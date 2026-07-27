@@ -1,5 +1,6 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { App as CapApp } from '@capacitor/app';
 import Home from './pages/Home';
 import WebViewPage from './pages/WebViewPage';
 import Feed from './pages/Feed';
@@ -11,8 +12,33 @@ import BottomNav from './components/BottomNav';
 
 function AppLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const hideBottomNavPages = ['/login', '/webview'];
   const showBottomNav = !hideBottomNavPages.includes(location.pathname);
+
+  // Penanganan Tombol Back HP Native Android (Hardware Back Button)
+  useEffect(() => {
+    let backListener;
+    async function setupBackListener() {
+      backListener = await CapApp.addListener('backButton', () => {
+        if (location.pathname !== '/') {
+          // Jika berada di sub-halaman (WebView/Feed/Grup/dll), kembali ke halaman sebelumnya
+          navigate(-1);
+        } else {
+          // Jika di halaman Home utama, keluar aplikasi
+          CapApp.exitApp();
+        }
+      });
+    }
+
+    setupBackListener();
+
+    return () => {
+      if (backListener && typeof backListener.remove === 'function') {
+        backListener.remove();
+      }
+    };
+  }, [location.pathname, navigate]);
 
   return (
     <div className="app-shell">
