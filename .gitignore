@@ -16,8 +16,8 @@ build/
 .env.production.local
 
 # Capacitor / Native build artifacts
-frontend/android/
-frontend/ios/
+*.apk
+*.aab
 
 # Logs
 npm-debug.log*
