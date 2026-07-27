@@ -1,13 +1,24 @@
 # PRD — Aplikasi Mobile TITC Indonesia
 
+## 0. Profil Resmi TITC Indonesia™
+
+**TITC Indonesia** merupakan lembaga penyedia tes TOEFL ITP® dan TOEFL iBT® resmi yang tersertifikasi oleh **Educational Testing Service (ETS)**. 
+
+- **Tanggal Berdiri**: 8 Januari 2023
+- **Pendiri / Leader**: Heri Setio A, S.Pd., M.I.Kom. (Managing Director of One Stop English Education Yogyakarta)
+- **Naungan Resmi**: One Stop English Education Yogyakarta — *The Authorized TOEFL Test Center* partner resmi **IIEF** (Indonesian International Education Foundation) dan **ITC** (International Testing Center)
+- **Cakupan Layanan**: Penyelenggaraan tes TOEFL ITP®, TOEFL iBT® Home Edition, dan TOEIC® resmi ETS.
+- **Pencapaian**: Memfasilitasi 2.000+ Test Taker per tahun untuk pemberkasan Beasiswa LPDP, AAS, BUMN, CPNS, serta institusi pendidikan di seluruh Indonesia.
+- **Alamat Kantor**: Sedayu, Bantul, Daerah Istimewa Yogyakarta, Indonesia.
+
 ## 1. Ringkasan Produk
 
 Aplikasi mobile Android (dan iOS di fase berikutnya) yang menampilkan konten dari website WordPress **titc.or.id** dengan dua jenis pengalaman:
 
 1. **Menu Shortcut** — ikon-ikon di halaman utama yang membuka halaman WordPress publik (misal `titc.or.id/toefl-itp`, `titc.or.id/jadwal`) lewat WebView, dengan tampilan CSS yang disesuaikan untuk layar mobile.
-2. **Forum/Komunitas Native** — satu menu khusus yang mengarah ke fitur komunitas (`titc.or.id/portal`, berbasis plugin **BuddyBoss Platform**), tapi tampilannya **dibangun ulang secara native** (bukan WebView) menggunakan React + Capacitor, dengan data ditarik dari WordPress REST API / BuddyBoss REST API.
+2. **Forum/Komunitas Native** — satu menu khusus yang mengarah ke fitur komunitas (`titc.or.id/portal`, berbasis plugin **Fluent Community** & **BuddyBoss Platform**), tapi tampilannya **dibangun ulang secara native** (bukan WebView) menggunakan React + Capacitor, dengan data ditarik dari WordPress REST API / Fluent Community REST API.
 
-Prinsip inti: **WordPress + BuddyBoss tetap menjadi satu-satunya sumber data (single source of truth)**. Aplikasi mobile tidak menyimpan data forum sendiri — semua post, komentar, pesan, dan member data tetap tersimpan dan tersinkron di database WordPress yang sama dengan versi web.
+Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satunya sumber data (single source of truth)**. Aplikasi mobile tidak menyimpan data forum sendiri — semua post, komentar, pesan, dan member data tetap tersimpan dan tersinkron di database WordPress yang sama dengan versi web.
 
 ## 2. Tujuan
 
