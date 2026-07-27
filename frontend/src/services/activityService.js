@@ -11,14 +11,34 @@ export const activityService = {
       );
       return data;
     } catch (error) {
-      console.warn('BuddyBoss activity API unavailable, returning mock feed data');
+      console.warn('BuddyBoss activity API unavailable, attempting public WP Posts API fallback...');
+      try {
+        const wpPosts = await apiRequest(
+          `${API_ENDPOINTS.WP_V2}/posts?page=${page}&per_page=${perPage}`
+        );
+        if (Array.isArray(wpPosts) && wpPosts.length > 0) {
+          return wpPosts.map((post) => ({
+            id: post.id,
+            user_name: 'Admin TITC Portal',
+            user_avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80',
+            action: 'Postingan Berita Resmi TITC',
+            content: post.title?.rendered || post.excerpt?.rendered?.replace(/<[^>]+>/g, '') || 'Berita TITC Portal',
+            date: new Date(post.date).toLocaleDateString('id-ID'),
+            likes_count: 5,
+            comments_count: 2
+          }));
+        }
+      } catch (wpErr) {
+        console.warn('WP Posts API also unavailable, using local mock data');
+      }
+
       return [
         {
           id: 1,
           user_name: 'Ahmad Ridwan',
           user_avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80',
-          action: 'Ahmad Ridwan posting di forum **Toyota FJ40 Restorasi**',
-          content: 'Halo teman-teman komunitas TITC, ada rekomendasi tempat restorasi karburator FJ40 yang trusted di area Jabodetabek?',
+          action: 'Ahmad Ridwan posting di forum **TITC Komunitas**',
+          content: 'Selamat datang di portal mobile TITC Indonesia! Silakan jelajahi menu shortcut dan fitur komunitas.',
           date: '2 jam yang lalu',
           likes_count: 12,
           comments_count: 4
@@ -28,20 +48,10 @@ export const activityService = {
           user_name: 'Budi Santoso',
           user_avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&q=80',
           action: 'Budi Santoso memperbarui foto profilnya',
-          content: 'Siap untuk Touring Nasional TITC 2026! 🚜💨',
+          content: 'Siap untuk kegiatan dan agenda terbaru TITC 2026! 🚀',
           date: '5 jam yang lalu',
           likes_count: 24,
           comments_count: 7
-        },
-        {
-          id: 3,
-          user_name: 'Deni Kurniawan',
-          user_avatar: 'https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=120&q=80',
-          action: 'Deni Kurniawan menambahkan berita baru',
-          content: 'Jadwal sertifikasi dan jadwal kelas TOEFL ITP untuk anggota bulan depan telah diperbarui.',
-          date: '1 hari yang lalu',
-          likes_count: 8,
-          comments_count: 1
         }
       ];
     }

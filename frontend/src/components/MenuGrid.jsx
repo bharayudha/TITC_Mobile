@@ -17,7 +17,7 @@ const defaultMenuItems = [
     title: 'TOEFL ITP',
     icon: Award,
     color: '#3b82f6',
-    url: 'https://titc.or.id/toefl-itp',
+    url: 'https://titc.or.id/portal/toefl-itp',
     badge: 'Populer'
   },
   {
@@ -25,7 +25,7 @@ const defaultMenuItems = [
     title: 'Jadwal Tes',
     icon: Calendar,
     color: '#10b981',
-    url: 'https://titc.or.id/jadwal'
+    url: 'https://titc.or.id/portal/jadwal'
   },
   {
     id: 'komunitas',
@@ -40,35 +40,36 @@ const defaultMenuItems = [
     title: 'Cek Sertifikat',
     icon: ShieldCheck,
     color: '#f59e0b',
-    url: 'https://titc.or.id/cek-sertifikat'
+    url: 'https://titc.or.id/portal/cek-sertifikat'
   },
   {
-    id: 'materi',
-    title: 'Materi & Modul',
+    id: 'portal_web',
+    title: 'Portal Utama',
     icon: BookOpen,
     color: '#ec4899',
-    url: 'https://titc.or.id/materi'
+    url: 'https://titc.or.id/portal/',
+    badge: 'Web'
   },
   {
     id: 'informasi',
     title: 'Informasi TITC',
     icon: Info,
     color: '#06b6d4',
-    url: 'https://titc.or.id/informasi'
+    url: 'https://titc.or.id/portal/informasi'
   },
   {
     id: 'syarat',
     title: 'Syarat & Ketentuan',
     icon: FileText,
     color: '#64748b',
-    url: 'https://titc.or.id/syarat'
+    url: 'https://titc.or.id/portal/syarat'
   },
   {
     id: 'bantuan',
     title: 'Pusat Bantuan',
     icon: HelpCircle,
     color: '#ef4444',
-    url: 'https://titc.or.id/bantuan'
+    url: 'https://titc.or.id/portal/bantuan'
   }
 ];
 

@@ -3,7 +3,7 @@
  * Handles WordPress REST API and BuddyBoss REST API endpoints.
  */
 
-const BASE_URL = 'https://titc.or.id/wp-json';
+const BASE_URL = 'https://titc.or.id/portal/wp-json';
 
 export const API_ENDPOINTS = {
   WP_V2: `${BASE_URL}/wp/v2`,
