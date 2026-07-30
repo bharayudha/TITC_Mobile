@@ -77,3 +77,86 @@ Seluruh dokumen teknis dan kebutuhan proyek berada pada folder [`docs/`](./docs/
 - [`docs/PRD_TITC_Mobile_App.md`](./docs/PRD_TITC_Mobile_App.md) — Product Requirement Document (PRD)
 - `Laporan_Kebutuhan_Teknis.docx` — Dokumen Kebutuhan Akses & API
 - `Timeline_Pengembangan_Aplikasi_Mobile_TITC.docx` — Timeline Kerja 30 Hari
+
+--- 
+
+## Struktur Folder Frontend (Flutter)
+
+Struktur direktori ini dirancang untuk memisahkan antara UI, logika bisnis, dan integrasi API 
+agar lebih modular, mudah di-*maintain*, dan aman.
+
+```text
+frontend/
+├── android/                  → project Android native (auto-generate, jangan diedit manual)
+├── ios/                      → project iOS native (auto-generate, jangan diedit manual)
+│
+├── assets/
+│   ├── images/               → logo, gambar background, ilustrasi
+│   └── icons/                → ikon custom (kalau tidak pakai icon pack bawaan)
+│
+├── lib/                      → SEMUA kode Dart ada di sini
+│   ├── main.dart             → entry point aplikasi (jangan taruh logic di sini)
+│   ├── app.dart              → setup MaterialApp, tema warna/font, routing awal
+│   │
+│   ├── constants/            → nilai tetap yang dipakai di banyak tempat
+│   │   ├── api_endpoints.dart      → base URL WordPress & BuddyBoss, path tiap endpoint
+│   │   ├── app_colors.dart         → kode warna brand TITC (biar tidak hardcode di tiap file)
+│   │   └── app_text_styles.dart    → gaya teks standar (judul, subjudul, dst)
+│   │
+│   ├── models/               → BENTUK data (bukan logic), satu file per jenis data
+│   │   ├── user_model.dart
+│   │   ├── space_model.dart
+│   │   ├── course_model.dart
+│   │   ├── member_model.dart
+│   │   └── message_model.dart
+│   │
+│   ├── services/               → SEMUA kode yang berkomunikasi ke API/server
+│   │   ├── api_client.dart          → setup dasar http/dio, header, error handling umum
+│   │   ├── auth_service.dart        → login, register, logout
+│   │   ├── spaces_service.dart      → ambil data Spaces & Membership Areas
+│   │   ├── courses_service.dart     → ambil data Courses & sub-kategorinya
+│   │   ├── members_service.dart     → ambil daftar member
+│   │   ├── messages_service.dart    → kirim/ambil pesan chat
+│   │   ├── token_storage.dart       → simpan & ambil token login secara aman
+│   │   └── firebase_messaging_service.dart → push notification
+│   │
+│   ├── screens/                → SEMUA halaman (UI penuh 1 layar), dikelompokkan per fitur
+│   │   ├── auth/
+│   │   │   ├── login_screen.dart
+│   │   │   └── signup_screen.dart
+│   │   ├── home/
+│   │   │   └── home_screen.dart          → Scaffold utama + Bottom Nav + Drawer
+│   │   ├── spaces/
+│   │   │   ├── spaces_list_screen.dart   → daftar: Free Placement Test, Institutional Prep, dst
+│   │   │   └── space_detail_screen.dart  → isi konten 1 space
+│   │   ├── courses/
+│   │   │   ├── courses_list_screen.dart  → daftar: 4 Hours Intensive, 3 Meeting Courses, dst
+│   │   │   └── course_detail_screen.dart → isi materi 1 course
+│   │   ├── members/
+│   │   │   └── members_list_screen.dart  → daftar nama member
+│   │   ├── preparation_test/
+│   │   │   └── preparation_test_webview_screen.dart → WebView ke situs eksternal
+│   │   └── messages/
+│   │       ├── messages_list_screen.dart → daftar percakapan
+│   │       └── chat_detail_screen.dart   → isi 1 percakapan
+│   │
+│   ├── widgets/                → komponen KECIL yang dipakai ULANG di banyak screen
+│   │   ├── bottom_nav_bar.dart
+│   │   ├── top_app_bar.dart          → search, notifikasi, ikon profil
+│   │   ├── side_drawer.dart          → menu hamburger (Membership Areas, TOEFL Preparation, dst)
+│   │   ├── chat_fab_button.dart      → tombol chat bubble mengambang
+│   │   ├── space_card.dart
+│   │   ├── course_card.dart
+│   │   ├── member_tile.dart
+│   │   ├── chat_bubble.dart
+│   │   ├── loading_indicator.dart
+│   │   └── error_view.dart
+│   │
+│   └── routes/
+│       └── app_router.dart      → daftar semua named route aplikasi
+│
+├── test/                     → unit test & widget test
+├── pubspec.yaml               → daftar package/dependency
+├── .gitignore
+└── README.md                  → dokumentasi project
+```
