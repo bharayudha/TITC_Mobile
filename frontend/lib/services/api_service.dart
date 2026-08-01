@@ -185,6 +185,9 @@ class ApiService {
       final Map<String, dynamic> body = {};
       if (firstName != null && firstName.isNotEmpty) body['first_name'] = firstName;
       if (lastName != null && lastName.isNotEmpty) body['last_name'] = lastName;
+      if (firstName != null && lastName != null) {
+        body['name'] = '${firstName.trim()} ${lastName.trim()}'.trim();
+      }
       if (bio != null) body['description'] = bio;
       if (email != null && email.isNotEmpty) body['email'] = email;
       if (website != null) body['url'] = website;

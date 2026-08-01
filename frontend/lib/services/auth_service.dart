@@ -122,9 +122,19 @@ class AuthService {
       print('Fetch Profile Body: ${response.body}');
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        _userName = data['name'] ?? _userName;
+        
+        final newName = data['name'];
+        if (newName != null && newName.isNotEmpty) {
+          _userName = newName;
+          await _storage.write(key: _userNameKey, value: _userName);
+        }
+        
         if (data['avatar_urls'] != null) {
-          _userAvatarUrl = data['avatar_urls']['96'] ?? data['avatar_urls']['48'] ?? data['avatar_urls']['24'];
+          final newAvatar = data['avatar_urls']['96'] ?? data['avatar_urls']['48'] ?? data['avatar_urls']['24'];
+          if (newAvatar != null) {
+            _userAvatarUrl = newAvatar;
+            await _storage.write(key: 'wp_user_avatar', value: _userAvatarUrl);
+          }
         }
         
         // Fetch fluent community specific profile for custom avatar

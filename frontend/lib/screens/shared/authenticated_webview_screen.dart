@@ -6,11 +6,13 @@ import 'package:magang_titc/constants/app_colors.dart';
 class AuthenticatedWebViewScreen extends StatefulWidget {
   final String url;
   final String title;
+  final String? extraCss;
 
   const AuthenticatedWebViewScreen({
     super.key,
     required this.url,
     required this.title,
+    this.extraCss,
   });
 
   @override
@@ -31,14 +33,21 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) => setState(() => _isLoading = true),
-          onPageFinished: (_) async {
-            // Sembunyikan Header dan Footer bawaan website agar terasa seperti Native App
+          onPageFinished: (String url) async {
+            // Inject CSS inside an IIFE to avoid "Identifier 'style' has already been declared" error
             await _controller.runJavaScript('''
-              const style = document.createElement('style');
-              style.innerHTML = `
-                /* Sembunyikan semua elemen web yang tidak perlu */
-                header, .site-header, #masthead, footer, .site-footer, #colophon, .fcom-sidebar, .fcom_page_header,
-                .fcom-bottom-nav, .fcom-mobile-nav, .fcom-app-header, nav {
+              (function() {
+                var style = document.createElement('style');
+                style.innerHTML = `
+                /* Sembunyikan Header dan Footer default WordPress & FCOM */
+                header, .site-header, #masthead, footer, .site-footer, #colophon, nav,
+                .fcom-sidebar, .fcom_page_header, .fcom-bottom-nav, .fcom-mobile-nav, .fcom-app-header,
+                .fcom_sidebar, .fcom_bottom_nav, .fcom_mobile_nav, .fcom_app_header,
+                .fc-header, .fc-mobile-header, .fc-top-bar, .fc-app-header, .fc-mobile-nav, .fc-bottom-bar,
+                #fc-app-header, #fc-mobile-nav, .fluent-community-header, .fluent-community-footer,
+                .fc-mobile-bottom-nav, .fc-mobile-nav-wrap, .fc-top-nav,
+                /* BuddyBoss fallback if they use BuddyBoss theme */
+                .bb-mobile-panel, .bb-mobile-header, .header-inner, .site-footer, .buddypanel {
                   display: none !important;
                 }
                 
@@ -110,8 +119,12 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
                   margin-bottom: 8px !important;
                   display: block !important;
                 }
+                
+                /* Extra CSS dari parameter */
+                ${widget.extraCss ?? ''}
               `;
               document.head.appendChild(style);
+              })();
             ''');
             
             // Beri waktu sejenak agar CSS selesai dirender sebelum menampilkan WebView

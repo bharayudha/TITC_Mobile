@@ -57,11 +57,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _selectedTab = 0;
   String _sortBy = _sortOptions.first;
 
+  String get _currentName => AuthService.userName ?? widget.name;
+
   void _openNotificationSettings() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NotificationSettingsScreen(
-          name: widget.name,
+          name: _currentName,
           username: widget.username,
           followingCount: widget.followingCount,
           followersCount: widget.followersCount,
@@ -71,7 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openEditProfile() async {
-    final names = widget.name.split(' ');
+    final names = _currentName.split(' ');
     final firstName = names.isNotEmpty ? names.first : '';
     final lastName = names.length > 1 ? names.sublist(1).join(' ') : '';
     
@@ -91,17 +93,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openAvatarUpload() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AuthenticatedWebViewScreen(
-          url: 'https://titc.or.id/portal/u/${widget.username}/about',
-          title: 'Edit Profile & Avatar',
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: AuthenticatedWebViewScreen(
+            url: 'https://titc.or.id/portal/u/${widget.username}/about',
+            title: 'Update Photo Profile',
+            extraCss: '''
+              /* Sembunyikan elemen web yang tidak perlu secara agresif */
+              .fcom-cover-photo, .fcom-cover-wrapper, .fc-cover, .fc-cover-wrapper, .fc-user-cover,
+              .fcom-profile-nav, .fcom-nav-wrapper, .fc-profile-nav, .fc-tabs, .fc-user-nav,
+              .fcom-profile-content, .fcom-main-content-wrap, .fc-profile-content, .fc-content-wrap,
+              .fcom-user-details, .fcom_user_name, .fcom_user_meta, .fc-user-details, .fc-user-name,
+              .fc-user-meta, .fluent-community-cover, .fluent-community-nav, .fluent-community-content,
+              .breadcrumb, .breadcrumbs, .fc-breadcrumb, .fcom-breadcrumb,
+              .fcom_cover_photo, .fcom_cover_wrapper, .fcom_profile_nav, .fcom_nav_wrapper,
+              .fcom_profile_content, .fcom_main_content_wrap, .fcom_user_details, .fcom_breadcrumb {
+                display: none !important;
+              }
+              
+              /* Pusatkan bungkus avatar */
+              .fcom-profile-header, .fc-profile-header, .fc-user-header, .fcom_profile_header {
+                background: transparent !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 30px 0 !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+              }
+              
+              /* Perbesar ukuran avatar */
+              .fcom-avatar, .fcom_user_avatar img, .fc-avatar, .fc-user-avatar img, .fcom_avatar {
+                width: 150px !important;
+                height: 150px !important;
+                margin: 0 auto !important;
+              }
+              
+              /* Hapus sisa-sisa background */
+              body, html, #fcom-app, #fluent-community-app, .fc-app {
+                background-color: white !important;
+              }
+            ''',
+          ),
         ),
       ),
-    );
-    // Refresh user profile data after returning from webview
-    await AuthService.init();
-    if (mounted) setState(() {});
+    ).then((_) {
+      // Refresh profile data after closing bottom sheet
+      AuthService.init().then((_) {
+        if (mounted) setState(() {});
+      });
+    });
   }
 
   @override
@@ -121,7 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 12),
             ProfileIdentityCard(
-              name: widget.name,
+              name: _currentName,
               username: widget.username,
               avatarUrl: AuthService.userAvatarUrl,
               followingCount: widget.followingCount,
@@ -182,7 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               : null,
           child: AuthService.userAvatarUrl == null || AuthService.userAvatarUrl!.isEmpty
               ? Text(
-                  widget.name.isEmpty ? '?' : widget.name[0].toUpperCase(),
+                  _currentName.isEmpty ? '?' : _currentName[0].toUpperCase(),
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
@@ -206,7 +257,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  "What's happening, ${widget.name}",
+                  "What's happening, $_currentName",
                   style: const TextStyle(fontSize: 14, color: Colors.black54),
                 ),
               ),
