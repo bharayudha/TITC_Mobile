@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/activity_model.dart';
 import '../models/member_model.dart';
@@ -212,7 +213,94 @@ class ApiService {
         return false;
       }
     } catch (e) {
-      print('Error in updateProfile: $e');
+      print('Exception in updateProfile: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> uploadAvatar(File imageFile) async {
+    try {
+      final cookies = AuthService.cookies;
+      final nonce = AuthService.wpNonce;
+      final slug = AuthService.userSlug;
+
+      if (cookies == null || nonce == null || slug == null) {
+        print('Missing auth cookies, nonce, or slug for uploadAvatar');
+        return false;
+      }
+
+      // 1. Upload to FCOM Media endpoint instead of WP Media (karena WP Media butuh role admin/editor)
+      final mediaUrl = Uri.parse('https://titc.or.id/wp-json/fluent-community/v2/feeds/media-upload');
+      final mediaReq = http.MultipartRequest('POST', mediaUrl);
+      
+      mediaReq.headers.addAll({
+        'Cookie': cookies,
+        'X-WP-Nonce': nonce,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      });
+      
+      mediaReq.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+      final mediaStream = await mediaReq.send();
+      final mediaRes = await http.Response.fromStream(mediaStream);
+      
+      if (mediaRes.statusCode != 200 && mediaRes.statusCode != 201) {
+        print('Failed to upload to FCOM Media: ${mediaRes.statusCode} - ${mediaRes.body}');
+        return false;
+      }
+
+      print('FCOM Media Upload Body: ${mediaRes.body}');
+      final mediaData = json.decode(mediaRes.body);
+      String? uploadedUrl;
+      
+      if (mediaData is Map) {
+        if (mediaData['url'] != null) {
+          uploadedUrl = mediaData['url'];
+        } else if (mediaData['source_url'] != null) {
+          uploadedUrl = mediaData['source_url'];
+        } else if (mediaData['file'] is Map && mediaData['file']['url'] != null) {
+          uploadedUrl = mediaData['file']['url'];
+        } else if (mediaData['image'] != null) {
+          uploadedUrl = mediaData['image'];
+        } else if (mediaData['data'] is Map && mediaData['data']['url'] != null) {
+          uploadedUrl = mediaData['data']['url'];
+        } else if (mediaData['media'] is Map && mediaData['media']['url'] != null) {
+          uploadedUrl = mediaData['media']['url'];
+        } else if (mediaData['media'] is List && mediaData['media'].isNotEmpty && mediaData['media'][0] is Map) {
+          uploadedUrl = mediaData['media'][0]['url'];
+        }
+      } else if (mediaData is List && mediaData.isNotEmpty && mediaData[0] is Map) {
+        uploadedUrl = mediaData[0]['url'] ?? mediaData[0]['source_url'];
+      }
+
+      if (uploadedUrl == null) {
+        print('No url returned from FCOM Media upload. Parsed data: $mediaData');
+        return false;
+      }
+
+      // 2. Assign the uploaded image URL as the FCOM Avatar
+      final fcomUrl = Uri.parse('https://titc.or.id/wp-json/fluent-community/v2/profile/$slug');
+      final fcomRes = await http.put(
+        fcomUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': cookies,
+          'X-WP-Nonce': nonce,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        },
+        body: json.encode({
+          'data': {
+            'avatar': uploadedUrl
+          }
+        })
+      );
+
+      print('FCOM Avatar Assign Status: ${fcomRes.statusCode}');
+      print('FCOM Avatar Assign Body: ${fcomRes.body}');
+      
+      return fcomRes.statusCode == 200 || fcomRes.statusCode == 201;
+    } catch (e) {
+      print('Exception in uploadAvatar: $e');
       return false;
     }
   }

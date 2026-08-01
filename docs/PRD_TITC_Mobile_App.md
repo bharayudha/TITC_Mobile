@@ -101,9 +101,10 @@ Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "peneru
 - Menu profil dipisahkan menjadi komponen *Native* dan *WebView* untuk menjamin pengalaman pengguna (UX) yang seamless:
   1. **Edit Profil (Ikon Pensil)**: Menggunakan halaman *100% Native Flutter* (`ProfileEditScreen`) untuk mengubah First Name, Last Name, Email, Website URL, Bio, Social Links, dan Password.
      - Endpoint: `POST /wp-json/wp/v2/users/me` (untuk data standar WP).
-  2. **Avatar Upload (Ikon Kamera/Awan)**: Menggunakan teknik *Manipulated WebView* (`AuthenticatedWebViewScreen`).
-     - Alasan: Upload foto dan *cropping* secara native langsung ke API FCOM sangat kompleks dan tidak didokumentasikan.
-     - Solusi UX: WebView disembunyikan menggunakan *Loading Spinner* (melalui widget `Stack`), lalu CSS kustom diinjeksi via JavaScript saat `onPageFinished`. Setelah 200ms, layar *loading* dihilangkan, memunculkan WebView yang *header/footer*-nya telah dihapus sehingga 100% terlihat seperti halaman Native.
+  2. **Avatar Upload (Ikon Kamera/Awan)**: Diubah menjadi fitur *100% Native* menggunakan `image_picker` (bukan WebView).
+     - **Alasan**: Tampilan upload WebView FCOM sangat bertabrakan dengan navigasi mobile dan merusak UX.
+     - **Solusi UX (Bypass Upload)**: Karena *user* standar (Subscriber) diblokir untuk mengunggah ke WP Media Library (`/wp/v2/media`), aplikasi secara langsung melakukan POST *multipart/form-data* foto ke endpoint internal FCOM: `POST /wp-json/fluent-community/v2/feeds/media-upload`. 
+     - **Metode Sinkronisasi**: Setelah mendapatkan URL *image* sukses dari balasan *upload*, aplikasi mengambil *Username Slug* rahasia milik user (yang dilacak saat `AuthService.init()`) lalu mengirim `PUT /wp-json/fluent-community/v2/profile/{slug}` dengan `{"data": {"avatar": "URL_FOTO"}}`. Data foto akan otomatis terefresh lewat mekanisme *Pull-to-Refresh* (`RefreshIndicator`) di `ProfileScreen`.
 
 ## 6. Kebutuhan Non-Fungsional
 

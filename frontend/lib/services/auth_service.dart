@@ -30,6 +30,7 @@ class AuthService {
   static String? _wpNonce;
   static String? _userEmail;
   static String? _userName;
+  static String? _userSlug;
   static String? _userAvatarUrl;
 
   /// Getter: apakah user sudah login (ada cookie tersimpan).
@@ -40,6 +41,7 @@ class AuthService {
   static String? get wpNonce => _wpNonce;
   static String? get userEmail => _userEmail;
   static String? get userName => _userName;
+  static String? get userSlug => _userSlug;
   static String? get userAvatarUrl => _userAvatarUrl;
 
   /// Inisialisasi: coba muat cookies yang pernah disimpan sebelumnya.
@@ -47,6 +49,7 @@ class AuthService {
     _cookies = await _storage.read(key: _cookiesKey);
     _userEmail = await _storage.read(key: _userEmailKey);
     _userName = await _storage.read(key: _userNameKey);
+    _userSlug = await _storage.read(key: 'wp_user_slug');
     _userAvatarUrl = await _storage.read(key: 'wp_user_avatar');
 
     if (_cookies != null) {
@@ -128,6 +131,12 @@ class AuthService {
           _userName = newName;
           await _storage.write(key: _userNameKey, value: _userName);
         }
+
+        final slug = data['slug'];
+        if (slug != null) {
+          _userSlug = slug;
+          await _storage.write(key: 'wp_user_slug', value: _userSlug);
+        }
         
         if (data['avatar_urls'] != null) {
           final newAvatar = data['avatar_urls']['96'] ?? data['avatar_urls']['48'] ?? data['avatar_urls']['24'];
@@ -138,7 +147,6 @@ class AuthService {
         }
         
         // Fetch fluent community specific profile for custom avatar
-        final slug = data['slug'];
         if (slug != null) {
           try {
             final fcomResponse = await http.get(

@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
@@ -11,6 +13,7 @@ import 'package:magang_titc/screens/customer/profile/notification_settings_scree
 import 'package:magang_titc/screens/customer/profile/profile_edit_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/services/api_service.dart';
 
 const Color _chipBorder = Color(0xFFDDDDDD);
 
@@ -93,66 +96,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openAvatarUpload() async {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: AuthenticatedWebViewScreen(
-            url: 'https://titc.or.id/portal/u/${widget.username}/about',
-            title: 'Update Photo Profile',
-            extraCss: '''
-              /* Sembunyikan elemen web yang tidak perlu secara agresif */
-              .fcom-cover-photo, .fcom-cover-wrapper, .fc-cover, .fc-cover-wrapper, .fc-user-cover,
-              .fcom-profile-nav, .fcom-nav-wrapper, .fc-profile-nav, .fc-tabs, .fc-user-nav,
-              .fcom-profile-content, .fcom-main-content-wrap, .fc-profile-content, .fc-content-wrap,
-              .fcom-user-details, .fcom_user_name, .fcom_user_meta, .fc-user-details, .fc-user-name,
-              .fc-user-meta, .fluent-community-cover, .fluent-community-nav, .fluent-community-content,
-              .breadcrumb, .breadcrumbs, .fc-breadcrumb, .fcom-breadcrumb,
-              .fcom_cover_photo, .fcom_cover_wrapper, .fcom_profile_nav, .fcom_nav_wrapper,
-              .fcom_profile_content, .fcom_main_content_wrap, .fcom_user_details, .fcom_breadcrumb {
-                display: none !important;
-              }
-              
-              /* Pusatkan bungkus avatar */
-              .fcom-profile-header, .fc-profile-header, .fc-user-header, .fcom_profile_header {
-                background: transparent !important;
-                box-shadow: none !important;
-                border: none !important;
-                padding: 30px 0 !important;
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-              }
-              
-              /* Perbesar ukuran avatar */
-              .fcom-avatar, .fcom_user_avatar img, .fc-avatar, .fc-user-avatar img, .fcom_avatar {
-                width: 150px !important;
-                height: 150px !important;
-                margin: 0 auto !important;
-              }
-              
-              /* Hapus sisa-sisa background */
-              body, html, #fcom-app, #fluent-community-app, .fc-app {
-                background-color: white !important;
-              }
-            ''',
-          ),
-        ),
-      ),
-    ).then((_) {
-      // Refresh profile data after closing bottom sheet
-      AuthService.init().then((_) {
-        if (mounted) setState(() {});
-      });
-    });
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) return; // User canceled
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Uploading photo... Please wait.'), duration: Duration(seconds: 2)),
+      );
+
+      final success = await ApiService.uploadAvatar(File(pickedFile.path));
+
+      if (success) {
+        // Refresh user profile data to get the new avatar URL
+        await AuthService.init();
+        if (mounted) {
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile photo updated successfully!')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to update photo. Please try again.')),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('An error occurred while picking the image.')),
+        );
+      }
+    }
   }
 
   @override
@@ -161,15 +146,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: kProfilePageBackground,
       appBar: const TitcAppBar(),
       drawer: const SideDrawer(),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ProfileBreadcrumb(
-              onHomeTap: () => openHomeTab(context),
-              onNotificationSettingsTap: _openNotificationSettings,
-              onEditTap: _openEditProfile,
-            ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await AuthService.init();
+          if (mounted) setState(() {});
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ProfileBreadcrumb(
+                onHomeTap: () => openHomeTab(context),
+                onNotificationSettingsTap: _openNotificationSettings,
+                onEditTap: _openEditProfile,
+              ),
             const SizedBox(height: 12),
             ProfileIdentityCard(
               name: _currentName,
@@ -194,6 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
           ],
         ),
+      ),
       ),
     );
   }
