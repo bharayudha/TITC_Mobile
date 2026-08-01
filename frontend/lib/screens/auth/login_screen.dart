@@ -3,6 +3,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/screens/auth/signup_screen.dart';
+import 'package:magang_titc/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _rememberMe = false;
   bool _obscurePassword = true;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -26,11 +29,38 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _login() {
-    if (_formKey.currentState?.validate() ?? false) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainShell()),
+  Future<void> _login() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await AuthService.login(
+        _emailController.text.trim(),
+        _passwordController.text,
       );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainShell()),
+        );
+      } else {
+        setState(() {
+          _errorMessage = result['message'] ?? 'Login gagal.';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Terjadi kesalahan: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -208,10 +238,27 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          // Error message
+          if (_errorMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Text(
+                _errorMessage!,
+                style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             height: 52,
             child: ElevatedButton(
-              onPressed: _login,
+              onPressed: _isLoading ? null : _login,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E5AF5),
                 foregroundColor: Colors.white,
@@ -219,7 +266,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text('Login', style: TextStyle(fontSize: 16)),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Text('Login', style: TextStyle(fontSize: 16)),
             ),
           ),
           const SizedBox(height: 24),

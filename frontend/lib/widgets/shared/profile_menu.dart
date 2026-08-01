@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/constants/app_text_styles.dart';
 import 'package:magang_titc/screens/auth/login_screen.dart';
 import 'package:magang_titc/screens/customer/profile/profile_screen.dart';
+import 'package:magang_titc/services/auth_service.dart';
 
 const Color _dangerColor = Color(0xFFE53935);
 
@@ -13,20 +14,13 @@ enum ProfileMenuAction { viewProfile, myCourses, mySpaces, certificate, logout }
 /// Tombol profil di app bar. Saat ditekan menampilkan popup berisi identitas
 /// pengguna dan pintasan menu.
 class ProfileMenuButton extends StatelessWidget {
-  const ProfileMenuButton({
-    super.key,
-    // TODO: ambil dari user_model setelah auth_service tersambung.
-    this.name = 'magang',
-    this.email = 'magang@example.com',
-    this.username = 'magang_titc',
-  });
-
-  final String name;
-  final String email;
-  final String username;
+  const ProfileMenuButton({super.key});
 
   void _onSelected(BuildContext context, ProfileMenuAction action) {
     if (action == ProfileMenuAction.viewProfile) {
+      final name = AuthService.userName ?? 'User';
+      final username = AuthService.userName ?? 'user';
+      
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ProfileScreen(name: name, username: username),
@@ -35,12 +29,14 @@ class ProfileMenuButton extends StatelessWidget {
       return;
     }
     if (action == ProfileMenuAction.logout) {
-      // Bersihkan seluruh riwayat halaman supaya tidak bisa di-back
-      // kembali ke area yang butuh login.
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+      AuthService.logout().then((_) {
+        // Bersihkan seluruh riwayat halaman supaya tidak bisa di-back
+        // kembali ke area yang butuh login.
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      });
     }
     // TODO: sambungkan aksi lain ke halaman masing-masing.
   }
@@ -111,6 +107,9 @@ class ProfileMenuButton extends StatelessWidget {
   }
 
   Widget _buildAccountHeader() {
+    final name = AuthService.userName ?? 'User';
+    final email = AuthService.userEmail ?? '';
+    final avatarUrl = AuthService.userAvatarUrl;
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
 
     return Row(
@@ -118,14 +117,19 @@ class ProfileMenuButton extends StatelessWidget {
         CircleAvatar(
           radius: 20,
           backgroundColor: Colors.grey.shade300,
-          child: Text(
-            initial,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade700,
-            ),
-          ),
+          backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+              ? NetworkImage(avatarUrl)
+              : null,
+          child: avatarUrl == null || avatarUrl.isEmpty
+              ? Text(
+                  initial,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
+                )
+              : null,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -142,11 +146,12 @@ class ProfileMenuButton extends StatelessWidget {
                   color: Colors.black87,
                 ),
               ),
-              Text(
-                email,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-              ),
+              if (email.isNotEmpty)
+                Text(
+                  email,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
             ],
           ),
         ),

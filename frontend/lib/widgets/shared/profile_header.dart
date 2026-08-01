@@ -115,6 +115,7 @@ class ProfileIdentityCard extends StatelessWidget {
     super.key,
     required this.name,
     required this.username,
+    this.avatarUrl,
     this.followingCount = 0,
     this.followersCount = 0,
     this.onAvatarUploadTap,
@@ -122,6 +123,7 @@ class ProfileIdentityCard extends StatelessWidget {
 
   final String name;
   final String username;
+  final String? avatarUrl;
   final int followingCount;
   final int followersCount;
   final VoidCallback? onAvatarUploadTap;
@@ -191,16 +193,24 @@ class ProfileIdentityCard extends StatelessWidget {
               color: Colors.grey.shade300,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 3),
+              image: avatarUrl != null && avatarUrl!.isNotEmpty
+                  ? DecorationImage(
+                      image: NetworkImage(avatarUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
             alignment: Alignment.center,
-            child: Text(
-              name.isEmpty ? '?' : name[0].toUpperCase(),
-              style: TextStyle(
-                fontSize: 56,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade700,
-              ),
-            ),
+            child: avatarUrl == null || avatarUrl!.isEmpty
+                ? Text(
+                    name.isEmpty ? '?' : name[0].toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 56,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade700,
+                    ),
+                  )
+                : null,
           ),
           // Lencana tingkat/level di kanan bawah avatar.
           Positioned(

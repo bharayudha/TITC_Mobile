@@ -16,9 +16,9 @@
 Aplikasi mobile Android (dan iOS di fase berikutnya) yang menampilkan konten dari website WordPress **titc.or.id** dengan dua jenis pengalaman:
 
 1. **Menu Shortcut** — ikon-ikon di halaman utama yang membuka halaman WordPress publik (misal `titc.or.id/toefl-itp`, `titc.or.id/jadwal`) lewat WebView, dengan tampilan CSS yang disesuaikan untuk layar mobile.
-2. **Forum/Komunitas Native** — satu menu khusus yang mengarah ke fitur komunitas (`titc.or.id/portal`, berbasis plugin **Fluent Community** & **BuddyBoss Platform**), tapi tampilannya **dibangun ulang secara native** (bukan WebView) menggunakan Flutter, dengan data ditarik dari WordPress REST API / Fluent Community REST API.
+2. **Forum/Komunitas Native** — satu menu khusus yang mengarah ke fitur komunitas (`titc.or.id/portal`, berbasis plugin **Fluent Community**), tapi tampilannya **dibangun ulang secara native** (bukan WebView) menggunakan Flutter, dengan data ditarik dari WordPress REST API / Fluent Community REST API.
 
-Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satunya sumber data (single source of truth)**. Aplikasi mobile tidak menyimpan data forum sendiri — semua post, komentar, pesan, dan member data tetap tersimpan dan tersinkron di database WordPress yang sama dengan versi web.
+Prinsip inti: **WordPress + Fluent Community tetap menjadi satu-satunya sumber data (single source of truth)**. Aplikasi mobile tidak menyimpan data forum sendiri — semua post, komentar, pesan, dan member data tetap tersimpan dan tersinkron di database WordPress yang sama dengan versi web.
 
 ## 2. Tujuan
 
@@ -33,9 +33,9 @@ Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satu
 |---|---|---|
 | Mobile Framework | **Flutter** | Performa native, pengembangan lintas platform (Android & iOS) dari satu basis kode, mendukung integrasi WebView untuk menu shortcut |
 | Data Source Utama | **WordPress REST API** (`/wp-json/wp/v2/`) | Untuk halaman/post publik |
-| Data Forum | **BuddyBoss REST API** (`/wp-json/buddyboss/v1/`) | Untuk Activity Feed, Groups, Members, Messages |
-| Autentikasi | **Application Password** (development/testing) → **JWT Authentication for WP REST API** (produksi, per-user) | Application Password untuk koneksi awal/testing; JWT untuk login user individual di aplikasi |
-| Backend Notifikasi | **Custom WordPress Plugin (PHP)** | Menjembatani trigger notifikasi ke Firebase (FCM) langsung dari action hooks BuddyBoss/WordPress tanpa perlu server terpisah. |
+| Data Forum | **Fluent Community REST API** (`/wp-json/fluent-community/v2/`) | Untuk Activity Feed, Spaces, Members, Chat |
+| Autentikasi | **WordPress Cookie Authentication** | Login disubmit via POST form, mengembalikan cookie `wordpress_logged_in` yang disisipkan ke Header tiap request API. |
+| Backend Notifikasi | **Custom WordPress Plugin (PHP)** | Menjembatani trigger notifikasi ke Firebase (FCM) langsung dari action hooks Fluent Community/WordPress tanpa perlu server terpisah. |
 | Push Notification | **Firebase Cloud Messaging (FCM)** | Satu-satunya jalur resmi push notification Android |
 | Version Control | **GitHub** (private repo) | Kolaborasi tim |
 | Build Target | Android APK/AAB (fase 1), iOS (fase berikutnya) | Sesuai scope 30 hari |
@@ -50,7 +50,7 @@ Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satu
         |
         |  2. Menu Forum → fetch data via REST API
         v
-[ WordPress + BuddyBoss Platform + LearnDash (di hosting perusahaan) ]
+[ WordPress + Fluent Community + LearnDash (di hosting perusahaan) ]
         |
         |  Trigger saat ada activity baru (post/comment/message)
         v
@@ -64,7 +64,7 @@ Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satu
 [ HP User — Notifikasi masuk ]
 ```
 
-Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "penerus sinyal" dari aktivitas BuddyBoss ke Firebase.
+Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "penerus sinyal" dari aktivitas Fluent Community ke Firebase.
 
 ## 5. Struktur Fitur & Layar (Screens)
 
@@ -78,25 +78,24 @@ Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "peneru
 
 ### 5.3 Forum — Feed
 - List activity terbaru (post, like, comment).
-- Data: `GET /wp-json/buddyboss/v1/activity`
-- Aksi: like, comment (POST ke endpoint activity/comment).
+- Data: `GET /wp-json/fluent-community/v2/feeds`
 
 ### 5.4 Forum — Groups/Spaces
 - Daftar grup yang bisa diikuti user.
-- Data: `GET /wp-json/buddyboss/v1/groups`
-- Aksi: join/leave group, lihat diskusi dalam grup.
+- Data: `GET /wp-json/fluent-community/v2/spaces`
 
 ### 5.5 Forum — Members
 - Daftar anggota komunitas + profil dasar.
-- Data: `GET /wp-json/buddyboss/v1/members`
+- Data: `GET /wp-json/fluent-community/v2/members`
 
 ### 5.6 Forum — Messages (Chat)
 - Chat pribadi antar user.
-- Data: `GET /wp-json/buddyboss/v1/messages/{thread_id}`
-- Update berkala (polling tiap beberapa detik) untuk kesan realtime, dilengkapi push notification untuk pesan saat aplikasi tertutup.
+- Data: `GET /wp-json/fluent-community/v2/chat/threads`
 
 ### 5.7 Login
-- Form login (username/password WordPress) → autentikasi via JWT → simpan token secara aman di penyimpanan lokal aplikasi (bukan localStorage biasa; gunakan penyimpanan aman native seperti Capacitor Preferences/Secure Storage).
+- Autentikasi menggunakan form action `login` yang mengembalikan Cookie WordPress (`wordpress_logged_in`).
+- Disimpan lokal dengan `flutter_secure_storage`.
+- Signup menggunakan alur 2-Step (Submit Data -> Verifikasi Kode Email 2FA).
 
 ## 6. Kebutuhan Non-Fungsional
 
@@ -115,7 +114,7 @@ Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "peneru
 ## 8. Dependensi & Prasyarat Sebelum Development Dimulai
 
 - Akses Administrator WordPress (atau role dengan capability setara — lihat dokumen Requirement terpisah).
-- Konfirmasi REST API BuddyBoss & LearnDash aktif dan bisa diakses dari luar (tidak diblokir plugin security).
+- Konfirmasi REST API Fluent Community & LearnDash aktif dan bisa diakses dari luar (tidak diblokir plugin security).
 - Application Password sudah digenerate untuk keperluan testing awal.
 - Firebase project sudah dibuat, `google-services.json` sudah didapat untuk dimasukkan ke project Android.
 - Daftar final menu shortcut beserta URL tujuan masing-masing.
@@ -125,3 +124,22 @@ Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "peneru
 
 - `Laporan_Kebutuhan_Teknis.docx` — daftar lengkap akses/data yang diminta ke perusahaan.
 - `Timeline_Pengembangan_Aplikasi_Mobile_TITC.docx` — jadwal kerja 30 hari per anggota tim.
+
+## 10. Detail Koneksi API & Alur Autentikasi
+
+### Mapping Endpoint Fluent Community
+- **Feed**: `GET /wp-json/fluent-community/v2/feeds`
+  - *Struktur Response*: Mengembalikan JSON dengan objek utama `"feeds"`, yang di dalamnya terdapat array `"data"`. Pembacaan di aplikasi harus membongkar struktur ini (`data['feeds']['data']`).
+- **Spaces**: `GET /wp-json/fluent-community/v2/spaces`
+- **Members**: `GET /wp-json/fluent-community/v2/members`
+- *Catatan: Semua endpoint di atas memerlukan Cookie WordPress valid di header request.*
+
+### Alur Autentikasi (Cookie-Based)
+Karena standar JWT API atau BuddyBoss sudah digantikan, login & register dilakukan dengan "meniru" form browser via WebView-like request:
+1. **Login**: GET halaman `/portal/?fcom_action=auth` -> ekstrak `_fcom_login_nonce` -> POST username, password, nonce ke `/login/`.
+2. **Register**: GET halaman form register -> ekstrak `_fcom_signup_nonce` -> POST data ke `admin-ajax.php?action=fcom_user_registration` -> Ekstrak Token 2FA dari HTML response -> Tampilkan Dialog OTP di Flutter -> POST kode OTP ke admin-ajax.php.
+3. **Penyimpanan Sesi**: Cookie `wordpress_logged_in` yang didapat dari Set-Cookie disimpan menggunakan `flutter_secure_storage` lalu disisipkan ke header `Cookie` di setiap request ke `/fluent-community/v2/`.
+
+> [!IMPORTANT]
+> **Catatan Penting Proteksi Firewall/Anti-Bot**: 
+> Semua *request* HTTP (baik GET data maupun POST login/register) WAJIB menyertakan header `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36` dan `Referer: https://titc.or.id/portal/`. Jika menggunakan *User-Agent* default Dart/Flutter (seperti `TITC-Mobile-App/1.0`), *request* akan diblokir dengan status `401/403 Forbidden` oleh sistem anti-DDOS / WordFence / LiteSpeed yang berjalan di server.

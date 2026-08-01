@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import 'package:magang_titc/screens/main_shell.dart';
+import 'package:magang_titc/services/auth_service.dart';
+
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -19,6 +22,8 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _agreeToTerms = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -30,7 +35,7 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  void _signUp() {
+  Future<void> _signUp() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -42,7 +47,127 @@ class _SignupScreenState extends State<SignupScreen> {
       );
       return;
     }
-    // TODO: hook up to authentication service.
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await AuthService.register(
+        _fullNameController.text.trim(),
+        _emailController.text.trim(),
+        _usernameController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        if (result['requires_2fa'] == true) {
+          // Show 2FA Dialog
+          setState(() {
+            _isLoading = false;
+          });
+          _show2FADialog(result['two_fa_token'], result['cookies']);
+        } else {
+          // Fallback if no 2FA
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Pendaftaran berhasil! Silakan login.')),
+          );
+          Navigator.of(context).pop();
+        }
+      } else {
+        setState(() {
+          _errorMessage = result['message'] ?? 'Pendaftaran gagal.';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Terjadi kesalahan: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _show2FADialog(String twoFaToken, String cookies) async {
+    final otpController = TextEditingController();
+    bool isVerifying = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Verifikasi Email'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Kode verifikasi (OTP) telah dikirim ke email Anda.'),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: otpController,
+                    decoration: const InputDecoration(
+                      labelText: 'Masukkan Kode OTP',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isVerifying
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: isVerifying
+                      ? null
+                      : () async {
+                          if (otpController.text.isEmpty) return;
+                          
+                          setStateDialog(() => isVerifying = true);
+                          
+                          final res = await AuthService.verifyRegistration2FA(
+                            twoFaToken,
+                            otpController.text.trim(),
+                            cookies,
+                          );
+
+                          setStateDialog(() => isVerifying = false);
+
+                          if (!mounted) return;
+                          if (res['success'] == true) {
+                            Navigator.of(context).pop(); // Tutup dialog
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(builder: (_) => const MainShell()),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(res['message'] ?? 'Kode salah.')),
+                            );
+                          }
+                        },
+                  child: isVerifying
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Verifikasi'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -267,10 +392,26 @@ class _SignupScreenState extends State<SignupScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          if (_errorMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Text(
+                _errorMessage!,
+                style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             height: 52,
             child: ElevatedButton(
-              onPressed: _signUp,
+              onPressed: _isLoading ? null : _signUp,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E5AF5),
                 foregroundColor: Colors.white,
@@ -278,7 +419,16 @@ class _SignupScreenState extends State<SignupScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text('Sign Up', style: TextStyle(fontSize: 16)),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Text('Sign Up', style: TextStyle(fontSize: 16)),
             ),
           ),
           const SizedBox(height: 24),

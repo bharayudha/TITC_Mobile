@@ -8,6 +8,8 @@ import 'package:magang_titc/widgets/customer/side_drawer.dart';
 import 'package:magang_titc/widgets/shared/top_app_bar.dart';
 import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/screens/customer/profile/notification_settings_screen.dart';
+import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
+import 'package:magang_titc/services/auth_service.dart';
 
 const Color _chipBorder = Color(0xFFDDDDDD);
 
@@ -68,6 +70,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _openEditProfile() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const AuthenticatedWebViewScreen(
+          url: 'https://titc.or.id/portal/account/',
+          title: 'Account Settings',
+        ),
+      ),
+    );
+    // Refresh user profile data after returning from webview
+    await AuthService.init();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openAvatarUpload() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AuthenticatedWebViewScreen(
+          url: 'https://titc.or.id/portal/u/${widget.username}/about',
+          title: 'Edit Profile & Avatar',
+        ),
+      ),
+    );
+    // Refresh user profile data after returning from webview
+    await AuthService.init();
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,15 +111,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ProfileBreadcrumb(
               onMembersTap: () => openMembersTab(context),
               onNotificationSettingsTap: _openNotificationSettings,
-              // TODO: buka halaman edit profil.
-              onEditTap: () {},
+              onEditTap: _openEditProfile,
             ),
             const SizedBox(height: 12),
             ProfileIdentityCard(
               name: widget.name,
               username: widget.username,
+              avatarUrl: AuthService.userAvatarUrl,
               followingCount: widget.followingCount,
               followersCount: widget.followersCount,
+              onAvatarUploadTap: _openAvatarUpload,
             ),
             const SizedBox(height: 12),
             ProfileTabBar(
@@ -137,18 +168,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.grey.shade300,
-            child: Text(
-              widget.name.isEmpty ? '?' : widget.name[0].toUpperCase(),
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: Colors.grey.shade300,
+          backgroundImage: AuthService.userAvatarUrl != null && AuthService.userAvatarUrl!.isNotEmpty
+              ? NetworkImage(AuthService.userAvatarUrl!)
+              : null,
+          child: AuthService.userAvatarUrl == null || AuthService.userAvatarUrl!.isEmpty
+              ? Text(
+                  widget.name.isEmpty ? '?' : widget.name[0].toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
+                )
+              : null,
+        ),
           const SizedBox(width: 12),
           Expanded(
             child: GestureDetector(
@@ -238,8 +274,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               GestureDetector(
-                // TODO: buka form edit bagian About.
-                onTap: () {},
+                onTap: _openEditProfile,
                 child: const PhosphorIcon(
                   PhosphorIconsRegular.pencilSimple,
                   size: 18,
@@ -271,7 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Align(
       alignment: Alignment.centerLeft,
       child: GestureDetector(
-        onTap: () {},
+        onTap: _openEditProfile,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
