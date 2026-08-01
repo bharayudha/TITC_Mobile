@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/auth/login_screen.dart';
+import 'package:magang_titc/screens/auth/login_screen.dart';
 
 class App extends StatelessWidget {
   const App({super.key});

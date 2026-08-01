@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-import '../main_shell.dart';
-import 'signup_screen.dart';
+import 'package:magang_titc/screens/main_shell.dart';
+import 'package:magang_titc/screens/auth/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-import 'courses/courses_list_screen.dart';
-import 'home/home_screen.dart';
-import 'members/members_list_screen.dart';
-import 'messages/messages_list_screen.dart';
-import 'preparation_test/preparation_test_webview_screen.dart';
-import 'spaces/spaces_list_screen.dart';
-import '../widgets/bottom_nav_bar.dart';
-import '../widgets/chat_fab_button.dart';
-import '../widgets/side_drawer.dart';
-import '../widgets/top_app_bar.dart';
+import 'package:magang_titc/screens/customer/courses/courses_list_screen.dart';
+import 'package:magang_titc/screens/customer/home/home_screen.dart';
+import 'package:magang_titc/screens/customer/members/members_list_screen.dart';
+import 'package:magang_titc/screens/customer/messages/messages_list_screen.dart';
+import 'package:magang_titc/screens/customer/preparation_test/preparation_test_webview_screen.dart';
+import 'package:magang_titc/screens/customer/spaces/spaces_list_screen.dart';
+import 'package:magang_titc/widgets/customer/customer_bottom_nav_bar.dart';
+import 'package:magang_titc/widgets/shared/chat_fab_button.dart';
+import 'package:magang_titc/widgets/customer/side_drawer.dart';
+import 'package:magang_titc/widgets/shared/top_app_bar.dart';
 
 /// Kerangka utama aplikasi: app bar, drawer, chat FAB, dan bottom nav dipasang
 /// sekali di sini supaya perpindahan tab hanya menganimasikan isi kontennya.
