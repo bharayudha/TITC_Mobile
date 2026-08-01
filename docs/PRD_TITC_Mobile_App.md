@@ -16,7 +16,7 @@
 Aplikasi mobile Android (dan iOS di fase berikutnya) yang menampilkan konten dari website WordPress **titc.or.id** dengan dua jenis pengalaman:
 
 1. **Menu Shortcut** — ikon-ikon di halaman utama yang membuka halaman WordPress publik (misal `titc.or.id/toefl-itp`, `titc.or.id/jadwal`) lewat WebView, dengan tampilan CSS yang disesuaikan untuk layar mobile.
-2. **Forum/Komunitas Native** — satu menu khusus yang mengarah ke fitur komunitas (`titc.or.id/portal`, berbasis plugin **Fluent Community** & **BuddyBoss Platform**), tapi tampilannya **dibangun ulang secara native** (bukan WebView) menggunakan React + Capacitor, dengan data ditarik dari WordPress REST API / Fluent Community REST API.
+2. **Forum/Komunitas Native** — satu menu khusus yang mengarah ke fitur komunitas (`titc.or.id/portal`, berbasis plugin **Fluent Community** & **BuddyBoss Platform**), tapi tampilannya **dibangun ulang secara native** (bukan WebView) menggunakan Flutter, dengan data ditarik dari WordPress REST API / Fluent Community REST API.
 
 Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satunya sumber data (single source of truth)**. Aplikasi mobile tidak menyimpan data forum sendiri — semua post, komentar, pesan, dan member data tetap tersimpan dan tersinkron di database WordPress yang sama dengan versi web.
 
@@ -31,12 +31,11 @@ Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satu
 
 | Layer | Teknologi | Alasan |
 |---|---|---|
-| Frontend UI | **React** (build jadi static HTML/JS/CSS) | Tim sudah familiar, komponen reusable, cocok dibungkus Capacitor |
-| Mobile Wrapper | **Capacitor** | Membungkus React app jadi APK/AAB Android asli, mendukung WebView native untuk menu shortcut |
+| Mobile Framework | **Flutter** | Performa native, pengembangan lintas platform (Android & iOS) dari satu basis kode, mendukung integrasi WebView untuk menu shortcut |
 | Data Source Utama | **WordPress REST API** (`/wp-json/wp/v2/`) | Untuk halaman/post publik |
 | Data Forum | **BuddyBoss REST API** (`/wp-json/buddyboss/v1/`) | Untuk Activity Feed, Groups, Members, Messages |
 | Autentikasi | **Application Password** (development/testing) → **JWT Authentication for WP REST API** (produksi, per-user) | Application Password untuk koneksi awal/testing; JWT untuk login user individual di aplikasi |
-| Backend Tambahan | **Node.js + Express** (atau **Firebase Cloud Functions** sebagai alternatif serverless) | Menjembatani trigger notifikasi ke Firebase; tidak menyimpan data forum, murni pass-through/logic tambahan |
+| Backend Notifikasi | **Custom WordPress Plugin (PHP)** | Menjembatani trigger notifikasi ke Firebase (FCM) langsung dari action hooks BuddyBoss/WordPress tanpa perlu server terpisah. |
 | Push Notification | **Firebase Cloud Messaging (FCM)** | Satu-satunya jalur resmi push notification Android |
 | Version Control | **GitHub** (private repo) | Kolaborasi tim |
 | Build Target | Android APK/AAB (fase 1), iOS (fase berikutnya) | Sesuai scope 30 hari |
@@ -44,7 +43,7 @@ Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satu
 ## 4. Arsitektur Sistem (Alur Data)
 
 ```
-[ React App (dibungkus Capacitor) ]
+[ Flutter App ]
         |
         |  1. Menu Shortcut → WebView langsung ke halaman WordPress
         |     (titc.or.id/toefl-itp, /jadwal, dst — CSS mobile-only disuntik via Customizer)
@@ -55,9 +54,9 @@ Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satu
         |
         |  Trigger saat ada activity baru (post/comment/message)
         v
-[ Backend Tambahan (Node.js/Express atau Firebase Functions) ]
+[ Custom WordPress Plugin (PHP) ]
         |
-        |  Panggil FCM untuk kirim push notification
+        |  Panggil FCM API untuk kirim push notification
         v
 [ Firebase Cloud Messaging ]
         |
@@ -65,7 +64,7 @@ Prinsip inti: **WordPress + Fluent Community / BuddyBoss tetap menjadi satu-satu
 [ HP User — Notifikasi masuk ]
 ```
 
-Catatan: Backend tambahan TIDAK menyimpan salinan data forum. Perannya murni sebagai "penerus sinyal" dari WordPress ke Firebase.
+Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "penerus sinyal" dari aktivitas BuddyBoss ke Firebase.
 
 ## 5. Struktur Fitur & Layar (Screens)
 
