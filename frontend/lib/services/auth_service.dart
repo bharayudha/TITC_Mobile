@@ -62,9 +62,9 @@ class AuthService {
         await _fetchUserProfile();
         print('Profile fetched. Name: $_userName, Avatar: $_userAvatarUrl');
       } else {
-        print('Invalid nonce, logging out...');
-        // Cookie tidak valid lagi (expired/logout)
-        await logout();
+        print('Warning: Could not fetch nonce on init. But we will keep the cookies.');
+        // Kita tidak boleh memanggil logout() di sini karena bisa saja network lambat
+        // atau halaman belum memuat nonce dengan benar.
       }
     } else {
       print('=== AUTH DEBUG ===');
@@ -76,11 +76,10 @@ class AuthService {
   static Future<String?> _fetchRestNonce(String cookies) async {
     try {
       final response = await http.get(
-        Uri.parse(_authPageUrl),
+        Uri.parse('https://titc.or.id/portal/'),
         headers: {
           'Cookie': cookies,
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://titc.or.id/portal/',
         },
       );
       print('Fetch Nonce Status: ${response.statusCode}');

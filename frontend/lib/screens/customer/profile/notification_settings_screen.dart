@@ -80,7 +80,7 @@ class _NotificationSettingsScreenState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ProfileBreadcrumb(
-              onMembersTap: () => openMembersTab(context),
+              onHomeTap: () => openHomeTab(context),
               // Sudah berada di halaman ini, jadi tidak perlu aksi.
               onNotificationSettingsTap: null,
               onEditTap: () {},

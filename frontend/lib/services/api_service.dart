@@ -167,6 +167,9 @@ class ApiService {
     String? firstName,
     String? lastName,
     String? bio,
+    String? email,
+    String? website,
+    String? password,
   }) async {
     try {
       final cookies = AuthService.cookies;
@@ -177,12 +180,15 @@ class ApiService {
         return false;
       }
 
-      final url = Uri.parse('$_baseUrl/wp/v2/users/me');
+      final url = Uri.parse('https://titc.or.id/wp-json/wp/v2/users/me');
       
       final Map<String, dynamic> body = {};
       if (firstName != null && firstName.isNotEmpty) body['first_name'] = firstName;
       if (lastName != null && lastName.isNotEmpty) body['last_name'] = lastName;
       if (bio != null) body['description'] = bio;
+      if (email != null && email.isNotEmpty) body['email'] = email;
+      if (website != null) body['url'] = website;
+      if (password != null && password.isNotEmpty) body['password'] = password;
 
       final response = await http.post(
         url,

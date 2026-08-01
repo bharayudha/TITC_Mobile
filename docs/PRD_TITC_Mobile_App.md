@@ -97,6 +97,14 @@ Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "peneru
 - Disimpan lokal dengan `flutter_secure_storage`.
 - Signup menggunakan alur 2-Step (Submit Data -> Verifikasi Kode Email 2FA).
 
+### 5.8 Profile Settings & Edit Profile
+- Menu profil dipisahkan menjadi komponen *Native* dan *WebView* untuk menjamin pengalaman pengguna (UX) yang seamless:
+  1. **Edit Profil (Ikon Pensil)**: Menggunakan halaman *100% Native Flutter* (`ProfileEditScreen`) untuk mengubah First Name, Last Name, Email, Website URL, Bio, Social Links, dan Password.
+     - Endpoint: `POST /wp-json/wp/v2/users/me` (untuk data standar WP).
+  2. **Avatar Upload (Ikon Kamera/Awan)**: Menggunakan teknik *Manipulated WebView* (`AuthenticatedWebViewScreen`).
+     - Alasan: Upload foto dan *cropping* secara native langsung ke API FCOM sangat kompleks dan tidak didokumentasikan.
+     - Solusi UX: WebView disembunyikan menggunakan *Loading Spinner* (melalui widget `Stack`), lalu CSS kustom diinjeksi via JavaScript saat `onPageFinished`. Setelah 200ms, layar *loading* dihilangkan, memunculkan WebView yang *header/footer*-nya telah dihapus sehingga 100% terlihat seperti halaman Native.
+
 ## 6. Kebutuhan Non-Fungsional
 
 - **Keamanan token**: token JWT disimpan pakai secure storage, bukan localStorage biasa.
@@ -138,7 +146,9 @@ Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "peneru
 Karena standar JWT API atau BuddyBoss sudah digantikan, login & register dilakukan dengan "meniru" form browser via WebView-like request:
 1. **Login**: GET halaman `/portal/?fcom_action=auth` -> ekstrak `_fcom_login_nonce` -> POST username, password, nonce ke `/login/`.
 2. **Register**: GET halaman form register -> ekstrak `_fcom_signup_nonce` -> POST data ke `admin-ajax.php?action=fcom_user_registration` -> Ekstrak Token 2FA dari HTML response -> Tampilkan Dialog OTP di Flutter -> POST kode OTP ke admin-ajax.php.
-3. **Penyimpanan Sesi**: Cookie `wordpress_logged_in` yang didapat dari Set-Cookie disimpan menggunakan `flutter_secure_storage` lalu disisipkan ke header `Cookie` di setiap request ke `/fluent-community/v2/`.
+3. **Penyimpanan Sesi (Persistent Login)**: Cookie `wordpress_logged_in` yang didapat dari Set-Cookie disimpan menggunakan `flutter_secure_storage` lalu disisipkan ke header `Cookie` di setiap request ke `/fluent-community/v2/`.
+   - **Handling Hot Restart / App Resume**: Pada `AuthService.init()`, sistem akan memuat *cookies* dan menembak `/portal/` untuk mendapatkan *REST API Nonce* terbaru dari HTML. Jika fetch *nonce* gagal, sesi/cookie **tidak dihapus** untuk mencegah user ter-*logout* secara tidak sengaja akibat isu jaringan.
+   - **Routing Otomatis**: Layar utama (`app.dart`) akan mengecek `AuthService.isLoggedIn` dan secara otomatis mengarahkan ke `MainShell()` jika login masih valid.
 
 > [!IMPORTANT]
 > **Catatan Penting Proteksi Firewall/Anti-Bot**: 

@@ -21,12 +21,12 @@ const List<String> kProfileTabs = [
 class ProfileBreadcrumb extends StatelessWidget {
   const ProfileBreadcrumb({
     super.key,
-    this.onMembersTap,
+    this.onHomeTap,
     this.onNotificationSettingsTap,
     this.onEditTap,
   });
 
-  final VoidCallback? onMembersTap;
+  final VoidCallback? onHomeTap;
   final VoidCallback? onNotificationSettingsTap;
   final VoidCallback? onEditTap;
 
@@ -47,9 +47,9 @@ class ProfileBreadcrumb extends StatelessWidget {
               child: Row(
                 children: [
                   GestureDetector(
-                    onTap: onMembersTap,
+                    onTap: onHomeTap,
                     child: const Text(
-                      'Members',
+                      'Home',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,

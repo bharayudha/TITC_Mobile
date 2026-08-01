@@ -8,6 +8,7 @@ import 'package:magang_titc/widgets/customer/side_drawer.dart';
 import 'package:magang_titc/widgets/shared/top_app_bar.dart';
 import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/screens/customer/profile/notification_settings_screen.dart';
+import 'package:magang_titc/screens/customer/profile/profile_edit_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
 
@@ -16,15 +17,14 @@ const Color _chipBorder = Color(0xFFDDDDDD);
 /// Latar kotak tulis postingan.
 const Color _composerFill = Color(0xFFEDF1F7);
 
-/// Posisi tab Members pada bottom navigation di [MainShell].
-const int kMembersTabIndex = 3;
+const int kHomeTabIndex = 0;
 
-/// Membuka daftar Members. Seluruh riwayat halaman dibersihkan agar tidak
+/// Membuka halaman Home. Seluruh riwayat halaman dibersihkan agar tidak
 /// menumpuk beberapa shell saat berpindah lewat breadcrumb.
-void openMembersTab(BuildContext context) {
+void openHomeTab(BuildContext context) {
   Navigator.of(context).pushAndRemoveUntil(
     MaterialPageRoute(
-      builder: (_) => const MainShell(initialIndex: kMembersTabIndex),
+      builder: (_) => const MainShell(initialIndex: kHomeTabIndex),
     ),
     (route) => false,
   );
@@ -71,15 +71,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openEditProfile() async {
+    final names = widget.name.split(' ');
+    final firstName = names.isNotEmpty ? names.first : '';
+    final lastName = names.length > 1 ? names.sublist(1).join(' ') : '';
+    
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const AuthenticatedWebViewScreen(
-          url: 'https://titc.or.id/portal/settings',
-          title: 'Account Settings',
+        builder: (_) => ProfileEditScreen(
+          firstName: firstName,
+          lastName: lastName,
+          email: AuthService.userEmail ?? '',
+          bio: '',
         ),
       ),
     );
-    // Refresh user profile data after returning from webview
+    // Refresh user profile data after returning
     await AuthService.init();
     if (mounted) setState(() {});
   }
@@ -109,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ProfileBreadcrumb(
-              onMembersTap: () => openMembersTab(context),
+              onHomeTap: () => openHomeTab(context),
               onNotificationSettingsTap: _openNotificationSettings,
               onEditTap: _openEditProfile,
             ),
