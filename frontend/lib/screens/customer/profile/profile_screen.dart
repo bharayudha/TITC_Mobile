@@ -74,7 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const AuthenticatedWebViewScreen(
-          url: 'https://titc.or.id/portal/account/',
+          url: 'https://titc.or.id/portal/settings',
           title: 'Account Settings',
         ),
       ),

@@ -162,4 +162,49 @@ class ApiService {
       throw Exception('Terjadi kesalahan: $e');
     }
   }
+
+  static Future<bool> updateProfile({
+    String? firstName,
+    String? lastName,
+    String? bio,
+  }) async {
+    try {
+      final cookies = AuthService.cookies;
+      final nonce = AuthService.wpNonce;
+
+      if (cookies == null || nonce == null) {
+        print('Missing auth cookies or nonce for updateProfile');
+        return false;
+      }
+
+      final url = Uri.parse('$_baseUrl/wp/v2/users/me');
+      
+      final Map<String, dynamic> body = {};
+      if (firstName != null && firstName.isNotEmpty) body['first_name'] = firstName;
+      if (lastName != null && lastName.isNotEmpty) body['last_name'] = lastName;
+      if (bio != null) body['description'] = bio;
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': cookies,
+          'X-WP-Nonce': nonce,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://titc.or.id/portal/',
+        },
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        print('Failed to update profile: ${response.statusCode} - ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('Error in updateProfile: $e');
+      return false;
+    }
+  }
 }

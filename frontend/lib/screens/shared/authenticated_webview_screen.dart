@@ -32,21 +32,22 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
         NavigationDelegate(
           onPageStarted: (_) => setState(() => _isLoading = true),
           onPageFinished: (_) async {
-            if (mounted) setState(() => _isLoading = false);
             // Sembunyikan Header dan Footer bawaan website agar terasa seperti Native App
             await _controller.runJavaScript('''
               const style = document.createElement('style');
               style.innerHTML = `
                 /* Sembunyikan semua elemen web yang tidak perlu */
-                header, .site-header, #masthead, footer, .site-footer, #colophon, .fcom-sidebar, .fcom_page_header {
+                header, .site-header, #masthead, footer, .site-footer, #colophon, .fcom-sidebar, .fcom_page_header,
+                .fcom-bottom-nav, .fcom-mobile-nav, .fcom-app-header, nav {
                   display: none !important;
                 }
                 
-                /* Reset Body agar penuh layar tanpa margin web */
-                body, html, .site-content, .fcom-app-wrapper {
-                  padding: 0 !important;
+                /* Paksa body untuk terlihat seperti aplikasi native */
+                body {
+                  background-color: #F7F9FC !important;
+                  padding-top: 0 !important;
+                  padding-bottom: 0 !important;
                   margin: 0 !important;
-                  background-color: #F7F9FC !important; /* Warna background Flutter App */
                 }
                 
                 /* Container utama form dibuat menyatu dengan background */
@@ -112,6 +113,15 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
               `;
               document.head.appendChild(style);
             ''');
+            
+            // Beri waktu sejenak agar CSS selesai dirender sebelum menampilkan WebView
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            });
           },
         ),
       );
@@ -138,7 +148,6 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
               path: '/',
             ),
           );
-          // Tambahkan juga untuk domain dengan titik (wildcard)
           await cookieManager.setCookie(
             WebViewCookie(
               name: name,
@@ -157,6 +166,7 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 3,
