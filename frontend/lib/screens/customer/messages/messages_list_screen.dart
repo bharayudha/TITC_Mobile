@@ -3,7 +3,10 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/constants/app_colors.dart';
+import 'package:magang_titc/models/message_model.dart';
+import 'package:magang_titc/services/messages_service.dart';
 import 'package:magang_titc/screens/customer/preparation_test/preparation_test_webview_screen.dart';
+import 'package:magang_titc/screens/customer/messages/chat_detail_screen.dart';
 import 'package:magang_titc/widgets/customer/customer_bottom_nav_bar.dart';
 import 'package:magang_titc/widgets/customer/side_drawer.dart';
 import 'package:magang_titc/widgets/shared/top_app_bar.dart';
@@ -17,6 +20,13 @@ class MessagesListScreen extends StatefulWidget {
 
 class _MessagesListScreenState extends State<MessagesListScreen> {
   final _searchController = TextEditingController();
+  late Future<ChatThreadsResult> _threadsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _threadsFuture = MessagesService.fetchThreads();
+  }
 
   @override
   void dispose() {
@@ -38,43 +48,93 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
     );
   }
 
+  Future<void> _refresh() async {
+    setState(() {
+      _threadsFuture = MessagesService.fetchThreads();
+    });
+    await _threadsFuture;
+  }
+
+  void _openThread(ChatThreadModel thread) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatDetailScreen(
+          threadId: thread.id,
+          title: thread.title,
+          avatarUrl: thread.avatarUrl,
+          canSendMessage: thread.canSendMessage,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: const TitcAppBar(),
       drawer: const SideDrawer(),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Blok header + search dipisahkan dari daftar lewat drop shadow.
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: kShadowDown,
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Blok header + search dipisahkan dari daftar lewat drop shadow.
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: kShadowDown,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMessagesHeader(),
+                    _buildSearchBar(),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildMessagesHeader(),
-                  _buildSearchBar(),
-                  const SizedBox(height: 12),
-                ],
+              const SizedBox(height: 20),
+              FutureBuilder<ChatThreadsResult>(
+                future: _threadsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Center(child: Text('Gagal memuat: ${snapshot.error}')),
+                    );
+                  }
+
+                  final result = snapshot.data!;
+                  final query = _searchController.text.trim().toLowerCase();
+                  final communities = _filterThreads(result.communityThreads, query);
+                  final directs = _filterThreads([...result.directThreads, ...result.groupThreads], query);
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildSectionLabel('COMMUNITIES'),
+                      const SizedBox(height: 12),
+                      _buildThreadSection(communities, 'Belum ada percakapan komunitas.'),
+                      const SizedBox(height: 24),
+                      _buildSectionLabel('DIRECT MESSAGES'),
+                      const SizedBox(height: 12),
+                      _buildThreadSection(directs, 'Belum ada pesan langsung.'),
+                      const SizedBox(height: 24),
+                    ],
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 20),
-            _buildSectionLabel('COMMUNITIES'),
-            const SizedBox(height: 12),
-            _buildPlaceholderBox(height: 420),
-            const SizedBox(height: 24),
-            _buildSectionLabel('DIRECT MESSAGES'),
-            const SizedBox(height: 12),
-            _buildPlaceholderBox(height: 200),
-            const SizedBox(height: 16),
-            _buildPlaceholderBox(height: 180),
-            const SizedBox(height: 24),
-          ],
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: BottomNavBar(
@@ -82,6 +142,11 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
         onTap: _onNavTap,
       ),
     );
+  }
+
+  List<ChatThreadModel> _filterThreads(List<ChatThreadModel> threads, String query) {
+    if (query.isEmpty) return threads;
+    return threads.where((t) => t.title.toLowerCase().contains(query)).toList();
   }
 
   Widget _buildMessagesHeader() {
@@ -101,14 +166,7 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                   PhosphorIconsRegular.paperPlaneTilt,
                   color: Colors.black87,
                 ),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: const PhosphorIcon(
-                  PhosphorIconsRegular.dotsThreeVertical,
-                  color: Colors.black87,
-                ),
-                onPressed: () {},
+                onPressed: _refresh,
               ),
             ],
           ),
@@ -122,6 +180,7 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: TextField(
         controller: _searchController,
+        onChanged: (_) => setState(() {}),
         decoration: InputDecoration(
           hintText: 'Search conversations',
           hintStyle: const TextStyle(color: Colors.grey),
@@ -161,14 +220,75 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
     );
   }
 
-  Widget _buildPlaceholderBox({required double height}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: const Color(0xFFD9D9D9),
-          borderRadius: BorderRadius.circular(4),
+  Widget _buildThreadSection(List<ChatThreadModel> threads, String emptyMessage) {
+    if (threads.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(emptyMessage, style: TextStyle(color: Colors.grey.shade600)),
+        ),
+      );
+    }
+
+    return Column(
+      children: threads.map(_buildThreadTile).toList(),
+    );
+  }
+
+  Widget _buildThreadTile(ChatThreadModel thread) {
+    return InkWell(
+      onTap: () => _openThread(thread),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: Colors.blue.shade50,
+              backgroundImage: thread.avatarUrl.isNotEmpty ? NetworkImage(thread.avatarUrl) : null,
+              child: thread.avatarUrl.isEmpty
+                  ? Text(thread.title.isNotEmpty ? thread.title[0].toUpperCase() : '?')
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    thread.title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (thread.lastMessagePreview.isNotEmpty)
+                    Text(
+                      thread.lastMessagePreview,
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+            if (thread.unreadCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E5AF5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${thread.unreadCount}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+          ],
         ),
       ),
     );
