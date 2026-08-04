@@ -3,8 +3,11 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:magang_titc/services/auth_service.dart';
 
 /// WebView khusus untuk halaman Space di Fluent Community Portal.
-/// Menghilangkan semua elemen navigasi web (header, sidebar, bottom nav)
-/// sehingga tampilan menyatu seolah-olah halaman Native.
+/// Class names verified via DOM debug:
+/// - Right sidebar: ASIDE.el-aside.fcom_resp_side
+/// - Sidebar widgets: DIV.fcom_main_side_wrap > DIV.app_side_widget
+/// - Feed parent: DIV.fhr_home
+/// - Layout uses Element Plus: el-container, el-aside, el-main
 class SpaceWebViewScreen extends StatefulWidget {
   final String spaceSlug;
   final String title;
@@ -23,125 +26,245 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
 
-  // CSS untuk menyembunyikan semua elemen navigasi web Fluent Community
-  static const String _hideChromeCSS = '''
-    /* ===== HIDE TOP NAVIGATION BAR ===== */
-    .fcom_top_menu,
-    .top_menu_left,
-    .top_menu_center,
-    .top_menu_right {
-      display: none !important;
-      height: 0 !important;
-      overflow: hidden !important;
+  String get _injectScript => r'''
+(function() {
+  'use strict';
+
+  function injectCSS() {
+    if (document.getElementById('titc-final-styles')) return;
+    var s = document.createElement('style');
+    s.id = 'titc-final-styles';
+    s.textContent = `
+      /* ===== HIDE: Top navigation FCOM ===== */
+      .fcom_top_menu { display: none !important; }
+
+      /* ===== HIDE: Left sidebar (spaces list) ===== */
+      .spaces, .space_contents, #fluent_community_sidebar_menu,
+      .fcom_sidebar_wrap, .fcom_side_footer, .space_opener {
+        display: none !important; width: 0 !important;
+      }
+
+      /* ===== HIDE: Mobile bottom nav ===== */
+      .fcom_mobile_menu { display: none !important; }
+
+      /* ===== HIDE: Hamburger button ===== */
+      .fcom_space_opener_btn { display: none !important; }
+
+      /* ===== HIDE: WordPress theme header/footer ===== */
+      header, .site-header, #masthead, .ast-site-header,
+      .elementor-location-header, footer, .site-footer, #colophon,
+      .ast-site-footer, .elementor-location-footer, .footer-widgets,
+      .bb-mobile-panel, .bb-mobile-header, .spectra-header-template {
+        display: none !important;
+      }
+
+      /* ===== HIDE: Judul space (verified: H1.fcom_page_title) ===== */
+      .fcom_page_title {
+        display: none !important;
+      }
+
+      /* ===== HIDE: Tab nav desktop (Posts/Chat/About links) ===== */
+      nav.fcom_desktop_only {
+        display: none !important;
+      }
+
+      /* ===== COLLAPSE: Container header tapi jangan display:none ===== */
+      /* Harus tetap di DOM agar BUTTON.fcom_dot_menu bisa diklik via JS */
+      .fhr_content_layout_header {
+        height: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        position: relative !important;
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+        background: transparent !important;
+      }
+
+      /* ===== HIDE VISUALLY: Tombol ⋮ web (tetap di DOM untuk diklik) ===== */
+      .fcom_dot_menu {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        top: 0 !important;
+        right: 0 !important;
+      }
+      /* ===== FIX: Body ===== */
+      body {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+        overflow-x: hidden !important;
+      }
+
+      /* ===== FIX: All wrappers full width ===== */
+      .fcom_wrap, .fluent_com, .fhr_content, #fluent_comminity_body, .fhr_wrap {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+      }
+
+      /* ===== CRITICAL: Element Plus layout containers ===== */
+      .el-container {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      .el-main {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        flex: none !important;
+        overflow: visible !important;
+      }
+
+      /* ===== LEFT el-aside (spaces list) = sembunyikan ===== */
+      aside.el-aside:not(.fcom_resp_side) {
+        display: none !important;
+        width: 0 !important;
+      }
+
+      /* ===== RIGHT el-aside (About + Recent) = tampilkan full width ===== */
+      aside.fcom_resp_side,
+      .fcom_resp_side {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: none !important;
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        float: none !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 8px 0 0 0 !important;
+        box-sizing: border-box !important;
+        order: 10 !important;
+      }
+
+      .fcom_main_side_wrap {
+        display: block !important;
+        width: 100% !important;
+        padding: 0 12px 16px !important;
+        box-sizing: border-box !important;
+      }
+
+      .app_side_widget {
+        display: block !important;
+        width: 100% !important;
+        margin-bottom: 12px !important;
+        border-radius: 8px !important;
+        background: var(--fcom-primary-bg, #fff) !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        padding: 16px !important;
+        box-sizing: border-box !important;
+      }
+
+      .widget_header {
+        margin-bottom: 8px !important;
+        font-weight: 600 !important;
+      }
+
+      .fhr_home {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .feed_layout {
+        padding-left: 0 !important;
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  function fixLayout() {
+    document.querySelectorAll('.el-container').forEach(function(c) {
+      c.style.setProperty('display', 'flex', 'important');
+      c.style.setProperty('flex-direction', 'column', 'important');
+      c.style.setProperty('width', '100%', 'important');
+      c.style.setProperty('max-width', '100%', 'important');
+    });
+
+    document.querySelectorAll('.el-main').forEach(function(m) {
+      m.style.setProperty('width', '100%', 'important');
+      m.style.setProperty('max-width', '100%', 'important');
+      m.style.setProperty('padding', '0', 'important');
+      m.style.setProperty('flex', 'none', 'important');
+    });
+
+    var feedLayout = document.querySelector('.feed_layout');
+    if (feedLayout) {
+      feedLayout.style.setProperty('padding-left', '0', 'important');
+      feedLayout.style.setProperty('margin-left', '0', 'important');
+      feedLayout.style.setProperty('width', '100%', 'important');
+      feedLayout.style.setProperty('max-width', '100%', 'important');
     }
 
-    /* ===== HIDE LEFT SIDEBAR ===== */
-    .spaces,
-    .space_contents,
-    #fluent_community_sidebar_menu,
-    .fcom_sidebar_wrap,
-    .fcom_side_footer,
-    .space_opener {
-      display: none !important;
-      width: 0 !important;
-      overflow: hidden !important;
+    // Collapse container header (jangan display:none agar tombol ⋮ tetap di DOM)
+    var layoutHeader = document.querySelector('.fhr_content_layout_header');
+    if (layoutHeader) {
+      layoutHeader.style.setProperty('height', '0', 'important');
+      layoutHeader.style.setProperty('min-height', '0', 'important');
+      layoutHeader.style.setProperty('padding', '0', 'important');
+      layoutHeader.style.setProperty('margin', '0', 'important');
+      layoutHeader.style.setProperty('overflow', 'visible', 'important');
     }
 
-    /* ===== HIDE MOBILE BOTTOM NAVIGATION ===== */
-    .fcom_mobile_menu,
-    .focm_menu_items,
-    .focm_menu_item {
-      display: none !important;
-      height: 0 !important;
-      overflow: hidden !important;
-    }
 
-    /* ===== HIDE MOBILE HAMBURGER BUTTON ===== */
-    .fcom_space_opener_btn {
-      display: none !important;
-    }
+  }
 
-    /* ===== HIDE WORDPRESS THEME HEADER/FOOTER ===== */
-    header, .site-header, #masthead, .ast-site-header, .elementor-location-header,
-    footer, .site-footer, #colophon, .ast-site-footer, .elementor-location-footer,
-    .footer-widgets, .bb-mobile-panel, .bb-mobile-header, .header-inner, .buddypanel,
-    .spectra-header-template {
-      display: none !important;
-    }
+  // Jalankan
+  injectCSS();
+  fixLayout();
 
-    /* ===== FIX LAYOUT: Hapus offset sidebar ===== */
-    .feed_layout {
-      padding-left: 0 !important;
-      margin-left: 0 !important;
-    }
+  [300, 800, 1500, 3000].forEach(function(ms) {
+    setTimeout(function() { injectCSS(); fixLayout(); }, ms);
+  });
 
-    /* ===== FIX BODY ===== */
-    body {
-      padding-top: 0 !important;
-      margin-top: 0 !important;
-      overflow-x: hidden !important;
-    }
 
-    /* ===== Pastikan konten utama full width ===== */
-    .fcom_wrap, .fluent_com, .fhr_content, #fluent_comminity_body {
-      max-width: 100% !important;
-      width: 100% !important;
-      padding-left: 0 !important;
-      margin-left: 0 !important;
-    }
-  ''';
-
-  // JavaScript untuk menyuntikkan CSS dan menjaga agar tetap tersembunyi
-  // meskipun SPA (Single Page Application) Vue.js melakukan re-render
-  static const String _injectScript = '''
-    (function() {
-      // Inject CSS
-      var style = document.createElement('style');
-      style.id = 'titc-mobile-hide-chrome';
-      style.innerHTML = `$_hideChromeCSS`;
-      document.head.appendChild(style);
-
-      // MutationObserver untuk memantau perubahan DOM dari Vue.js SPA
-      // dan memastikan CSS tetap tersuntik meskipun ada re-render
-      var observer = new MutationObserver(function(mutations) {
-        if (!document.getElementById('titc-mobile-hide-chrome')) {
-          var s = document.createElement('style');
-          s.id = 'titc-mobile-hide-chrome';
-          s.innerHTML = `$_hideChromeCSS`;
-          document.head.appendChild(s);
-        }
-      });
-      observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true
-      });
-    })();
-  ''';
+  // MutationObserver dengan debounce
+  var debounceTimer = null;
+  var observer = new MutationObserver(function() {
+    injectCSS();
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fixLayout, 200);
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+})();
+''';
 
   @override
   void initState() {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent('Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
+      ..setUserAgent(
+          'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
       ..setNavigationDelegate(
         NavigationDelegate(
-          onNavigationRequest: (NavigationRequest request) {
-            // Paksa semua navigasi tetap di dalam WebView, jangan buka Chrome
-            return NavigationDecision.navigate;
-          },
+          onNavigationRequest: (_) => NavigationDecision.navigate,
           onPageStarted: (_) {
             if (mounted) setState(() => _isLoading = true);
           },
           onPageFinished: (String url) async {
-            // Inject CSS + MutationObserver setiap kali halaman selesai dimuat
             await _controller.runJavaScript(_injectScript);
-
-            // Delay sedikit untuk memastikan CSS sudah dirender
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted) {
-                setState(() => _isLoading = false);
-              }
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (mounted) setState(() => _isLoading = false);
             });
           },
         ),
@@ -155,11 +278,10 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
     final cookiesString = AuthService.cookies;
 
     if (cookiesString != null && cookiesString.isNotEmpty) {
-      final parts = cookiesString.split(';');
-      for (final part in parts) {
+      for (final part in cookiesString.split(';')) {
         final kv = part.trim().split('=');
         if (kv.length >= 2) {
-          final name = kv[0];
+          final name = kv[0].trim();
           final value = kv.sublist(1).join('=');
           await cookieManager.setCookie(
             WebViewCookie(name: name, value: value, domain: 'titc.or.id', path: '/'),
@@ -171,31 +293,75 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       }
     }
 
-    final url = 'https://titc.or.id/portal/space/${widget.spaceSlug}/home';
-    _controller.loadRequest(Uri.parse(url));
+    await _controller.loadRequest(
+      Uri.parse('https://titc.or.id/portal/space/${widget.spaceSlug}/home'),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2B2E33),
+        backgroundColor: const Color(0xFF1877F2),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           widget.title,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onPressed: () {
+              // Klik BUTTON.fcom_dot_menu (verified via DOM debug)
+              _controller.runJavaScript('''
+                (function() {
+                  var dotBtn = document.querySelector('.fcom_dot_menu');
+                  if (!dotBtn) { console.log('[DEBUG] .fcom_dot_menu tidak ketemu'); return; }
+                  
+                  // Restore pointer-events agar bisa diklik
+                  dotBtn.style.setProperty('opacity', '1', 'important');
+                  dotBtn.style.setProperty('pointer-events', 'auto', 'important');
+                  
+                  // Klik tombolnya
+                  dotBtn.click();
+                  
+                  // Sembunyikan lagi setelah klik
+                  setTimeout(function() {
+                    dotBtn.style.setProperty('opacity', '0', 'important');
+                    dotBtn.style.setProperty('pointer-events', 'none', 'important');
+                  }, 100);
+                })();
+              ''');
+            },
+          ),
+        ],
       ),
       body: Stack(
         children: [
-          // WebView yang sudah dibersihkan dari elemen web
           Opacity(
-            opacity: _isLoading ? 0 : 1,
+            opacity: _isLoading ? 0.0 : 1.0,
             child: WebViewWidget(controller: _controller),
           ),
           if (_isLoading)
-            const Center(child: CircularProgressIndicator()),
+            const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF1877F2)),
+                  SizedBox(height: 12),
+                  Text('Memuat Space...',
+                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                ],
+              ),
+            ),
         ],
       ),
     );

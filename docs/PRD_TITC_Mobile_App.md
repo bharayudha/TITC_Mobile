@@ -461,3 +461,28 @@ Body (form-encoded):
 3. Jika fetch nonce berhasil → fetch profil user terbaru.
 4. Jika fetch nonce **gagal** → **JANGAN hapus cookies/logout**. Bisa jadi jaringan lambat. Biarkan user tetap login dengan data cache.
 5. `app.dart` mengecek `AuthService.isLoggedIn` → jika `true`, langsung ke `MainShell()`.
+
+## 11. Integrasi WebView Halaman Space (Fluent Community)
+
+Untuk menyajikan forum detail space dengan performa optimal dan navigasi native, halaman detail Space menggunakan WebView (`SpaceWebViewScreen`) dengan penyesuaian CSS dan JavaScript dinamis:
+
+### 11.1 Penyesuaian Layout DOM & CSS Injection
+Supaya WebView terasa menyatu dengan aplikasi native Flutter, elemen-elemen web dibersihkan melalui CSS Injection (`_injectScript`):
+- **Menghilangkan Top/Bottom Nav Bawaan Web**: Kelas CSS `.fcom_top_menu` dan `.fcom_mobile_menu` disembunyikan.
+- **Hiding Sidelist / Sidebar Kiri**: `.spaces`, `.space_contents`, dan `#fluent_community_sidebar_menu` di-hide.
+- **Responsivitas Layout Feed & Right Sidebar**:
+  - Parent `.el-container` diubah menjadi `flex-direction: column !important` agar main feed (`.feed_layout`) dan right sidebar (`ASIDE.el-aside.fcom_resp_side` berisi widget About & Recent Space Activities) mengalir secara vertikal ke bawah, bukan horizontal (mencegah tumpeng tindih layout).
+  - Main feed dan sidebar dibuat `width: 100%` dengan `position: static` dan `order: 10` untuk sidebar agar berada di bawah feed utama.
+
+### 11.2 Penanganan Double Header & Bridge Opsi 3-Dot (⋮)
+- **Hiding Container Judul Web**: Header asli di WebView (`.fhr_content_layout_header` yang membungkus teks judul space, emoji, dan menu navigation desktop `nav.fcom_desktop_only`) disembunyikan menggunakan CSS/JS dengan mengurangi tingginya menjadi 0 (`height: 0`, `overflow: visible`, `border: none`, `box-shadow: none`, `background: transparent`). Ini mencegah terjadinya "double header" karena aplikasi sudah menggunakan AppBar Flutter biru di bagian atas.
+- **Implementasi Bridge Tombol 3-Dot (⋮)**:
+  - Tombol 3-dot di AppBar Flutter dihubungkan ke tombol menu asli di webview (`BUTTON.fcom_dot_menu` yang memiliki atribut `el-tooltip`).
+  - Saat tombol 3-dot Flutter ditekan, ia mengirimkan perintah JavaScript untuk memaksa tombol asli di webview mendapatkan event `mouseenter` dan `click`:
+    ```javascript
+    var dotBtn = document.querySelector('.fcom_dot_menu');
+    dotBtn.style.setProperty('opacity', '1', 'important');
+    dotBtn.style.setProperty('pointer-events', 'auto', 'important');
+    dotBtn.click();
+    ```
+  - Karena container aslinya disembunyikan (berukuran 0px), koordinat posisi menu dari Element Plus tooltip/popover akan terganggu. Oleh karena itu, script mendeteksi kemunculan menu `.el-dropdown-menu` di `<body>` dan memaksa koordinat posisinya secara mutlak (`position: fixed; top: 10px; right: 10px; z-index: 999999; display: block; opacity: 1`) tepat di bawah/pojok kanan atas layar agar mudah diklik pengguna.
