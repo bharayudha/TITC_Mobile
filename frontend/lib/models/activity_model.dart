@@ -9,6 +9,10 @@ class ActivityModel {
   final int commentCount;
   final String? mediaUrl;
   final String? spaceName;
+  final String? permalink;
+  final String? linkPreviewUrl;
+  final String? linkPreviewTitle;
+  final String? linkPreviewDescription;
 
   ActivityModel({
     required this.id,
@@ -20,29 +24,33 @@ class ActivityModel {
     this.commentCount = 0,
     this.mediaUrl,
     this.spaceName,
+    this.permalink,
+    this.linkPreviewUrl,
+    this.linkPreviewTitle,
+    this.linkPreviewDescription,
   });
 
   /// Factory dari JSON response Fluent Community `/feeds`.
-  ///
-  /// Struktur JSON Fluent Community biasanya:
-  /// ```json
-  /// {
-  ///   "id": 123,
-  ///   "message": "...",
-  ///   "message_rendered": "<p>...</p>",
-  ///   "user": { "display_name": "...", "avatar": "..." },
-  ///   "created_at": "2026-07-...",
-  ///   "reactions_count": 2,
-  ///   "comments_count": 1,
-  ///   "space": { "title": "..." },
-  ///   "meta": { "featured_image": "..." }
-  /// }
-  /// ```
   factory ActivityModel.fromFluentCommunity(Map<String, dynamic> json) {
     // User info di v2 seringkali ada di 'xprofile' bukan 'user'
     final user = json['xprofile'] as Map<String, dynamic>? ?? json['user'] as Map<String, dynamic>? ?? {};
     final space = json['space'] as Map<String, dynamic>? ?? {};
     final meta = json['meta'] as Map<String, dynamic>? ?? {};
+    
+    // Parse preview data if available
+    final previewData = meta['preview_data'] as Map<String, dynamic>?;
+    String? linkUrl;
+    String? linkTitle;
+    String? linkDesc;
+    if (previewData != null) {
+      linkUrl = previewData['url'] ?? previewData['link'];
+      linkTitle = previewData['title'];
+      linkDesc = previewData['description'];
+    } else {
+      // Fallback regex extract link from content if needed, but FCOM usually uses preview_data
+      // We can check if 'url' exists in meta directly
+      linkUrl = meta['url'] as String?;
+    }
 
     return ActivityModel(
       id: json['id'] ?? 0,
@@ -61,6 +69,10 @@ class ActivityModel {
       commentCount: json['comments_count'] ?? json['comment_count'] ?? 0,
       mediaUrl: meta['featured_image'] as String?,
       spaceName: space['title'] as String?,
+      permalink: json['permalink'] as String?,
+      linkPreviewUrl: linkUrl,
+      linkPreviewTitle: linkTitle,
+      linkPreviewDescription: linkDesc,
     );
   }
 }

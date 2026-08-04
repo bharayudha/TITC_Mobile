@@ -3,6 +3,8 @@ import 'package:magang_titc/models/space_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:magang_titc/screens/customer/spaces/space_detail_screen.dart';
+import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 
 /// Konten tab Spaces. App bar, drawer, chat FAB, dan bottom nav dipasang oleh
 /// [MainShell].
@@ -16,11 +18,23 @@ class SpacesListScreen extends StatefulWidget {
 class _SpacesListScreenState extends State<SpacesListScreen> {
   bool _showAllSpaces = true;
   late Future<List<SpaceModel>> _spacesFuture;
+  List<SpaceModel> _allFetchedSpaces = [];
+  String _searchQuery = '';
+  String _sortBy = 'Alphabetical'; // Default sort
 
   @override
   void initState() {
     super.initState();
-    _spacesFuture = ApiService.fetchSpaces();
+    _loadSpaces();
+  }
+
+  void _loadSpaces() {
+    setState(() {
+      _spacesFuture = ApiService.fetchSpaces().then((spaces) {
+        _allFetchedSpaces = spaces;
+        return spaces;
+      });
+    });
   }
 
   @override
@@ -28,48 +42,70 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
     return SizedBox.expand(
       child: Stack(
         children: [
-          const Positioned.fill(child: ColoredBox(color: Color(0xFFD9D9D9))),
+          const Positioned.fill(child: ColoredBox(color: Color(0xFFF5F6F8))),
           
           // Data List
           Positioned.fill(
             top: 70, // Beri jarak untuk SectionHeader
-            child: RefreshIndicator(
-              onRefresh: () async {
-                setState(() {
-                  _spacesFuture = ApiService.fetchSpaces();
-                });
-              },
-              child: FutureBuilder<List<SpaceModel>>(
-                future: _spacesFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  } else if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
-                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text('Belum ada space.'));
-                  }
-
-                  // Filter berdasarkan tab (All vs My Spaces)
-                  final filteredSpaces = snapshot.data!.where((space) {
-                    if (_showAllSpaces) return true;
-                    return space.isJoined; // Asumsi: isJoined menandakan 'My Spaces'
-                  }).toList();
-
-                  if (filteredSpaces.isEmpty) {
-                     return const Center(child: Text('Tidak ada space di kategori ini.'));
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredSpaces.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      return _buildSpaceCard(filteredSpaces[index]);
+            child: Column(
+              children: [
+                _buildSearchAndSortBar(),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      _loadSpaces();
+                      await _spacesFuture;
                     },
-                  );
-                },
-              ),
+                    child: FutureBuilder<List<SpaceModel>>(
+                      future: _spacesFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        } else if (snapshot.hasError) {
+                          return Center(child: Text('Error: ${snapshot.error}'));
+                        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return const Center(child: Text('Belum ada space.'));
+                        }
+
+                        // Local Filtering
+                        var filteredSpaces = _allFetchedSpaces.where((space) {
+                          // Tab filter
+                          if (!_showAllSpaces && !space.isJoined) return false;
+                          
+                          // Search filter
+                          if (_searchQuery.isNotEmpty) {
+                            if (!space.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
+                                !space.description.toLowerCase().contains(_searchQuery.toLowerCase())) {
+                              return false;
+                            }
+                          }
+                          return true;
+                        }).toList();
+
+                        // Local Sorting
+                        if (_sortBy == 'Alphabetical') {
+                          filteredSpaces.sort((a, b) => a.title.compareTo(b.title));
+                        } else if (_sortBy == 'Members') {
+                          filteredSpaces.sort((a, b) => b.membersCount.compareTo(a.membersCount));
+                        }
+
+                        if (filteredSpaces.isEmpty) {
+                           return const Center(child: Text('Tidak ada space di kategori ini.'));
+                        }
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 80, top: 8),
+                          itemCount: filteredSpaces.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 16),
+                          itemBuilder: (context, index) {
+                            return _buildSpaceCard(filteredSpaces[index]);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -83,83 +119,234 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
     );
   }
 
+  Widget _buildSearchAndSortBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        children: [
+          // Search Field
+          TextField(
+            onChanged: (value) => setState(() => _searchQuery = value),
+            decoration: InputDecoration(
+              hintText: 'Search Space...',
+              hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+              prefixIcon: Icon(PhosphorIconsRegular.magnifyingGlass, color: Colors.grey.shade500),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFF1E5AF5)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Sort By Dropdown
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text('Sort by: ', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              DropdownButton<String>(
+                value: _sortBy,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                elevation: 16,
+                style: const TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600),
+                underline: const SizedBox(),
+                onChanged: (String? value) {
+                  if (value != null) {
+                    setState(() {
+                      _sortBy = value;
+                    });
+                  }
+                },
+                items: <String>['Alphabetical', 'Members']
+                    .map<DropdownMenuItem<String>>((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSpaceCard(SpaceModel space) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Cover image
-          Container(
-            height: 120,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              image: space.coverPhotoUrl.isNotEmpty
-                  ? DecorationImage(
-                      image: NetworkImage(space.coverPhotoUrl),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
+          // Cover image & Tag
+          Stack(
+            children: [
+              Container(
+                height: 130,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  image: space.coverPhotoUrl.isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(space.coverPhotoUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+              ),
+              if (space.isJoined)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade700,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Member',
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+            ],
           ),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
-                    image: space.logoUrl.isNotEmpty
-                        ? DecorationImage(
-                            image: NetworkImage(space.logoUrl),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
-                  child: space.logoUrl.isEmpty
-                      ? const Center(child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey))
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        space.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Logo
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                        image: space.logoUrl.isNotEmpty
+                            ? DecorationImage(
+                                image: NetworkImage(space.logoUrl),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
                       ),
-                      const SizedBox(height: 4),
-                      Row(
+                      child: space.logoUrl.isEmpty
+                          ? const Center(child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey))
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.public, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 4),
-                          Text(space.privacy, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                          const SizedBox(width: 12),
-                          PhosphorIcon(PhosphorIconsRegular.users, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 4),
-                          Text('${space.membersCount}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                          Text(
+                            space.title,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.public, size: 12, color: Colors.grey.shade500),
+                              const SizedBox(width: 4),
+                              Text(space.privacy, style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                              const SizedBox(width: 12),
+                              PhosphorIcon(PhosphorIconsRegular.users, size: 12, color: Colors.grey.shade500),
+                              const SizedBox(width: 4),
+                              Text('${space.membersCount} Members', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                            ],
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      // Simple HTML strip for description
-                      Text(
-                        space.description.replaceAll(RegExp(r'<[^>]*>'), ''),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Description
+                Text(
+                  space.description.replaceAll(RegExp(r'<[^>]*>'), ''),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                // Action Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 38,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (space.isJoined) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SpaceWebViewScreen(
+                              spaceSlug: space.slug,
+                              title: space.title,
+                            ),
+                          ),
+                        );
+                      } else {
+                        // Show loading indicator in button by calling setState in a stateful way, 
+                        // but since we are in _buildSpaceCard, we should trigger a rebuild or use a Future.
+                        // For simplicity, we just show a snackbar or local loading if we had it.
+                        // Better yet, just call API and refresh.
+                        bool success = await ApiService.joinSpace(space.slug);
+                        if (success) {
+                          _loadSpaces(); // Refresh list to get updated isJoined status
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Berhasil bergabung ke Space!')),
+                            );
+                          }
+                        } else {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Gagal bergabung ke Space.')),
+                            );
+                          }
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: space.isJoined ? Colors.white : const Color(0xFF1E5AF5),
+                      foregroundColor: space.isJoined ? const Color(0xFF1E5AF5) : Colors.white,
+                      elevation: 0,
+                      side: space.isJoined ? const BorderSide(color: Color(0xFF1E5AF5)) : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                    ],
+                    ),
+                    child: Text(
+                      space.isJoined ? 'View Space' : 'Join',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ],

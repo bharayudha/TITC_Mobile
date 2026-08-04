@@ -32,6 +32,11 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
       ..setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) {
+            // Cegah webview melempar user ke browser eksternal (Chrome)
+            // Biarkan semua navigasi tetap di dalam aplikasi
+            return NavigationDecision.navigate;
+          },
           onPageStarted: (_) => setState(() => _isLoading = true),
           onPageFinished: (String url) async {
             // Inject CSS inside an IIFE to avoid "Identifier 'style' has already been declared" error
@@ -40,14 +45,17 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
                 var style = document.createElement('style');
                 style.innerHTML = `
                 /* Sembunyikan Header dan Footer default WordPress & FCOM */
-                header, .site-header, #masthead, footer, .site-footer, #colophon, nav,
-                .fcom-sidebar, .fcom_page_header, .fcom-bottom-nav, .fcom-mobile-nav, .fcom-app-header,
+                /* Sembunyikan semua elemen Header dan Footer dari WordPress Theme (Astra, OceanWP, Elementor, BuddyBoss) */
+                header, .site-header, #masthead, .ast-site-header, .elementor-location-header,
+                footer, .site-footer, #colophon, .ast-site-footer, .elementor-location-footer, .footer-widgets,
+                .bb-mobile-panel, .bb-mobile-header, .header-inner, .buddypanel,
+                
+                /* Sembunyikan elemen bawaan Fluent Community UI */
+                nav, .fcom-sidebar, .fcom_page_header, .fcom-bottom-nav, .fcom-mobile-nav, .fcom-app-header,
                 .fcom_sidebar, .fcom_bottom_nav, .fcom_mobile_nav, .fcom_app_header,
                 .fc-header, .fc-mobile-header, .fc-top-bar, .fc-app-header, .fc-mobile-nav, .fc-bottom-bar,
                 #fc-app-header, #fc-mobile-nav, .fluent-community-header, .fluent-community-footer,
-                .fc-mobile-bottom-nav, .fc-mobile-nav-wrap, .fc-top-nav,
-                /* BuddyBoss fallback if they use BuddyBoss theme */
-                .bb-mobile-panel, .bb-mobile-header, .header-inner, .site-footer, .buddypanel {
+                .fc-mobile-bottom-nav, .fc-mobile-nav-wrap, .fc-top-nav {
                   display: none !important;
                 }
                 
@@ -60,12 +68,13 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
                 }
                 
                 /* Container utama form dibuat menyatu dengan background */
-                .fcom-main-content, .fcom-settings-wrapper {
+                .fcom-main-content, .fcom-settings-wrapper, .fluent_community_wrapper {
                   padding: 16px !important;
                   max-width: 100% !important;
                   border: none !important;
                   box-shadow: none !important;
                   background: transparent !important;
+                  margin-top: 0 !important;
                 }
                 
                 /* Desain Card untuk setiap bagian (Bio, Socials, Password) */
@@ -100,13 +109,13 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
                 button, .fcom-btn, input[type="submit"] {
                   background-color: #1E5AF5 !important;
                   color: white !important;
-                  border-radius: 10px !important;
-                  padding: 16px !important;
-                  font-size: 15px !important;
-                  font-weight: 600 !important;
-                  width: 100% !important;
+                  border-radius: 8px !important;
+                  padding: 12px 24px !important;
                   border: none !important;
-                  text-align: center !important;
+                  font-weight: 600 !important;
+                  font-size: 14px !important;
+                  cursor: pointer !important;
+                  width: 100% !important;
                   display: block !important;
                   margin-top: 10px !important;
                 }
@@ -173,7 +182,13 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
       }
     }
 
-    _controller.loadRequest(Uri.parse(widget.url));
+    _controller.loadRequest(
+      Uri.parse(widget.url),
+      headers: {
+        'X-App-Client': 'titc-mobile',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 titc-mobile',
+      },
+    );
   }
 
   @override

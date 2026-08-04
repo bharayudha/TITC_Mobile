@@ -1,6 +1,7 @@
 /// Model untuk satu entitas Space (Grup) dari Fluent Community.
 class SpaceModel {
   final int id;
+  final String slug;
   final String title;
   final String description;
   final String logoUrl;
@@ -11,6 +12,7 @@ class SpaceModel {
 
   SpaceModel({
     required this.id,
+    required this.slug,
     required this.title,
     required this.description,
     required this.logoUrl,
@@ -24,6 +26,7 @@ class SpaceModel {
   factory SpaceModel.fromJson(Map<String, dynamic> json) {
     return SpaceModel(
       id: json['id'] ?? 0,
+      slug: json['slug'] ?? '',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       logoUrl: json['logo'] ?? json['avatar'] ?? '',

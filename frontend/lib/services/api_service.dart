@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/activity_model.dart';
 import '../models/member_model.dart';
 import '../models/space_model.dart';
@@ -12,6 +13,24 @@ import 'auth_service.dart';
 class ApiService {
   static const String _baseUrl =
       'https://titc.or.id/wp-json/fluent-community/v2';
+  static const String _wpBaseUrl = 'https://titc.or.id/wp-json/wp/v2';
+
+  // Menyimpan slug space yang sudah di-join secara lokal sebagai fallback
+  static Set<String> _joinedSpacesCache = {};
+
+  static Future<void> _initJoinedCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getStringList('joined_spaces');
+    if (cached != null) {
+      _joinedSpacesCache = cached.toSet();
+    }
+  }
+
+  static Future<void> _addJoinedSpace(String slug) async {
+    _joinedSpacesCache.add(slug);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('joined_spaces', _joinedSpacesCache.toList());
+  }
 
   /// Headers standar yang menyertakan cookie autentikasi.
   static Map<String, String> get _authHeaders {
@@ -87,14 +106,18 @@ class ApiService {
     }
   }
   /// Ambil daftar spaces dari Fluent Community.
-  static Future<List<SpaceModel>> fetchSpaces() async {
+  static Future<List<SpaceModel>> fetchSpaces({String search = ''}) async {
     if (!AuthService.isLoggedIn) {
       throw Exception('Anda harus login terlebih dahulu.');
     }
 
     try {
+      final uri = Uri.parse('$_baseUrl/spaces').replace(
+        queryParameters: search.isNotEmpty ? {'search': search} : null,
+      );
+
       final response = await http.get(
-        Uri.parse('$_baseUrl/spaces'),
+        uri,
         headers: _authHeaders,
       );
 
@@ -112,11 +135,128 @@ class ApiService {
           spaces = [];
         }
 
-        return spaces.map((json) => SpaceModel.fromJson(json)).toList();
+        if (spaces.isNotEmpty) {
+          const encoder = JsonEncoder.withIndent('  ');
+          final jsonStr = encoder.convert(spaces.first);
+          for (final line in jsonStr.split('\n')) {
+            print('FCOM_JSON: $line');
+          }
+        }
+
+        await _initJoinedCache();
+
+        return spaces.map((json) {
+          final space = SpaceModel.fromJson(json);
+          // Inject isJoined from cache if the API didn't provide it
+          if (_joinedSpacesCache.contains(space.slug)) {
+            return SpaceModel(
+              id: space.id,
+              slug: space.slug,
+              title: space.title,
+              description: space.description,
+              logoUrl: space.logoUrl,
+              coverPhotoUrl: space.coverPhotoUrl,
+              membersCount: space.membersCount,
+              isJoined: true,
+              privacy: space.privacy,
+            );
+          }
+          return space;
+        }).toList();
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
       } else {
         throw Exception('Gagal memuat spaces: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Terjadi kesalahan: $e');
+    }
+  }
+
+  /// Bergabung ke dalam suatu Space.
+  static Future<bool> joinSpace(String spaceSlug) async {
+    if (!AuthService.isLoggedIn) {
+      throw Exception('Anda harus login terlebih dahulu.');
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/spaces/$spaceSlug/join'),
+        headers: _authHeaders,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await _addJoinedSpace(spaceSlug);
+        return true;
+      } else if (response.statusCode == 422 && response.body.contains('already a member')) {
+        // Jika server menolak karena user sudah menjadi member, kita anggap sukses
+        await _addJoinedSpace(spaceSlug);
+        return true;
+      } else {
+        print('Failed to join space: ${response.statusCode} - ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('Exception in joinSpace: $e');
+      return false;
+    }
+  }
+
+  /// Ambil feed spesifik untuk suatu space.
+  static Future<List<ActivityModel>> fetchSpaceFeeds(int spaceId) async {
+    if (!AuthService.isLoggedIn) {
+      throw Exception('Anda harus login terlebih dahulu.');
+    }
+
+    try {
+      // Biasanya parameter group_id atau space_id ditambahkan untuk mengambil feed khusus space
+      final uri = Uri.parse('$_baseUrl/feeds').replace(
+        queryParameters: {'space_id': spaceId.toString()},
+      );
+
+      final response = await http.get(
+        uri,
+        headers: _authHeaders,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        List<dynamic> feeds;
+        if (data is List) {
+          feeds = data;
+        } else if (data is Map && data.containsKey('data')) {
+          feeds = data['data'] as List;
+        } else if (data is Map && data.containsKey('activities')) {
+          if (data['activities'] is Map && data['activities'].containsKey('data')) {
+            feeds = data['activities']['data'] as List;
+          } else {
+            feeds = [];
+          }
+        } else if (data is Map && data.containsKey('feeds')) {
+          if (data['feeds'] is Map && data['feeds'].containsKey('data')) {
+            feeds = data['feeds']['data'] as List;
+          } else if (data['feeds'] is List) {
+            feeds = data['feeds'] as List;
+          } else {
+            feeds = [];
+          }
+        } else {
+          feeds = [];
+        }
+
+        // Karena parameter query API mungkin diabaikan (mengembalikan global feed),
+        // kita filter secara lokal untuk memastikan feed sesuai dengan Space yang dipilih
+        final spaceFeeds = feeds.where((json) {
+          final sId = json['space_id']?.toString() ?? json['group_id']?.toString();
+          return sId == spaceId.toString();
+        }).toList();
+
+        return spaceFeeds
+            .map((json) => ActivityModel.fromFluentCommunity(json))
+            .toList();
+      } else {
+        throw Exception('Gagal memuat space feed: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Terjadi kesalahan: $e');
