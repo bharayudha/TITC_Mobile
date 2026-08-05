@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
+import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/app_card.dart';
 
 const Color kProfilePageBackground = Color(0xFFF0F2F5);
@@ -196,7 +197,7 @@ class ProfileIdentityCard extends StatelessWidget {
               border: Border.all(color: Colors.white, width: 3),
               image: avatarUrl != null && avatarUrl!.isNotEmpty
                   ? DecorationImage(
-                      image: CachedNetworkImageProvider(avatarUrl!),
+                      image: CachedNetworkImageProvider(avatarUrl!, headers: AuthService.imageAuthHeaders),
                       fit: BoxFit.cover,
                     )
                   : null,

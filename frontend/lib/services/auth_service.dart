@@ -45,6 +45,13 @@ class AuthService {
 
   /// Getter: cookies saat ini, untuk dipakai oleh ApiService.
   static String? get cookies => _cookies;
+
+  /// Header auth untuk dipakai widget gambar (CachedNetworkImage/Provider).
+  /// Sebagian media (cover/logo space & course, avatar) kemungkinan ada di
+  /// balik privacy WordPress dan butuh cookie sesi yang sama seperti
+  /// panggilan API biasa, bukan cuma request gambar polos tanpa auth.
+  static Map<String, String>? get imageAuthHeaders =>
+      _cookies != null && _cookies!.isNotEmpty ? {'Cookie': _cookies!} : null;
   static String? get wpNonce => _wpNonce;
   static String? get userEmail => _userEmail;
   static String? get userName => _userName;

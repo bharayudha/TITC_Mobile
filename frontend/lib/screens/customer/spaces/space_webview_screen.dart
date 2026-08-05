@@ -338,11 +338,25 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       }
     }
 
+    final url = widget.overrideUrl ??
+        'https://titc.or.id/portal/${widget.portalSegment}/${widget.spaceSlug}/${widget.initialPath}';
+    print('WEBVIEW_LOAD: $url (cookie ${cookiesString == null ? "KOSONG" : "${cookiesString.length} char"})');
+
     await _controller.loadRequest(
-      Uri.parse(
-        widget.overrideUrl ??
-            'https://titc.or.id/portal/${widget.portalSegment}/${widget.spaceSlug}/${widget.initialPath}',
-      ),
+      Uri.parse(url),
+      // HANYA header anti-cache di sini, TANPA header 'Cookie' manual.
+      // WebView Android sudah membawa cookie lewat cookie jar (di atas);
+      // menambah 'Cookie' lagi sebagai header eksplisit sempat dicoba tapi
+      // ternyata membuat WebView mengirim header Cookie ganda/konflik
+      // dengan cookie jar-nya sendiri, sehingga server sama sekali tidak
+      // mengenali sesi (muncul diminta login ulang) — lebih parah dari
+      // sebelumnya. Situs pakai LiteSpeed Cache (cookie `_lscache_vary`),
+      // jadi anti-cache tetap dipertahankan supaya tidak disuguhi versi
+      // halaman yang ke-cache untuk pengunjung anonim.
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
     );
   }
 

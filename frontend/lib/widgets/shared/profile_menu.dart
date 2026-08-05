@@ -121,7 +121,7 @@ class ProfileMenuButton extends StatelessWidget {
           radius: 20,
           backgroundColor: Colors.grey.shade300,
           backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
-              ? CachedNetworkImageProvider(avatarUrl)
+              ? CachedNetworkImageProvider(avatarUrl, headers: AuthService.imageAuthHeaders)
               : null,
           child: avatarUrl == null || avatarUrl.isEmpty
               ? Text(

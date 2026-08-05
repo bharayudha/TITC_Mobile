@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:magang_titc/models/activity_model.dart';
 import 'package:magang_titc/models/space_model.dart';
 import 'package:magang_titc/services/api_service.dart';
+import 'package:magang_titc/services/auth_service.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/customer/spaces/post_detail_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
@@ -91,7 +92,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       iconTheme: const IconThemeData(color: Colors.white),
       flexibleSpace: FlexibleSpaceBar(
         background: widget.space.coverPhotoUrl.isNotEmpty
-            ? CachedNetworkImage(imageUrl: widget.space.coverPhotoUrl, fit: BoxFit.cover)
+            ? CachedNetworkImage(imageUrl: widget.space.coverPhotoUrl, httpHeaders: AuthService.imageAuthHeaders, fit: BoxFit.cover)
             : Container(color: Colors.grey.shade800),
       ),
     );
@@ -113,7 +114,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
                   borderRadius: BorderRadius.circular(8),
                   image: widget.space.logoUrl.isNotEmpty
                       ? DecorationImage(
-                          image: CachedNetworkImageProvider(widget.space.logoUrl),
+                          image: CachedNetworkImageProvider(widget.space.logoUrl, headers: AuthService.imageAuthHeaders),
                           fit: BoxFit.cover,
                         )
                       : null,
@@ -256,7 +257,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
                             shape: BoxShape.circle,
                             color: Colors.grey.shade600,
                             image: recentActivity.avatarUrl.isNotEmpty
-                              ? DecorationImage(image: CachedNetworkImageProvider(recentActivity.avatarUrl), fit: BoxFit.cover)
+                              ? DecorationImage(image: CachedNetworkImageProvider(recentActivity.avatarUrl, headers: AuthService.imageAuthHeaders), fit: BoxFit.cover)
                               : null,
                           ),
                         ),
@@ -320,7 +321,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
                 Row(
                   children: [
                     CircleAvatar(
-                      backgroundImage: feed.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(feed.avatarUrl) : null,
+                      backgroundImage: feed.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(feed.avatarUrl, headers: AuthService.imageAuthHeaders) : null,
                       backgroundColor: Colors.grey,
                       child: feed.avatarUrl.isEmpty ? const Icon(Icons.person, color: Colors.white) : null,
                     ),

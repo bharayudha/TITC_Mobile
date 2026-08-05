@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/models/message_model.dart';
+import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/messages_service.dart';
 import 'package:magang_titc/screens/customer/preparation_test/preparation_test_webview_screen.dart';
 import 'package:magang_titc/screens/customer/messages/chat_detail_screen.dart';
@@ -251,7 +252,7 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
             CircleAvatar(
               radius: 24,
               backgroundColor: Colors.blue.shade50,
-              backgroundImage: thread.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(thread.avatarUrl) : null,
+              backgroundImage: thread.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(thread.avatarUrl, headers: AuthService.imageAuthHeaders) : null,
               child: thread.avatarUrl.isEmpty
                   ? Text(thread.title.isNotEmpty ? thread.title[0].toUpperCase() : '?')
                   : null,

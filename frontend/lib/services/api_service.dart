@@ -8,6 +8,24 @@ import '../models/member_model.dart';
 import '../models/space_model.dart';
 import 'auth_service.dart';
 
+/// Satu halaman hasil dari endpoint members, lengkap dengan info paginasi
+/// supaya UI tahu total member dan apakah masih ada halaman berikutnya.
+class MembersPage {
+  final List<MemberModel> members;
+  final int total;
+  final int currentPage;
+  final int lastPage;
+
+  const MembersPage({
+    required this.members,
+    required this.total,
+    required this.currentPage,
+    required this.lastPage,
+  });
+
+  bool get hasMore => currentPage < lastPage;
+}
+
 /// Service untuk mengakses REST API Fluent Community.
 ///
 /// Semua endpoint memerlukan autentikasi (cookie WordPress).
@@ -171,65 +189,103 @@ class ApiService {
     }
 
     try {
-      final uri = Uri.parse('$_baseUrl/spaces').replace(
-        queryParameters: search.isNotEmpty ? {'search': search} : null,
-      );
+      // Server bisa mem-paginate /spaces (akun dengan banyak space akan
+      // dipecah jadi beberapa halaman). Sebelumnya kode ini cuma baca
+      // halaman pertama dan langsung nge-cast `data['spaces']` sebagai
+      // List — kalau bentuknya ternyata objek paginator ({data, meta,
+      // current_page, last_page, ...}) beberapa/semua space jadi tidak
+      // ikut kebaca. Di sini kita loop ambil semua halaman sampai habis.
+      final allSpacesJson = <dynamic>[];
+      int page = 1;
+      while (true) {
+        final uri = Uri.parse('$_baseUrl/spaces').replace(
+          queryParameters: {
+            if (search.isNotEmpty) 'search': search,
+            'page': page.toString(),
+          },
+        );
 
-      final response = await _authorizedGet(uri);
+        final response = await _authorizedGet(uri);
 
-      if (response.statusCode == 200) {
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          throw Exception('Sesi login telah habis. Silakan login ulang.');
+        } else if (response.statusCode != 200) {
+          throw Exception('Gagal memuat spaces: ${response.statusCode}');
+        }
+
         final data = json.decode(response.body);
 
-        List<dynamic> spaces;
+        List<dynamic> pageItems;
+        int? currentPage;
+        int? lastPage;
         if (data is List) {
-          spaces = data;
-        } else if (data is Map && data.containsKey('data')) {
-          spaces = data['data'] as List;
-        } else if (data is Map && data.containsKey('spaces')) {
-          spaces = data['spaces'] as List;
+          pageItems = data;
+        } else if (data is Map && data['data'] is Map) {
+          final wrapper = data['data'] as Map;
+          pageItems = (wrapper['data'] as List?) ?? [];
+          currentPage = wrapper['current_page'] as int?;
+          lastPage = wrapper['last_page'] as int?;
+        } else if (data is Map && data['data'] is List) {
+          pageItems = data['data'] as List;
+        } else if (data is Map && data['spaces'] is Map) {
+          final wrapper = data['spaces'] as Map;
+          pageItems = (wrapper['data'] as List?) ?? [];
+          currentPage = wrapper['current_page'] as int?;
+          lastPage = wrapper['last_page'] as int?;
+        } else if (data is Map && data['spaces'] is List) {
+          pageItems = data['spaces'] as List;
         } else {
-          spaces = [];
+          pageItems = [];
         }
 
-        if (spaces.isNotEmpty) {
-          const encoder = JsonEncoder.withIndent('  ');
-          final jsonStr = encoder.convert(spaces.first);
-          for (final line in jsonStr.split('\n')) {
-            print('FCOM_JSON: $line');
+        if (page == 1) {
+          print('SPACES_PAGE_INFO: currentPage=$currentPage lastPage=$lastPage itemsOnPage=${pageItems.length}');
+          if (pageItems.isNotEmpty) {
+            const encoder = JsonEncoder.withIndent('  ');
+            final jsonStr = encoder.convert(pageItems.first);
+            for (final line in jsonStr.split('\n')) {
+              print('FCOM_JSON: $line');
+            }
           }
         }
 
-        await _initJoinedCache();
+        allSpacesJson.addAll(pageItems);
 
-        final result = spaces.map((json) {
-          final space = SpaceModel.fromJson(json);
-          // Inject isJoined from cache if the API didn't provide it
-          if (_joinedSpacesCache.contains(space.slug)) {
-            return SpaceModel(
-              id: space.id,
-              slug: space.slug,
-              title: space.title,
-              description: space.description,
-              logoUrl: space.logoUrl,
-              coverPhotoUrl: space.coverPhotoUrl,
-              membersCount: space.membersCount,
-              isJoined: true,
-              privacy: space.privacy,
-            );
-          }
-          return space;
-        }).toList();
-        // Hanya cache hasil daftar penuh (tanpa search), supaya tab Spaces
-        // tidak salah menampilkan hasil pencarian sebagai daftar default.
-        if (search.isEmpty) {
-          cachedSpaces = result;
-        }
-        return result;
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        throw Exception('Sesi login telah habis. Silakan login ulang.');
-      } else {
-        throw Exception('Gagal memuat spaces: ${response.statusCode}');
+        final hasMore = currentPage != null && lastPage != null && currentPage < lastPage;
+        // Guard `page > 20` cuma jaring pengaman supaya tidak infinite loop
+        // kalau field paginasi ternyata berbeda dari dugaan di atas.
+        if (!hasMore || pageItems.isEmpty || page > 20) break;
+        page++;
       }
+
+      final spaces = allSpacesJson;
+
+      await _initJoinedCache();
+
+      final result = spaces.map((json) {
+        final space = SpaceModel.fromJson(json);
+        // Inject isJoined from cache if the API didn't provide it
+        if (_joinedSpacesCache.contains(space.slug)) {
+          return SpaceModel(
+            id: space.id,
+            slug: space.slug,
+            title: space.title,
+            description: space.description,
+            logoUrl: space.logoUrl,
+            coverPhotoUrl: space.coverPhotoUrl,
+            membersCount: space.membersCount,
+            isJoined: true,
+            privacy: space.privacy,
+          );
+        }
+        return space;
+      }).toList();
+      // Hanya cache hasil daftar penuh (tanpa search), supaya tab Spaces
+      // tidak salah menampilkan hasil pencarian sebagai daftar default.
+      if (search.isEmpty) {
+        cachedSpaces = result;
+      }
+      return result;
     } catch (e) {
       throw Exception('Terjadi kesalahan: $e');
     }
@@ -435,41 +491,100 @@ class ApiService {
     }
   }
 
-  /// Ambil daftar members dari Fluent Community.
-  static Future<List<MemberModel>> fetchMembers({String search = ''}) async {
+  /// Ambil satu halaman members dari Fluent Community.
+  ///
+  /// Member di TITC jumlahnya ribuan (web menampilkan "All Members (2,256)"),
+  /// jadi datanya diambil per halaman lalu di-scroll tak terbatas di UI —
+  /// bukan sekali tarik semua.
+  static Future<MembersPage> fetchMembers({
+    String search = '',
+    int page = 1,
+  }) async {
     if (!AuthService.isLoggedIn) {
       throw Exception('Anda harus login terlebih dahulu.');
     }
 
     try {
       final uri = Uri.parse('$_baseUrl/members').replace(
-        queryParameters: search.isNotEmpty ? {'search': search} : null,
+        queryParameters: {
+          if (search.isNotEmpty) 'search': search,
+          'page': page.toString(),
+        },
       );
 
       final response = await _authorizedGet(uri);
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        List<dynamic> members;
-        if (data is List) {
-          members = data;
-        } else if (data is Map && data.containsKey('data')) {
-          members = data['data'] as List;
-        } else if (data is Map && data.containsKey('members')) {
-          members = data['members'] as List;
-        } else {
-          members = [];
-        }
-
-        return members.map((json) => MemberModel.fromJson(json)).toList();
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
+      if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
-      } else {
+      } else if (response.statusCode != 200) {
         throw Exception('Gagal memuat members: ${response.statusCode}');
       }
+
+      final data = json.decode(response.body);
+
+      // Bentuk respons bisa: List langsung, {data: [...]}, atau objek
+      // paginator {data: {data: [...], total, current_page, last_page}}.
+      List<dynamic> items = const [];
+      int? total;
+      int? currentPage;
+      int? lastPage;
+
+      void readPaginator(Map wrapper) {
+        items = (wrapper['data'] as List?) ?? const [];
+        total = wrapper['total'] as int?;
+        currentPage = wrapper['current_page'] as int?;
+        lastPage = wrapper['last_page'] as int?;
+      }
+
+      if (data is List) {
+        items = data;
+      } else if (data is Map && data['members'] is Map) {
+        readPaginator(data['members'] as Map);
+      } else if (data is Map && data['data'] is Map) {
+        readPaginator(data['data'] as Map);
+      } else if (data is Map && data['members'] is List) {
+        items = data['members'] as List;
+        total = data['total'] as int?;
+      } else if (data is Map && data['data'] is List) {
+        items = data['data'] as List;
+        total = data['total'] as int?;
+      }
+
+      if (page == 1) {
+        print('MEMBERS_PAGE_INFO: total=$total currentPage=$currentPage lastPage=$lastPage items=${items.length}');
+        if (items.isNotEmpty) {
+          const encoder = JsonEncoder.withIndent('  ');
+          for (final line in encoder.convert(items.first).split('\n')) {
+            print('MEMBER_JSON: $line');
+          }
+        }
+      }
+
+      return MembersPage(
+        members: items.map((json) => MemberModel.fromJson(json)).toList(),
+        total: total ?? items.length,
+        currentPage: currentPage ?? page,
+        lastPage: lastPage ?? (items.isEmpty ? page : page + 1),
+      );
     } catch (e) {
       throw Exception('Terjadi kesalahan: $e');
+    }
+  }
+
+  /// Ikuti / berhenti mengikuti seorang member.
+  static Future<bool> toggleFollowMember(int memberId, {required bool follow}) async {
+    if (!AuthService.isLoggedIn) return false;
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('$_baseUrl/members/$memberId/${follow ? 'follow' : 'unfollow'}'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 15));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print('Exception in toggleFollowMember: $e');
+      return false;
     }
   }
 

@@ -222,7 +222,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           radius: 18,
           backgroundColor: Colors.grey.shade300,
           backgroundImage: AuthService.userAvatarUrl != null && AuthService.userAvatarUrl!.isNotEmpty
-              ? CachedNetworkImageProvider(AuthService.userAvatarUrl!)
+              ? CachedNetworkImageProvider(AuthService.userAvatarUrl!, headers: AuthService.imageAuthHeaders)
               : null,
           child: AuthService.userAvatarUrl == null || AuthService.userAvatarUrl!.isEmpty
               ? Text(

@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/course_model.dart';
 import 'package:magang_titc/services/api_service.dart';
+import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
@@ -225,6 +226,7 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                 child: course.coverPhotoUrl.isNotEmpty
                     ? CachedNetworkImage(
                         imageUrl: course.coverPhotoUrl,
+                        httpHeaders: AuthService.imageAuthHeaders,
                         height: 130,
                         width: double.infinity,
                         fit: BoxFit.cover,
@@ -274,6 +276,7 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                       child: course.logoUrl.isNotEmpty
                           ? CachedNetworkImage(
                               imageUrl: course.logoUrl,
+                              httpHeaders: AuthService.imageAuthHeaders,
                               width: 48,
                               height: 48,
                               fit: BoxFit.cover,

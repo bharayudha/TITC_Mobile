@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import '../../../models/activity_model.dart';
 import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
 import '../spaces/space_webview_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -68,7 +69,10 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.blue.shade900,
               borderRadius: BorderRadius.circular(12),
               image: DecorationImage(
-                image: const CachedNetworkImageProvider('https://titc.or.id/wp-content/uploads/2025/07/cropped-TORC.png'), // Placeholder
+                image: CachedNetworkImageProvider(
+                  'https://titc.or.id/wp-content/uploads/2025/07/cropped-TORC.png', // Placeholder
+                  headers: AuthService.imageAuthHeaders,
+                ),
                 fit: BoxFit.cover,
                 colorFilter: const ColorFilter.mode(Colors.black54, BlendMode.darken),
               ),
@@ -211,6 +215,21 @@ class _HomeScreenState extends State<HomeScreen> {
       display: inline-flex !important;
       margin-top: 0 !important;
     }
+    /* Style dasar SpaceWebViewScreen menyembunyikan .fcom_dot_menu secara
+       total (opacity 0 + pointer-events none) supaya HANYA bisa dipicu
+       lewat tombol "⋮" kustom di app bar Flutter -- itu didesain untuk
+       SATU dot-menu per halaman Space. Tapi di modal komentar, kelas yang
+       sama dipakai ulang untuk tombol "⋮" milik SETIAP komentar (punya
+       sendiri maupun punya orang lain), jadi aturan sembunyi-total itu ikut
+       mematikan semuanya. Kembalikan tampil & bisa diklik normal di sini.
+    */
+    .el-dialog .fcom_dot_menu {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      position: static !important;
+      top: auto !important;
+      right: auto !important;
+    }
   ''';
 
   Widget _buildActivityCard(ActivityModel activity) {
@@ -230,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 CircleAvatar(
                   backgroundColor: Colors.grey.shade300,
-                  backgroundImage: activity.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(activity.avatarUrl) : null,
+                  backgroundImage: activity.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(activity.avatarUrl, headers: AuthService.imageAuthHeaders) : null,
                   child: activity.avatarUrl.isEmpty ? Text(activity.authorName[0]) : null,
                 ),
                 const SizedBox(width: 12),
