@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/activity_model.dart';
 import 'package:magang_titc/models/space_model.dart';
@@ -90,7 +91,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       iconTheme: const IconThemeData(color: Colors.white),
       flexibleSpace: FlexibleSpaceBar(
         background: widget.space.coverPhotoUrl.isNotEmpty
-            ? Image.network(widget.space.coverPhotoUrl, fit: BoxFit.cover)
+            ? CachedNetworkImage(imageUrl: widget.space.coverPhotoUrl, fit: BoxFit.cover)
             : Container(color: Colors.grey.shade800),
       ),
     );
@@ -112,7 +113,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
                   borderRadius: BorderRadius.circular(8),
                   image: widget.space.logoUrl.isNotEmpty
                       ? DecorationImage(
-                          image: NetworkImage(widget.space.logoUrl),
+                          image: CachedNetworkImageProvider(widget.space.logoUrl),
                           fit: BoxFit.cover,
                         )
                       : null,
@@ -255,7 +256,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
                             shape: BoxShape.circle,
                             color: Colors.grey.shade600,
                             image: recentActivity.avatarUrl.isNotEmpty
-                              ? DecorationImage(image: NetworkImage(recentActivity.avatarUrl), fit: BoxFit.cover)
+                              ? DecorationImage(image: CachedNetworkImageProvider(recentActivity.avatarUrl), fit: BoxFit.cover)
                               : null,
                           ),
                         ),
@@ -319,7 +320,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
                 Row(
                   children: [
                     CircleAvatar(
-                      backgroundImage: feed.avatarUrl.isNotEmpty ? NetworkImage(feed.avatarUrl) : null,
+                      backgroundImage: feed.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(feed.avatarUrl) : null,
                       backgroundColor: Colors.grey,
                       child: feed.avatarUrl.isEmpty ? const Icon(Icons.person, color: Colors.white) : null,
                     ),

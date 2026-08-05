@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -86,7 +87,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             CircleAvatar(
               radius: 18,
               backgroundColor: Colors.blue.shade50,
-              backgroundImage: widget.avatarUrl.isNotEmpty ? NetworkImage(widget.avatarUrl) : null,
+              backgroundImage: widget.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(widget.avatarUrl) : null,
               child: widget.avatarUrl.isEmpty
                   ? Text(widget.title.isNotEmpty ? widget.title[0].toUpperCase() : '?')
                   : null,
@@ -176,7 +177,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             CircleAvatar(
               radius: 14,
               backgroundColor: Colors.blue.shade50,
-              backgroundImage: message.authorAvatar.isNotEmpty ? NetworkImage(message.authorAvatar) : null,
+              backgroundImage: message.authorAvatar.isNotEmpty ? CachedNetworkImageProvider(message.authorAvatar) : null,
               child: message.authorAvatar.isEmpty
                   ? Text(message.authorName.isNotEmpty ? message.authorName[0].toUpperCase() : '?', style: const TextStyle(fontSize: 12))
                   : null,

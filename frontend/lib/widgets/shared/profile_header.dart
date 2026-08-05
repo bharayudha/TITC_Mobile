@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -195,7 +196,7 @@ class ProfileIdentityCard extends StatelessWidget {
               border: Border.all(color: Colors.white, width: 3),
               image: avatarUrl != null && avatarUrl!.isNotEmpty
                   ? DecorationImage(
-                      image: NetworkImage(avatarUrl!),
+                      image: CachedNetworkImageProvider(avatarUrl!),
                       fit: BoxFit.cover,
                     )
                   : null,

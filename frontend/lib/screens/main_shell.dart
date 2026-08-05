@@ -25,6 +25,16 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   late int _currentIndex = widget.initialIndex;
 
+  // Tab yang sudah pernah dibuka sejak shell ini dibuat. Widget-nya baru
+  // dibangun (dan initState/fetch datanya jalan) saat pertama kali dibuka,
+  // lalu tetap hidup di tree (bukan di-dispose) saat pindah ke tab lain,
+  // supaya balik lagi ke tab itu tidak fetch ulang dari nol / gambar tidak
+  // ke-download ulang. Sebelumnya AnimatedSwitcher+KeyedSubtree membuang
+  // State tab lama setiap pindah tab, itu yang bikin pindah-pindah tab
+  // terasa stuck/lambat dan sesekali timeout karena semua fetch tab jalan
+  // dari nol lagi.
+  late final Set<int> _openedTabs = {_currentIndex};
+
   static const List<Widget> _tabs = [
     HomeScreen(),
     SpacesListScreen(),
@@ -41,7 +51,10 @@ class _MainShellState extends State<MainShell> {
       return;
     }
     if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+      _openedTabs.add(index);
+    });
   }
 
   @override
@@ -52,19 +65,23 @@ class _MainShellState extends State<MainShell> {
       drawer: const SideDrawer(),
       body: Stack(
         children: [
-          AnimatedSwitcher(
-            // Selaras dengan prototype Figma: 400ms, easing Slow.
-            duration: navAnimDuration,
-            switchInCurve: navAnimCurve,
-            switchOutCurve: navAnimCurve,
-            // Cross-fade murni: konten tidak bergeser naik/turun.
-            transitionBuilder: (child, animation) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            child: KeyedSubtree(
-              key: ValueKey<int>(_currentIndex),
-              child: _tabs[_currentIndex],
-            ),
+          Stack(
+            children: [
+              for (final index in _openedTabs)
+                AnimatedOpacity(
+                  // Selaras dengan prototype Figma: 300ms, easing Slow.
+                  opacity: index == _currentIndex ? 1 : 0,
+                  duration: navAnimDuration,
+                  curve: navAnimCurve,
+                  child: IgnorePointer(
+                    ignoring: index != _currentIndex,
+                    child: TickerMode(
+                      enabled: index == _currentIndex,
+                      child: _tabs[index],
+                    ),
+                  ),
+                ),
+            ],
           ),
           // Mengisi seluruh body agar tombol bisa digeser ke mana saja.
           // Area kosongnya tidak menangkap sentuhan, jadi konten di

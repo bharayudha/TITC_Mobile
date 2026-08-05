@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/activity_model.dart';
+import '../models/course_model.dart';
 import '../models/member_model.dart';
 import '../models/space_model.dart';
 import 'auth_service.dart';
@@ -13,7 +14,24 @@ import 'auth_service.dart';
 class ApiService {
   static const String _baseUrl =
       'https://titc.or.id/wp-json/fluent-community/v2';
-  static const String _wpBaseUrl = 'https://titc.or.id/wp-json/wp/v2';
+
+  // Client HTTP dipakai bersama supaya koneksi ke titc.or.id bisa dipakai
+  // ulang antar request (bukan handshake TCP/TLS baru tiap panggilan).
+  static final http.Client _client = http.Client();
+
+  // Cache hasil fetch terakhir, dipakai layar (Home/Spaces) untuk tampil
+  // instan saat tab dibuka lagi alih-alih fetch ulang dari nol setiap kali
+  // pindah tab. Direset saat logout lewat [clearCache].
+  static List<ActivityModel>? cachedActivities;
+  static List<SpaceModel>? cachedSpaces;
+  static List<CourseModel>? cachedCourses;
+
+  static void clearCache() {
+    cachedActivities = null;
+    cachedSpaces = null;
+    cachedCourses = null;
+    _joinedSpacesCache = {};
+  }
 
   // Menyimpan slug space yang sudah di-join secara lokal sebagai fallback
   static Set<String> _joinedSpacesCache = {};
@@ -37,15 +55,44 @@ class ApiService {
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
       'Referer': 'https://titc.or.id/portal/',
       if (AuthService.cookies != null) 'Cookie': AuthService.cookies!,
       if (AuthService.wpNonce != null) 'X-WP-Nonce': AuthService.wpNonce!,
     };
   }
 
-  /// Ambil daftar feed/activity dari Fluent Community.
-  static Future<List<ActivityModel>> fetchActivities() async {
+  /// GET dengan auth headers. Jika server menolak dengan 401/403 (biasanya
+  /// karena X-WP-Nonce belum sempat/gagal diambil, mis. setelah ganti akun),
+  /// coba refresh nonce sekali lalu retry sebelum menyerah.
+  static Future<http.Response> _authorizedGet(Uri uri) async {
+    var response = await _client
+        .get(uri, headers: _authHeaders)
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AuthService.refreshNonce();
+      response = await _client
+          .get(uri, headers: _authHeaders)
+          .timeout(const Duration(seconds: 15));
+    }
+
+    return response;
+  }
+
+  /// Ambil daftar feed/activity dari Fluent Community. Di-dedupe: kalau
+  /// beberapa tab dibuka berdekatan sama-sama memicu fetch ini, mereka
+  /// berbagi satu request yang sama alih-alih menembak beberapa request
+  /// paralel ke host yang sama (penyebab lambat/timeout saat pindah tab).
+  static Future<List<ActivityModel>>? _activitiesInFlight;
+
+  static Future<List<ActivityModel>> fetchActivities() {
+    return _activitiesInFlight ??= _doFetchActivities().whenComplete(() {
+      _activitiesInFlight = null;
+    });
+  }
+
+  static Future<List<ActivityModel>> _doFetchActivities() async {
     if (!AuthService.isLoggedIn) {
       throw Exception('Anda harus login terlebih dahulu.');
     }
@@ -54,11 +101,8 @@ class ApiService {
       print('--- FETCH FEEDS DEBUG ---');
       print('URL: $_baseUrl/feeds');
       print('Headers: $_authHeaders');
-      
-      final response = await http.get(
-        Uri.parse('$_baseUrl/feeds'),
-        headers: _authHeaders,
-      );
+
+      final response = await _authorizedGet(Uri.parse('$_baseUrl/feeds'));
 
       print('Status Code: ${response.statusCode}');
       print('Response Body: ${response.body}');
@@ -93,9 +137,11 @@ class ApiService {
           feeds = [];
         }
 
-        return feeds
+        final activities = feeds
             .map((json) => ActivityModel.fromFluentCommunity(json))
             .toList();
+        cachedActivities = activities;
+        return activities;
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
       } else {
@@ -105,8 +151,21 @@ class ApiService {
       throw Exception('Terjadi kesalahan: $e');
     }
   }
-  /// Ambil daftar spaces dari Fluent Community.
-  static Future<List<SpaceModel>> fetchSpaces({String search = ''}) async {
+  /// Ambil daftar spaces dari Fluent Community. Fetch daftar penuh (tanpa
+  /// search) di-dedupe seperti [fetchActivities]; fetch dengan search tidak
+  /// perlu di-dedupe karena tiap query beda hasil.
+  static Future<List<SpaceModel>>? _spacesInFlight;
+
+  static Future<List<SpaceModel>> fetchSpaces({String search = ''}) {
+    if (search.isEmpty) {
+      return _spacesInFlight ??= _doFetchSpaces(search: search).whenComplete(() {
+        _spacesInFlight = null;
+      });
+    }
+    return _doFetchSpaces(search: search);
+  }
+
+  static Future<List<SpaceModel>> _doFetchSpaces({String search = ''}) async {
     if (!AuthService.isLoggedIn) {
       throw Exception('Anda harus login terlebih dahulu.');
     }
@@ -116,10 +175,7 @@ class ApiService {
         queryParameters: search.isNotEmpty ? {'search': search} : null,
       );
 
-      final response = await http.get(
-        uri,
-        headers: _authHeaders,
-      );
+      final response = await _authorizedGet(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -145,7 +201,7 @@ class ApiService {
 
         await _initJoinedCache();
 
-        return spaces.map((json) {
+        final result = spaces.map((json) {
           final space = SpaceModel.fromJson(json);
           // Inject isJoined from cache if the API didn't provide it
           if (_joinedSpacesCache.contains(space.slug)) {
@@ -163,6 +219,12 @@ class ApiService {
           }
           return space;
         }).toList();
+        // Hanya cache hasil daftar penuh (tanpa search), supaya tab Spaces
+        // tidak salah menampilkan hasil pencarian sebagai daftar default.
+        if (search.isEmpty) {
+          cachedSpaces = result;
+        }
+        return result;
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
       } else {
@@ -183,7 +245,7 @@ class ApiService {
       final response = await http.post(
         Uri.parse('$_baseUrl/spaces/$spaceSlug/join'),
         headers: _authHeaders,
-      );
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         await _addJoinedSpace(spaceSlug);
@@ -202,6 +264,119 @@ class ApiService {
     }
   }
 
+  /// Ambil daftar courses dari Fluent Community (module Course = Space
+  /// dengan `type: "course"`, jadi bentuk responsnya serupa `fetchSpaces`).
+  /// Fetch daftar penuh (tanpa search) di-dedupe seperti [fetchActivities].
+  static Future<List<CourseModel>>? _coursesInFlight;
+
+  static Future<List<CourseModel>> fetchCourses({String search = ''}) {
+    if (search.isEmpty) {
+      return _coursesInFlight ??= _doFetchCourses(search: search).whenComplete(() {
+        _coursesInFlight = null;
+      });
+    }
+    return _doFetchCourses(search: search);
+  }
+
+  static Future<List<CourseModel>> _doFetchCourses({String search = ''}) async {
+    if (!AuthService.isLoggedIn) {
+      throw Exception('Anda harus login terlebih dahulu.');
+    }
+
+    try {
+      final uri = Uri.parse('$_baseUrl/courses').replace(
+        queryParameters: search.isNotEmpty ? {'search': search} : null,
+      );
+
+      final response = await _authorizedGet(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        List<dynamic> courses;
+        if (data is List) {
+          courses = data;
+        } else if (data is Map && data.containsKey('courses')) {
+          if (data['courses'] is Map && data['courses'].containsKey('data')) {
+            courses = data['courses']['data'] as List;
+          } else if (data['courses'] is List) {
+            courses = data['courses'] as List;
+          } else {
+            courses = [];
+          }
+        } else if (data is Map && data.containsKey('data')) {
+          courses = data['data'] as List;
+        } else {
+          courses = [];
+        }
+
+        // Debug sementara: tampilkan JSON mentah course pertama supaya kita
+        // bisa lihat nama field asli untuk status enrollment/akses (dipakai
+        // untuk investigasi kasus "Continue Learning" mengarah ke course
+        // yang ternyata private meski akun sudah py access di web).
+        if (courses.isNotEmpty) {
+          const encoder = JsonEncoder.withIndent('  ');
+          final jsonStr = encoder.convert(courses.first);
+          for (final line in jsonStr.split('\n')) {
+            print('COURSE_JSON: $line');
+          }
+        }
+
+        final result = courses.map((json) => CourseModel.fromJson(json)).toList();
+        for (final c in result) {
+          print('COURSE_PARSED: slug=${c.slug} isEnrolled=${c.isEnrolled} privacy=${c.privacy} title=${c.title}');
+        }
+        // Hanya cache hasil daftar penuh (tanpa search), supaya tab Courses
+        // tidak salah menampilkan hasil pencarian sebagai daftar default.
+        if (search.isEmpty) {
+          cachedCourses = result;
+        }
+        return result;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('Sesi login telah habis. Silakan login ulang.');
+      } else {
+        throw Exception('Gagal memuat courses: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Terjadi kesalahan: $e');
+    }
+  }
+
+  /// Mendaftar (enroll) ke suatu Course. Course di TITC umumnya privat dan
+  /// baru bisa diakses setelah didaftarkan manual oleh admin (pembelian di
+  /// web), jadi endpoint ini bisa menolak dengan pesan spesifik dari server
+  /// alih-alih generic error — pesan itu diteruskan supaya UI bisa
+  /// menampilkannya apa adanya ke pengguna.
+  static Future<String?> enrollCourse(int courseId) async {
+    if (!AuthService.isLoggedIn) {
+      throw Exception('Anda harus login terlebih dahulu.');
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/courses/$courseId/enroll'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return null; // null = sukses
+      }
+
+      String? message;
+      try {
+        final data = json.decode(response.body);
+        if (data is Map && data['message'] is String) {
+          message = data['message'];
+        }
+      } catch (_) {}
+      return message ?? 'Gagal mendaftar course (${response.statusCode}).';
+    } catch (e) {
+      return 'Terjadi kesalahan: $e';
+    }
+  }
+
   /// Ambil feed spesifik untuk suatu space.
   static Future<List<ActivityModel>> fetchSpaceFeeds(int spaceId) async {
     if (!AuthService.isLoggedIn) {
@@ -214,10 +389,7 @@ class ApiService {
         queryParameters: {'space_id': spaceId.toString()},
       );
 
-      final response = await http.get(
-        uri,
-        headers: _authHeaders,
-      );
+      final response = await _authorizedGet(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -274,10 +446,7 @@ class ApiService {
         queryParameters: search.isNotEmpty ? {'search': search} : null,
       );
 
-      final response = await http.get(
-        uri,
-        headers: _authHeaders,
-      );
+      final response = await _authorizedGet(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

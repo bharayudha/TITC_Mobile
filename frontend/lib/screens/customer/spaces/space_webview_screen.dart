@@ -1,6 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:magang_titc/services/auth_service.dart';
+
+/// Encode string Dart menjadi literal string JS yang aman (escape kutip,
+/// backslash, baris baru, dll) supaya CSS tambahan bisa disisipkan ke
+/// dalam snippet JS yang di-runJavaScript tanpa risiko injeksi.
+String _jsStringLiteral(String value) => jsonEncode(value);
 
 /// WebView khusus untuk halaman Space di Fluent Community Portal.
 /// Class names verified via DOM debug:
@@ -9,14 +16,42 @@ import 'package:magang_titc/services/auth_service.dart';
 /// - Feed parent: DIV.fhr_home
 /// - Layout uses Element Plus: el-container, el-aside, el-main
 class SpaceWebViewScreen extends StatefulWidget {
-  final String spaceSlug;
+  final String? spaceSlug;
   final String title;
+
+  /// Segmen path portal FCOM: `space` (default) atau `course`. Modul Course
+  /// di Fluent Community adalah varian dari Space (`type: "course"`) dan
+  /// memakai shell Vue/CSS yang sama persis, jadi screen ini di-reuse
+  /// dengan parameter URL berbeda alih-alih duplikat file (lihat PRD §12).
+  final String portalSegment;
+
+  /// Segmen tab yang dimuat di dalam space/course, mis. `home` (default)
+  /// atau `lessons` untuk langsung membuka daftar pelajaran course.
+  final String initialPath;
+
+  /// URL absolut yang dipakai apa adanya (mis. permalink sebuah post),
+  /// alih-alih membangun URL dari [portalSegment]/[spaceSlug]/[initialPath].
+  /// Dipakai untuk kasus seperti membuka satu post + modal komentarnya,
+  /// yang tetap memakai shell Vue/Element-Plus yang sama sehingga CSS
+  /// reflow di bawah ini tetap relevan.
+  final String? overrideUrl;
+
+  /// CSS tambahan yang di-inject setelah style dasar, mis. untuk
+  /// memfullscreen-kan modal komentar Element Plus.
+  final String? extraCss;
 
   const SpaceWebViewScreen({
     super.key,
-    required this.spaceSlug,
+    this.spaceSlug,
     required this.title,
-  });
+    this.portalSegment = 'space',
+    this.initialPath = 'home',
+    this.overrideUrl,
+    this.extraCss,
+  }) : assert(
+         spaceSlug != null || overrideUrl != null,
+         'Harus isi spaceSlug atau overrideUrl',
+       );
 
   @override
   State<SpaceWebViewScreen> createState() => _SpaceWebViewScreenState();
@@ -263,6 +298,16 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
           },
           onPageFinished: (String url) async {
             await _controller.runJavaScript(_injectScript);
+            if (widget.extraCss != null && widget.extraCss!.isNotEmpty) {
+              await _controller.runJavaScript('''
+                (function() {
+                  var s = document.createElement('style');
+                  s.id = 'titc-extra-styles';
+                  s.textContent = ${_jsStringLiteral(widget.extraCss!)};
+                  document.head.appendChild(s);
+                })();
+              ''');
+            }
             Future.delayed(const Duration(milliseconds: 700), () {
               if (mounted) setState(() => _isLoading = false);
             });
@@ -294,7 +339,10 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
     }
 
     await _controller.loadRequest(
-      Uri.parse('https://titc.or.id/portal/space/${widget.spaceSlug}/home'),
+      Uri.parse(
+        widget.overrideUrl ??
+            'https://titc.or.id/portal/${widget.portalSegment}/${widget.spaceSlug}/${widget.initialPath}',
+      ),
     );
   }
 
@@ -357,7 +405,7 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
                 children: [
                   CircularProgressIndicator(color: Color(0xFF1877F2)),
                   SizedBox(height: 12),
-                  Text('Memuat Space...',
+                  Text('Memuat...',
                       style: TextStyle(color: Colors.grey, fontSize: 13)),
                 ],
               ),

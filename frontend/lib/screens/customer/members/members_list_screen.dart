@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/member_model.dart';
 import 'package:magang_titc/services/api_service.dart';
@@ -108,7 +109,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: Colors.grey.shade300,
-                  backgroundImage: member.avatarUrl.isNotEmpty ? NetworkImage(member.avatarUrl) : null,
+                  backgroundImage: member.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(member.avatarUrl) : null,
                   child: member.avatarUrl.isEmpty
                       ? const PhosphorIcon(PhosphorIconsRegular.user, color: Colors.grey)
                       : null,

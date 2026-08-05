@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -221,7 +222,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           radius: 18,
           backgroundColor: Colors.grey.shade300,
           backgroundImage: AuthService.userAvatarUrl != null && AuthService.userAvatarUrl!.isNotEmpty
-              ? NetworkImage(AuthService.userAvatarUrl!)
+              ? CachedNetworkImageProvider(AuthService.userAvatarUrl!)
               : null,
           child: AuthService.userAvatarUrl == null || AuthService.userAvatarUrl!.isEmpty
               ? Text(

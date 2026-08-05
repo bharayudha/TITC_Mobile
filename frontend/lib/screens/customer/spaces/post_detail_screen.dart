@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/activity_model.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -30,7 +31,7 @@ class PostDetailScreen extends StatelessWidget {
               Row(
                 children: [
                   CircleAvatar(
-                    backgroundImage: post.avatarUrl.isNotEmpty ? NetworkImage(post.avatarUrl) : null,
+                    backgroundImage: post.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(post.avatarUrl) : null,
                     backgroundColor: Colors.grey,
                     child: post.avatarUrl.isEmpty ? const Icon(Icons.person, color: Colors.white) : null,
                   ),
@@ -58,7 +59,7 @@ class PostDetailScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(post.mediaUrl!, fit: BoxFit.cover, width: double.infinity),
+                  child: CachedNetworkImage(imageUrl: post.mediaUrl!, fit: BoxFit.cover, width: double.infinity),
                 ),
               ],
               const SizedBox(height: 16),

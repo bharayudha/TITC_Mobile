@@ -1,8 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import '../../../models/activity_model.dart';
 import '../../../services/api_service.dart';
+import '../spaces/space_webview_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +19,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _activitiesFuture = ApiService.fetchActivities();
+    final cached = ApiService.cachedActivities;
+    if (cached != null) {
+      // Tampilkan data lama dulu supaya tidak loading dari nol tiap kali
+      // tab ini dibuka lagi, lalu diam-diam refresh di belakang layar.
+      _activitiesFuture = Future.value(cached);
+      ApiService.fetchActivities()
+          .then((fresh) {
+            if (mounted) setState(() => _activitiesFuture = Future.value(fresh));
+          })
+          .catchError((_) {});
+    } else {
+      _activitiesFuture = ApiService.fetchActivities();
+    }
   }
 
   @override
@@ -53,10 +67,10 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: BoxDecoration(
               color: Colors.blue.shade900,
               borderRadius: BorderRadius.circular(12),
-              image: const DecorationImage(
-                image: NetworkImage('https://titc.or.id/wp-content/uploads/2025/07/cropped-TORC.png'), // Placeholder
+              image: DecorationImage(
+                image: const CachedNetworkImageProvider('https://titc.or.id/wp-content/uploads/2025/07/cropped-TORC.png'), // Placeholder
                 fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(Colors.black54, BlendMode.darken),
+                colorFilter: const ColorFilter.mode(Colors.black54, BlendMode.darken),
               ),
             ),
             child: const Center(
@@ -130,6 +144,75 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openComments(ActivityModel activity) {
+    if (activity.permalink == null || activity.permalink!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link komentar tidak tersedia.')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SpaceWebViewScreen(
+          overrideUrl: activity.permalink!,
+          title: 'Komentar',
+          extraCss: _commentsExtraCss,
+        ),
+      ),
+    );
+  }
+
+  /// Post + komentar dibuka lewat modal Element Plus (`.el-dialog` di dalam
+  /// `.el-overlay`) di atas halaman Space. Tanpa CSS ini modalnya tampil
+  /// sebagai kotak kecil melayang di atas latar gelap (persis versi
+  /// desktop-nya) alih-alih memenuhi layar seperti halaman native.
+  static const String _commentsExtraCss = '''
+    .el-overlay {
+      background: transparent !important;
+      position: fixed !important;
+      inset: 0 !important;
+    }
+    .el-overlay-dialog {
+      padding: 0 !important;
+      display: block !important;
+    }
+    .el-dialog {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      display: flex !important;
+      flex-direction: column !important;
+      box-sizing: border-box !important;
+    }
+    .el-dialog__header {
+      flex: none !important;
+      padding: 12px 16px !important;
+    }
+    .el-dialog__body {
+      flex: 1 1 auto !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      padding: 12px 16px !important;
+    }
+    .el-dialog__footer {
+      flex: none !important;
+      padding: 12px 16px !important;
+    }
+    /* Aturan tombol full-width dari style dasar tidak cocok untuk modal ini:
+       like/reply/emoji/kirim-gambar/post-comment harus tetap tombol kecil
+       sejajar, bukan block penuh lebar layar. */
+    .el-dialog button {
+      width: auto !important;
+      display: inline-flex !important;
+      margin-top: 0 !important;
+    }
+  ''';
+
   Widget _buildActivityCard(ActivityModel activity) {
     return Card(
       elevation: 0,
@@ -147,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 CircleAvatar(
                   backgroundColor: Colors.grey.shade300,
-                  backgroundImage: activity.avatarUrl.isNotEmpty ? NetworkImage(activity.avatarUrl) : null,
+                  backgroundImage: activity.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(activity.avatarUrl) : null,
                   child: activity.avatarUrl.isEmpty ? Text(activity.authorName[0]) : null,
                 ),
                 const SizedBox(width: 12),
@@ -175,9 +258,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 4),
                 Text('${activity.likeCount}', style: TextStyle(color: Colors.grey.shade600)),
                 const SizedBox(width: 16),
-                PhosphorIcon(PhosphorIconsRegular.chatCircle, size: 20, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
-                Text('${activity.commentCount}', style: TextStyle(color: Colors.grey.shade600)),
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => _openComments(activity),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PhosphorIcon(PhosphorIconsRegular.chatCircle, size: 20, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('${activity.commentCount}', style: TextStyle(color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             )
           ],

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -20,6 +21,12 @@ class AuthService {
   static const String _ajaxUrl = '$_baseUrl/wp-admin/admin-ajax.php';
 
   static const _storage = FlutterSecureStorage();
+
+  // Client HTTP dipakai bersama (bukan http.get/post top-level yang bikin
+  // koneksi baru tiap kali) supaya koneksi TCP/TLS ke titc.or.id bisa dipakai
+  // ulang antar request alih-alih handshake dari nol setiap kali — ini salah
+  // satu penyebab utama request terasa lambat/timeout saat pindah tab.
+  static final http.Client _client = http.Client();
 
   static const String _cookiesKey = 'wp_cookies';
   static const String _userNameKey = 'wp_user_name';
@@ -54,52 +61,97 @@ class AuthService {
 
     if (_cookies != null) {
       print('=== AUTH DEBUG ===');
-      print('Cookies loaded, fetching nonce...');
-      // Coba ambil REST nonce dengan cookie yang ada
-      final nonce = await _fetchRestNonce(_cookies!);
-      print('Nonce received: $nonce');
-      if (nonce != null && nonce != '0') {
-        _wpNonce = nonce;
-        // Ambil info profil terbaru untuk foto
-        print('Fetching user profile...');
-        await _fetchUserProfile();
-        print('Profile fetched. Name: $_userName, Avatar: $_userAvatarUrl');
-      } else {
-        print('Warning: Could not fetch nonce on init. But we will keep the cookies.');
-        // Kita tidak boleh memanggil logout() di sini karena bisa saja network lambat
-        // atau halaman belum memuat nonce dengan benar.
-      }
+      print('Cookies loaded, fetching nonce in background...');
+      // Dijalankan tanpa await agar startup app / navigasi tidak "stuck loading"
+      // menunggu jaringan. ApiService akan otomatis refresh nonce & retry
+      // bila request pertama gagal karena nonce belum siap.
+      unawaited(_refreshNonceAndProfile());
     } else {
       print('=== AUTH DEBUG ===');
       print('No cookies found.');
     }
   }
 
+  /// Ambil nonce terbaru lalu profil user. Dipanggil di background
+  /// (tidak boleh di-await oleh flow login/init) supaya UI tetap responsif.
+  static Future<void> _refreshNonceAndProfile() async {
+    if (_cookies == null) return;
+
+    // Lewat refreshNonce() (bukan _fetchRestNonce langsung) supaya berbagi
+    // request yang sama dengan pemanggil lain yang kebetulan jalan bersamaan.
+    await refreshNonce();
+    print('Nonce received: $_wpNonce');
+    if (_wpNonce != null) {
+      print('Fetching user profile...');
+      await _fetchUserProfile();
+      print('Profile fetched. Name: $_userName, Avatar: $_userAvatarUrl');
+    } else {
+      print('Warning: Could not fetch nonce. But we will keep the cookies.');
+      // Kita tidak boleh memanggil logout() di sini karena bisa saja network lambat
+      // atau halaman belum memuat nonce dengan benar.
+    }
+  }
+
+  /// Refresh nonce saja (dipakai ApiService saat suatu request gagal
+  /// dengan 401/403 karena nonce basi atau belum sempat terambil).
+  ///
+  /// Di-dedupe: kalau beberapa layar (mis. Home & Spaces yang dibuka
+  /// hampir bersamaan saat pindah tab dengan cepat) sama-sama memicu
+  /// refresh di waktu yang berdekatan, mereka menunggu SATU request yang
+  /// sama alih-alih menembak beberapa fetch homepage yang berat secara
+  /// paralel — itu yang bikin pindah-pindah tab jadi lambat/timeout.
+  static Future<void>? _nonceRefreshInFlight;
+
+  static Future<void> refreshNonce() {
+    return _nonceRefreshInFlight ??= _doRefreshNonce().whenComplete(() {
+      _nonceRefreshInFlight = null;
+    });
+  }
+
+  static Future<void> _doRefreshNonce() async {
+    final cookies = _cookies;
+    if (cookies == null) return;
+    final nonce = await _fetchRestNonce(cookies);
+    if (nonce != null && nonce != '0') {
+      _wpNonce = nonce;
+    }
+  }
+
   /// Fetch REST API Nonce (X-WP-Nonce) dari halaman portal
   static Future<String?> _fetchRestNonce(String cookies) async {
     try {
-      final response = await http.get(
-        Uri.parse('https://titc.or.id/portal/'),
-        headers: {
-          'Cookie': cookies,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-      );
+      final response = await _client
+          .get(
+            Uri.parse('https://titc.or.id/'),
+            headers: {
+              'Cookie': cookies,
+              'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
+              'Accept':
+                  'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
       print('Fetch Nonce Status: ${response.statusCode}');
-      
+
       if (response.statusCode == 200 || response.statusCode == 302) {
         final body = response.body;
         // Cari dari Gutenberg script: wp.apiFetch.createNonceMiddleware( "xxxxx" )
-        final match = RegExp(r'createNonceMiddleware\(\s*"([a-zA-Z0-9]+)"\s*\)').firstMatch(body);
+        final match = RegExp(
+          r'createNonceMiddleware\(\s*"([a-zA-Z0-9]+)"\s*\)',
+        ).firstMatch(body);
         if (match != null) return match.group(1);
-        
+
         // Cari fallback: "nonce":"xxxxx"
-        final match2 = RegExp(r'"nonce"\s*:\s*"([a-zA-Z0-9]+)"').firstMatch(body);
+        final match2 = RegExp(
+          r'"nonce"\s*:\s*"([a-zA-Z0-9]+)"',
+        ).firstMatch(body);
         if (match2 != null) return match2.group(1);
-        
+
         print('Could not find nonce in HTML body of length ${body.length}');
         // Try looking for fluent community specific tokens
-        final match3 = RegExp(r'rest_nonce[^>]*["\x27]([a-zA-Z0-9]+)["\x27]').firstMatch(body);
+        final match3 = RegExp(
+          r'rest_nonce[^>]*["\x27]([a-zA-Z0-9]+)["\x27]',
+        ).firstMatch(body);
         if (match3 != null) return match3.group(1);
       }
     } catch (e) {
@@ -108,24 +160,36 @@ class AuthService {
     return null;
   }
 
-  /// Fetch informasi profil user via WP REST API (me)
-  static Future<void> _fetchUserProfile() async {
+  /// Fetch informasi profil user via WP REST API (me). Di-dedupe seperti
+  /// [refreshNonce] supaya beberapa tab yang dibuka berdekatan tidak memicu
+  /// beberapa chain fetch profil paralel ke host yang sama.
+  static Future<void>? _profileFetchInFlight;
+
+  static Future<void> _fetchUserProfile() {
+    return _profileFetchInFlight ??= _doFetchUserProfile().whenComplete(() {
+      _profileFetchInFlight = null;
+    });
+  }
+
+  static Future<void> _doFetchUserProfile() async {
     if (_cookies == null || _wpNonce == null) return;
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/wp-json/wp/v2/users/me'),
-        headers: {
-          'Cookie': _cookies!,
-          'X-WP-Nonce': _wpNonce!,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://titc.or.id/portal/'
-        },
-      );
+      final response = await _client
+          .get(
+            Uri.parse('$_baseUrl/wp-json/wp/v2/users/me'),
+            headers: {
+              'Cookie': _cookies!,
+              'X-WP-Nonce': _wpNonce!,
+              'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
+              'Referer': 'https://titc.or.id/portal/',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
       print('Fetch Profile Status: ${response.statusCode}');
       print('Fetch Profile Body: ${response.body}');
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
+
         final newName = data['name'];
         if (newName != null && newName.isNotEmpty) {
           _userName = newName;
@@ -137,39 +201,50 @@ class AuthService {
           _userSlug = slug;
           await _storage.write(key: 'wp_user_slug', value: _userSlug);
         }
-        
+
         if (data['avatar_urls'] != null) {
-          final newAvatar = data['avatar_urls']['96'] ?? data['avatar_urls']['48'] ?? data['avatar_urls']['24'];
+          final newAvatar =
+              data['avatar_urls']['96'] ??
+              data['avatar_urls']['48'] ??
+              data['avatar_urls']['24'];
           if (newAvatar != null) {
             _userAvatarUrl = newAvatar;
             await _storage.write(key: 'wp_user_avatar', value: _userAvatarUrl);
           }
         }
-        
+
         // Fetch fluent community specific profile for custom avatar
         if (slug != null) {
           try {
-            final fcomResponse = await http.get(
-              Uri.parse('$_baseUrl/wp-json/fluent-community/v2/profile/$slug'),
-              headers: {
-                'Cookie': _cookies!,
-                'X-WP-Nonce': _wpNonce!,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://titc.or.id/portal/'
-              },
-            );
+            final fcomResponse = await _client
+                .get(
+                  Uri.parse(
+                    '$_baseUrl/wp-json/fluent-community/v2/profile/$slug',
+                  ),
+                  headers: {
+                    'Cookie': _cookies!,
+                    'X-WP-Nonce': _wpNonce!,
+                    'User-Agent':
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://titc.or.id/portal/',
+                  },
+                )
+                .timeout(const Duration(seconds: 15));
             print('FCOM Profile Status: ${fcomResponse.statusCode}');
             if (fcomResponse.statusCode == 200) {
               final fcomData = json.decode(fcomResponse.body);
-              if (fcomData['profile'] != null && fcomData['profile']['avatar'] != null) {
+              if (fcomData['profile'] != null &&
+                  fcomData['profile']['avatar'] != null) {
                 _userAvatarUrl = fcomData['profile']['avatar'];
-              } else if (fcomData['user'] != null && fcomData['user']['photo_url'] != null) {
+              } else if (fcomData['user'] != null &&
+                  fcomData['user']['photo_url'] != null) {
                 _userAvatarUrl = fcomData['user']['photo_url'];
               } else if (fcomData['photo_url'] != null) {
                 _userAvatarUrl = fcomData['photo_url'];
               } else if (fcomData['avatar_url'] != null) {
                 _userAvatarUrl = fcomData['avatar_url'];
-              } else if (fcomData['user'] != null && fcomData['user']['avatar_url'] != null) {
+              } else if (fcomData['user'] != null &&
+                  fcomData['user']['avatar_url'] != null) {
                 _userAvatarUrl = fcomData['user']['avatar_url'];
               }
               print('Extracted FCOM Avatar: $_userAvatarUrl');
@@ -198,10 +273,11 @@ class AuthService {
   ) async {
     try {
       // Step 1: Ambil halaman register untuk mendapatkan nonce
-      final authPageResponse = await http.get(
+      final authPageResponse = await _client.get(
         Uri.parse(_registerPageUrl),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': 'https://titc.or.id/portal/',
         },
       );
@@ -216,12 +292,13 @@ class AuthService {
       }
 
       // Step 2: POST register via AJAX
-      final registerResponse = await http.post(
+      final registerResponse = await _client.post(
         Uri.parse(_ajaxUrl),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Cookie': allCookies,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': 'https://titc.or.id/portal/',
         },
         body: {
@@ -244,7 +321,8 @@ class AuthService {
       final body = registerResponse.body;
 
       // Sukses registrasi tahap 1 biasanya mereturn JSON berisi verifcation_html
-      if (body.contains('verifcation_html') || body.contains('__two_fa_signed_token')) {
+      if (body.contains('verifcation_html') ||
+          body.contains('__two_fa_signed_token')) {
         // Extract 2FA token
         final twoFaToken = _extract2FaToken(body);
         if (twoFaToken != null) {
@@ -257,11 +335,11 @@ class AuthService {
           };
         }
       }
-      
+
       // Jika error (username sudah ada, dll), cari error message
       final errorMatch = RegExp(r'"message"\s*:\s*"([^"]+)"').firstMatch(body);
       if (errorMatch != null) {
-         return {
+        return {
           'success': false,
           'message': errorMatch.group(1)!.replaceAll('\\', ''),
         };
@@ -286,12 +364,13 @@ class AuthService {
     String cookies,
   ) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse(_ajaxUrl),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Cookie': cookies,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': 'https://titc.or.id/portal/',
         },
         body: {
@@ -307,19 +386,25 @@ class AuthService {
       // Cek apakah sukses login / redirect
       if (response.statusCode == 200) {
         final body = response.body;
-        if (body.contains('redirect_url') || allCookies.contains('wordpress_logged_in')) {
+        if (body.contains('redirect_url') ||
+            allCookies.contains('wordpress_logged_in')) {
           _cookies = allCookies;
           _wpNonce = await _fetchRestNonce(allCookies);
           await _storage.write(key: _cookiesKey, value: allCookies);
           return {'success': true, 'message': 'Pendaftaran berhasil!'};
         }
-        
-        final errorMatch = RegExp(r'"message"\s*:\s*"([^"]+)"').firstMatch(body);
+
+        final errorMatch = RegExp(
+          r'"message"\s*:\s*"([^"]+)"',
+        ).firstMatch(body);
         if (errorMatch != null) {
-          return {'success': false, 'message': errorMatch.group(1)!.replaceAll('\\', '')};
+          return {
+            'success': false,
+            'message': errorMatch.group(1)!.replaceAll('\\', ''),
+          };
         }
       }
-      
+
       return {'success': false, 'message': 'Verifikasi gagal atau kode salah.'};
     } catch (e) {
       return {'success': false, 'message': 'Error jaringan: $e'};
@@ -331,16 +416,20 @@ class AuthService {
   /// Return `true` jika berhasil, `false` jika gagal.
   /// Throw [Exception] jika terjadi error jaringan.
   static Future<Map<String, dynamic>> login(
-      String email, String password) async {
+    String email,
+    String password,
+  ) async {
     try {
       // Step 1: Ambil halaman auth untuk mendapatkan nonce
-      final authPageResponse = await http.get(
-        Uri.parse(_authPageUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://titc.or.id/portal/',
-        },
-      );
+      final authPageResponse = await _client
+          .get(
+            Uri.parse(_authPageUrl),
+            headers: {
+              'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
+              'Referer': 'https://titc.or.id/portal/',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (authPageResponse.statusCode == 302) {
         // Halaman melakukan redirect - ini berarti kita perlu ikuti redirect
@@ -351,14 +440,16 @@ class AuthService {
       String allCookies = _extractCookies(authPageResponse);
 
       // Ambil halaman auth dengan mengikuti redirect
-      final authPageFull = await http.get(
-        Uri.parse(_authPageUrl),
-        headers: {
-          'Cookie': allCookies,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://titc.or.id/portal/',
-        },
-      );
+      final authPageFull = await _client
+          .get(
+            Uri.parse(_authPageUrl),
+            headers: {
+              'Cookie': allCookies,
+              'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
+              'Referer': 'https://titc.or.id/portal/',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       // Extract nonce dari HTML form
       final nonce = _extractNonce(authPageFull.body);
@@ -376,25 +467,27 @@ class AuthService {
       }
 
       // Step 2: POST login
-      final loginResponse = await http.post(
-        Uri.parse(_loginPostUrl),
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie': 'wordpress_test_cookie=WP+Cookie+check;$allCookies',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://titc.or.id/portal/',
-        },
-        body: {
-          'log': email,
-          'pwd': password,
-          'action': 'fcom_user_login_form',
-          '_fcom_login_nonce': nonce,
-          'wp-submit': 'Login',
-          'redirect_to': '/portal',
-          'rememberme': 'forever',
-          'testcookie': '1',
-        },
-      );
+      final loginResponse = await _client
+          .post(
+            Uri.parse(_loginPostUrl),
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': 'wordpress_test_cookie=WP+Cookie+check;$allCookies',
+              'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
+              'Referer': 'https://titc.or.id/portal/',
+            },
+            body: {
+              'log': email,
+              'pwd': password,
+              'action': 'fcom_user_login_form',
+              '_fcom_login_nonce': nonce,
+              'wp-submit': 'Login',
+              'redirect_to': '/portal',
+              'rememberme': 'forever',
+              'testcookie': '1',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       // Step 3: Cek response - login berhasil biasanya redirect (302)
       final loginCookies = _extractCookies(loginResponse);
@@ -404,21 +497,22 @@ class AuthService {
         // Login berhasil! Simpan cookies
         final mergedCookies = _mergeCookies(allCookies, loginCookies);
         _cookies = mergedCookies;
-        _wpNonce = await _fetchRestNonce(mergedCookies);
+        _wpNonce = null; // reset, jangan pakai nonce akun sebelumnya
         _userEmail = email;
         _userName = email.split('@').first; // Fallback username
-        
+        _userSlug = null;
+        _userAvatarUrl = null;
+
         await _storage.write(key: _cookiesKey, value: mergedCookies);
         await _storage.write(key: _userEmailKey, value: _userEmail!);
         await _storage.write(key: _userNameKey, value: _userName!);
 
-        // Ambil profil yang lebih akurat dan avatar
-        await _fetchUserProfile();
+        // Ambil nonce & profil di background agar layar login tidak
+        // "stuck loading" menunggu jaringan. ApiService akan otomatis
+        // refresh nonce & retry bila konten pertama kali gagal dimuat.
+        unawaited(_refreshNonceAndProfile());
 
-        return {
-          'success': true,
-          'message': 'Login berhasil!',
-        };
+        return {'success': true, 'message': 'Login berhasil!'};
       } else {
         // Login gagal - cek apakah ada pesan error di body
         final errorMsg = _extractLoginError(loginResponse.body);
@@ -441,11 +535,13 @@ class AuthService {
     _wpNonce = null;
     _userEmail = null;
     _userName = null;
+    _userSlug = null;
     _userAvatarUrl = null;
     await _storage.delete(key: _cookiesKey);
     await _storage.delete(key: _userNameKey);
     await _storage.delete(key: _userEmailKey);
     await _storage.delete(key: 'wp_user_avatar');
+    await _storage.delete(key: 'wp_user_slug');
   }
 
   /// Extract semua Set-Cookie headers dari response.
@@ -485,7 +581,9 @@ class AuthService {
 
   /// Extract 2FA token dari HTML response AJAX.
   static String? _extract2FaToken(String html) {
-    final regex = RegExp(r'name=\\?"__two_fa_signed_token\\?"\s+value=\\?"([^"\\]+)\\?"');
+    final regex = RegExp(
+      r'name=\\?"__two_fa_signed_token\\?"\s+value=\\?"([^"\\]+)\\?"',
+    );
     final match = regex.firstMatch(html);
     return match?.group(1);
   }

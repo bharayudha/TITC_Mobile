@@ -1,9 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_text_styles.dart';
 import 'package:magang_titc/screens/auth/login_screen.dart';
 import 'package:magang_titc/screens/customer/profile/profile_screen.dart';
+import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
 
 const Color _dangerColor = Color(0xFFE53935);
@@ -29,6 +31,7 @@ class ProfileMenuButton extends StatelessWidget {
       return;
     }
     if (action == ProfileMenuAction.logout) {
+      ApiService.clearCache();
       AuthService.logout().then((_) {
         // Bersihkan seluruh riwayat halaman supaya tidak bisa di-back
         // kembali ke area yang butuh login.
@@ -118,7 +121,7 @@ class ProfileMenuButton extends StatelessWidget {
           radius: 20,
           backgroundColor: Colors.grey.shade300,
           backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
-              ? NetworkImage(avatarUrl)
+              ? CachedNetworkImageProvider(avatarUrl)
               : null,
           child: avatarUrl == null || avatarUrl.isEmpty
               ? Text(

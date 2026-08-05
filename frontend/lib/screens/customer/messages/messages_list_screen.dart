@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -250,7 +251,7 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
             CircleAvatar(
               radius: 24,
               backgroundColor: Colors.blue.shade50,
-              backgroundImage: thread.avatarUrl.isNotEmpty ? NetworkImage(thread.avatarUrl) : null,
+              backgroundImage: thread.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(thread.avatarUrl) : null,
               child: thread.avatarUrl.isEmpty
                   ? Text(thread.title.isNotEmpty ? thread.title[0].toUpperCase() : '?')
                   : null,

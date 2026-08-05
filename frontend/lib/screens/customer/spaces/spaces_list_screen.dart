@@ -1,9 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/space_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:magang_titc/screens/customer/spaces/space_detail_screen.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 
 /// Konten tab Spaces. App bar, drawer, chat FAB, dan bottom nav dipasang oleh
@@ -25,10 +25,31 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSpaces();
+    _loadSpaces(useCache: true);
   }
 
-  void _loadSpaces() {
+  /// Muat daftar spaces. Kalau [useCache] true dan ada data lama, data itu
+  /// langsung ditampilkan (tidak loading dari nol tiap kali tab ini dibuka
+  /// lagi) sambil diam-diam refresh di belakang layar. Pull-to-refresh dan
+  /// aksi join selalu memaksa fetch baru (useCache: false).
+  void _loadSpaces({bool useCache = false}) {
+    final cached = ApiService.cachedSpaces;
+    if (useCache && cached != null) {
+      setState(() {
+        _allFetchedSpaces = cached;
+        _spacesFuture = Future.value(cached);
+      });
+      ApiService.fetchSpaces().then((spaces) {
+        if (mounted) {
+          setState(() {
+            _allFetchedSpaces = spaces;
+            _spacesFuture = Future.value(spaces);
+          });
+        }
+      }).catchError((_) {});
+      return;
+    }
+
     setState(() {
       _spacesFuture = ApiService.fetchSpaces().then((spaces) {
         _allFetchedSpaces = spaces;
@@ -204,15 +225,20 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
             children: [
               Container(
                 height: 130,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  image: space.coverPhotoUrl.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(space.coverPhotoUrl),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
+                color: Colors.grey.shade200,
+                child: space.coverPhotoUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: space.coverPhotoUrl,
+                        height: 130,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorWidget: (context, url, error) => Center(
+                          child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
+                        ),
+                      )
+                    : Center(
+                        child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
+                      ),
               ),
               if (space.isJoined)
                 Positioned(
@@ -244,20 +270,23 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                     Container(
                       width: 48,
                       height: 48,
+                      clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.grey.shade200),
-                        image: space.logoUrl.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(space.logoUrl),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
                       ),
-                      child: space.logoUrl.isEmpty
-                          ? const Center(child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey))
-                          : null,
+                      child: space.logoUrl.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: space.logoUrl,
+                              width: 48,
+                              height: 48,
+                              fit: BoxFit.cover,
+                              errorWidget: (context, url, error) => const Center(
+                                child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey),
+                              ),
+                            )
+                          : const Center(child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

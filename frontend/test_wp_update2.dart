@@ -18,7 +18,7 @@ void main() async {
   final body = json.encode({
     'first_name': 'Arnanda',
     'last_name': 'TestNative',
-    'description': 'Bio updated from native', 'meta': @{'fcom_headline': 'Test Headline'}
+    'description': 'Bio updated from native', 'meta': {'fcom_headline': 'Test Headline'}
   });
   
   final res = await http.post(Uri.parse(url), headers: headers, body: body);
