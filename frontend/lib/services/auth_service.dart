@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -38,7 +39,16 @@ class AuthService {
   static String? _userEmail;
   static String? _userName;
   static String? _userSlug;
-  static String? _userAvatarUrl;
+
+  /// URL foto profil user. Dibungkus ValueNotifier supaya widget yang
+  /// menampilkannya (mis. tombol profil di app bar) ikut ter-update begitu
+  /// foto berubah — setelah login, setelah profil di-fetch, atau setelah
+  /// user mengunggah foto baru — tanpa perlu buka ulang halaman.
+  static final ValueNotifier<String?> avatarUrlNotifier =
+      ValueNotifier<String?>(null);
+
+  static String? get _userAvatarUrl => avatarUrlNotifier.value;
+  static set _userAvatarUrl(String? value) => avatarUrlNotifier.value = value;
 
   /// Getter: apakah user sudah login (ada cookie tersimpan).
   static bool get isLoggedIn => _cookies != null && _cookies!.isNotEmpty;

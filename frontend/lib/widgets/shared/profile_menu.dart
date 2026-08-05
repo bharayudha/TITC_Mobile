@@ -10,6 +10,71 @@ import 'package:magang_titc/services/auth_service.dart';
 
 const Color _dangerColor = Color(0xFFE53935);
 
+/// Foto profil user sebagai ikon tombol di app bar — mengikuti tampilan web,
+/// bukan ikon orang generik. Kalau user belum punya foto (atau URL-nya gagal
+/// dimuat), jatuh kembali ke inisial nama, lalu ke ikon default.
+class _ProfileAvatarIcon extends StatelessWidget {
+  const _ProfileAvatarIcon();
+
+  /// Sedikit lebih kecil dari ikon app bar lain (24) supaya lingkaran foto
+  /// tidak terlihat lebih "berat" dari ikon search & bell di sebelahnya.
+  static const double _size = 28;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: AuthService.avatarUrlNotifier,
+      builder: (context, avatarUrl, _) {
+        if (avatarUrl == null || avatarUrl.isEmpty) return _fallback();
+
+        return ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: avatarUrl,
+            // Sama seperti pemuatan gambar lain di app: sebagian media ada di
+            // balik privacy WordPress, jadi cookie sesi harus ikut terkirim.
+            httpHeaders: AuthService.imageAuthHeaders,
+            width: _size,
+            height: _size,
+            fit: BoxFit.cover,
+            placeholder: (_, _) => _initialCircle(),
+            errorWidget: (_, _, _) => _fallback(),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Inisial nama di atas lingkaran abu — dipakai saat foto masih dimuat.
+  Widget _initialCircle() {
+    final name = AuthService.userName ?? '';
+    if (name.isEmpty) return _fallback();
+
+    return Container(
+      width: _size,
+      height: _size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        name[0].toUpperCase(),
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade700,
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback() => const PhosphorIcon(
+    PhosphorIconsRegular.userCircle,
+    color: Colors.black87,
+    size: _size,
+  );
+}
+
 /// Pilihan pada popup profil.
 enum ProfileMenuAction { viewProfile, myCourses, mySpaces, certificate, logout }
 
@@ -47,10 +112,7 @@ class ProfileMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<ProfileMenuAction>(
-      icon: const PhosphorIcon(
-        PhosphorIconsRegular.userCircle,
-        color: Colors.black87,
-      ),
+      icon: const _ProfileAvatarIcon(),
       tooltip: 'Profil',
       color: Colors.white,
       elevation: 8,
