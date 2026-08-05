@@ -32,15 +32,33 @@ class CourseModel {
     this.privacy = 'private',
   });
 
+  /// Ambil nilai String pertama yang benar-benar berisi.
+  ///
+  /// Operator `??` saja tidak cukup karena API mengirim `""` (string kosong)
+  /// maupun `null` untuk gambar yang belum diisi; dengan `??` nilai `""`
+  /// dianggap sah sehingga fallback tidak pernah dipakai.
+  static String _firstNonEmpty(List<dynamic> candidates) {
+    for (final value in candidates) {
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return '';
+  }
+
   /// Factory untuk membuat object dari JSON response Fluent Community API.
   factory CourseModel.fromJson(Map<String, dynamic> json) {
+    final settings = json['settings'] as Map<String, dynamic>? ?? const {};
+
     return CourseModel(
       id: json['id'] ?? 0,
       slug: json['slug'] ?? '',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
-      logoUrl: json['logo'] ?? json['avatar'] ?? '',
-      coverPhotoUrl: json['cover_photo'] ?? json['cover'] ?? '',
+      logoUrl: _firstNonEmpty([json['logo'], json['avatar']]),
+      coverPhotoUrl: _firstNonEmpty([
+        json['cover_photo'],
+        json['cover'],
+        settings['og_image'],
+      ]),
       studentsCount: json['studentsCount'] ?? 0,
       isEnrolled: json['isEnrolled'] ?? false,
       progress: json['progress'] ?? 0,

@@ -35,7 +35,9 @@ class MemberModel {
     T? pick<T>(String key) => (json[key] ?? xprofile[key]) as T?;
 
     return MemberModel(
-      id: pick<int>('id') ?? 0,
+      // Respons `/members` memakai `user_id`, bukan `id`. Tanpa fallback ini
+      // semua member ber-id 0 sehingga aksi Follow salah sasaran.
+      id: pick<int>('user_id') ?? pick<int>('id') ?? 0,
       displayName:
           pick<String>('display_name') ?? pick<String>('name') ?? 'Unknown Member',
       username: pick<String>('username') ??
@@ -65,28 +67,59 @@ class MemberModel {
     );
   }
 
-  /// FCOM menyimpan tautan sosial di `meta.social_links`, bentuknya bisa Map
-  /// (`{linkedin: url}`) atau List (`[{provider: 'linkedin', url: '...'}]`).
+  /// Provider sosial yang dikenali, dipakai saat memindai key di `meta`.
+  static const List<String> _socialProviders = [
+    'linkedin',
+    'instagram',
+    'facebook',
+    'twitter',
+    'x',
+    'youtube',
+    'github',
+    'tiktok',
+    'website',
+  ];
+
+  /// Ambil tautan sosial dari `meta`.
+  ///
+  /// Respons `/members` yang sebenarnya TIDAK punya key `social_links`
+  /// (isinya `website`, `cover_photo`, `headline`, `badge_slug`, ...), jadi
+  /// tiap provider kemungkinan disimpan sebagai key tersendiri di `meta`.
+  /// Karena itu di sini dicoba dua-duanya: `social_links` kalau ada, dan
+  /// pemindaian langsung key `meta` untuk nama provider yang dikenal.
   static Map<String, String> _parseSocialLinks(dynamic meta) {
     if (meta is! Map) return const {};
-    final raw = meta['social_links'];
     final result = <String, String>{};
 
+    // Bentuk 1: terkumpul di `social_links` (Map atau List).
+    final raw = meta['social_links'];
     if (raw is Map) {
       raw.forEach((key, value) {
-        if (value is String && value.isNotEmpty) result['$key'] = value;
+        if (value is String && value.trim().isNotEmpty) {
+          result['$key'] = value.trim();
+        }
       });
     } else if (raw is List) {
       for (final item in raw) {
         if (item is Map) {
           final provider = item['provider'] ?? item['name'] ?? item['type'];
           final url = item['url'] ?? item['link'];
-          if (provider is String && url is String && url.isNotEmpty) {
-            result[provider] = url;
+          if (provider is String && url is String && url.trim().isNotEmpty) {
+            result[provider] = url.trim();
           }
         }
       }
     }
+
+    // Bentuk 2: tiap provider jadi key tersendiri di `meta`.
+    for (final provider in _socialProviders) {
+      if (result.containsKey(provider)) continue;
+      final value = meta[provider];
+      if (value is String && value.trim().isNotEmpty) {
+        result[provider] = value.trim();
+      }
+    }
+
     return result;
   }
 }

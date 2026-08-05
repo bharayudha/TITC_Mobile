@@ -204,6 +204,32 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
     );
   }
 
+  /// Isian saat space tidak punya cover (atau covernya gagal dimuat).
+  /// Emoji space dipakai lebih dulu supaya kartu tetap punya identitas
+  /// visual seperti di web, bukan kotak abu-abu kosong.
+  Widget _buildCoverFallback(SpaceModel space) {
+    if (space.emoji.isNotEmpty) {
+      return Center(
+        child: Text(space.emoji, style: const TextStyle(fontSize: 44)),
+      );
+    }
+    return Center(
+      child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
+    );
+  }
+
+  /// Isian kotak logo 48x48 saat space tidak punya logo.
+  Widget _buildLogoFallback(SpaceModel space) {
+    if (space.emoji.isNotEmpty) {
+      return Center(
+        child: Text(space.emoji, style: const TextStyle(fontSize: 22)),
+      );
+    }
+    return const Center(
+      child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey),
+    );
+  }
+
   Widget _buildSpaceCard(SpaceModel space) {
     return Container(
       decoration: BoxDecoration(
@@ -234,13 +260,9 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                         height: 130,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorWidget: (context, url, error) => Center(
-                          child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
-                        ),
+                        errorWidget: (context, url, error) => _buildCoverFallback(space),
                       )
-                    : Center(
-                        child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
-                      ),
+                    : _buildCoverFallback(space),
               ),
               if (space.isJoined)
                 Positioned(
@@ -285,11 +307,9 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                               width: 48,
                               height: 48,
                               fit: BoxFit.cover,
-                              errorWidget: (context, url, error) => const Center(
-                                child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey),
-                              ),
+                              errorWidget: (context, url, error) => _buildLogoFallback(space),
                             )
-                          : const Center(child: PhosphorIcon(PhosphorIconsRegular.users, color: Colors.grey)),
+                          : _buildLogoFallback(space),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

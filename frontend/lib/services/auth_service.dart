@@ -56,6 +56,26 @@ class AuthService {
   /// Getter: cookies saat ini, untuk dipakai oleh ApiService.
   static String? get cookies => _cookies;
 
+  /// Kembalikan nilai cookie ke bentuk mentahnya (belum ter-percent-encode).
+  ///
+  /// Cookie WordPress yang kita simpan diambil apa adanya dari header
+  /// `Set-Cookie`, jadi nilainya SUDAH ter-encode, mis.
+  /// `magang_titc%7C1787156011%7C...`. Sementara `WebViewCookie` meng-encode
+  /// lagi nilai yang diberikan, sehingga `%7C` berubah jadi `%257C` dan
+  /// WordPress gagal membaca cookie login — user dilempar ke halaman login
+  /// berulang-ulang. Dengan men-decode dulu di sini, hasil encode oleh plugin
+  /// pas kembali ke nilai aslinya.
+  ///
+  /// Kalau nilainya ternyata tidak valid untuk di-decode (mis. ada `%` yang
+  /// bukan escape), nilai asli dipakai apa adanya supaya tidak malah rusak.
+  static String decodeCookieValue(String value) {
+    try {
+      return Uri.decodeComponent(value);
+    } catch (_) {
+      return value;
+    }
+  }
+
   /// Header auth untuk dipakai widget gambar (CachedNetworkImage/Provider).
   /// Sebagian media (cover/logo space & course, avatar) kemungkinan ada di
   /// balik privacy WordPress dan butuh cookie sesi yang sama seperti
@@ -128,7 +148,7 @@ class AuthService {
   static Future<void> _doRefreshNonce() async {
     final cookies = _cookies;
     if (cookies == null) return;
-    final nonce = await _fetchRestNonce(cookies);
+    final nonce = await _fetchRestNonceWithRetry(cookies);
     if (nonce != null && nonce != '0') {
       _wpNonce = nonce;
     }
@@ -147,7 +167,7 @@ class AuthService {
                   'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             },
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       print('Fetch Nonce Status: ${response.statusCode}');
 
       if (response.statusCode == 200 || response.statusCode == 302) {
@@ -177,6 +197,19 @@ class AuthService {
     return null;
   }
 
+  /// Wrapper retry untuk [_fetchRestNonce]. Nonce fetch memuat seluruh
+  /// homepage yang berat, jadi paling rentan timeout. Retry 1x setelah
+  /// jeda singkat sebelum menyerah.
+  static Future<String?> _fetchRestNonceWithRetry(String cookies) async {
+    final result = await _fetchRestNonce(cookies);
+    if (result != null) return result;
+
+    // Retry sekali setelah jeda 2 detik
+    await Future.delayed(const Duration(seconds: 2));
+    print('Retrying nonce fetch...');
+    return _fetchRestNonce(cookies);
+  }
+
   /// Fetch informasi profil user via WP REST API (me). Di-dedupe seperti
   /// [refreshNonce] supaya beberapa tab yang dibuka berdekatan tidak memicu
   /// beberapa chain fetch profil paralel ke host yang sama.
@@ -201,7 +234,7 @@ class AuthService {
               'Referer': 'https://titc.or.id/portal/',
             },
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       print('Fetch Profile Status: ${response.statusCode}');
       print('Fetch Profile Body: ${response.body}');
       if (response.statusCode == 200) {
@@ -246,7 +279,7 @@ class AuthService {
                     'Referer': 'https://titc.or.id/portal/',
                   },
                 )
-                .timeout(const Duration(seconds: 15));
+                .timeout(const Duration(seconds: 30));
             print('FCOM Profile Status: ${fcomResponse.statusCode}');
             if (fcomResponse.statusCode == 200) {
               final fcomData = json.decode(fcomResponse.body);
@@ -446,7 +479,7 @@ class AuthService {
               'Referer': 'https://titc.or.id/portal/',
             },
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
       if (authPageResponse.statusCode == 302) {
         // Halaman melakukan redirect - ini berarti kita perlu ikuti redirect
@@ -466,7 +499,7 @@ class AuthService {
               'Referer': 'https://titc.or.id/portal/',
             },
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
       // Extract nonce dari HTML form
       final nonce = _extractNonce(authPageFull.body);
@@ -504,7 +537,7 @@ class AuthService {
               'testcookie': '1',
             },
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
       // Step 3: Cek response - login berhasil biasanya redirect (302)
       final loginCookies = _extractCookies(loginResponse);

@@ -83,16 +83,30 @@ class ApiService {
   /// GET dengan auth headers. Jika server menolak dengan 401/403 (biasanya
   /// karena X-WP-Nonce belum sempat/gagal diambil, mis. setelah ganti akun),
   /// coba refresh nonce sekali lalu retry sebelum menyerah.
+  ///
+  /// Juga menangani timeout dan error jaringan: retry 1x setelah jeda 2
+  /// detik sebelum throw. Server TITC bisa lambat (apalagi saat LiteSpeed
+  /// Cache sedang memproses), jadi retry 1x cukup mengurangi false-timeout.
   static Future<http.Response> _authorizedGet(Uri uri) async {
-    var response = await _client
-        .get(uri, headers: _authHeaders)
-        .timeout(const Duration(seconds: 15));
+    http.Response response;
+    try {
+      response = await _client
+          .get(uri, headers: _authHeaders)
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      // Retry 1x untuk timeout / network error
+      print('_authorizedGet: first attempt failed ($e), retrying in 2s...');
+      await Future.delayed(const Duration(seconds: 2));
+      response = await _client
+          .get(uri, headers: _authHeaders)
+          .timeout(const Duration(seconds: 30));
+    }
 
     if (response.statusCode == 401 || response.statusCode == 403) {
       await AuthService.refreshNonce();
       response = await _client
           .get(uri, headers: _authHeaders)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
     }
 
     return response;
@@ -123,7 +137,11 @@ class ApiService {
       final response = await _authorizedGet(Uri.parse('$_baseUrl/feeds'));
 
       print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
+      // Truncate response body to avoid flooding stdout
+      final bodyPreview = response.body.length > 500
+          ? '${response.body.substring(0, 500)}... (${response.body.length} chars total)'
+          : response.body;
+      print('Response Body (preview): $bodyPreview');
       print('-------------------------');
 
       if (response.statusCode == 200) {
@@ -189,76 +207,69 @@ class ApiService {
     }
 
     try {
-      // Server bisa mem-paginate /spaces (akun dengan banyak space akan
-      // dipecah jadi beberapa halaman). Sebelumnya kode ini cuma baca
-      // halaman pertama dan langsung nge-cast `data['spaces']` sebagai
-      // List — kalau bentuknya ternyata objek paginator ({data, meta,
-      // current_page, last_page, ...}) beberapa/semua space jadi tidak
-      // ikut kebaca. Di sini kita loop ambil semua halaman sampai habis.
-      final allSpacesJson = <dynamic>[];
-      int page = 1;
-      while (true) {
-        final uri = Uri.parse('$_baseUrl/spaces').replace(
-          queryParameters: {
-            if (search.isNotEmpty) 'search': search,
-            'page': page.toString(),
-          },
-        );
+      final uri = Uri.parse('$_baseUrl/spaces').replace(
+        queryParameters: search.isNotEmpty ? {'search': search} : null,
+      );
 
-        final response = await _authorizedGet(uri);
+      final response = await _authorizedGet(uri);
 
-        if (response.statusCode == 401 || response.statusCode == 403) {
-          throw Exception('Sesi login telah habis. Silakan login ulang.');
-        } else if (response.statusCode != 200) {
-          throw Exception('Gagal memuat spaces: ${response.statusCode}');
-        }
-
-        final data = json.decode(response.body);
-
-        List<dynamic> pageItems;
-        int? currentPage;
-        int? lastPage;
-        if (data is List) {
-          pageItems = data;
-        } else if (data is Map && data['data'] is Map) {
-          final wrapper = data['data'] as Map;
-          pageItems = (wrapper['data'] as List?) ?? [];
-          currentPage = wrapper['current_page'] as int?;
-          lastPage = wrapper['last_page'] as int?;
-        } else if (data is Map && data['data'] is List) {
-          pageItems = data['data'] as List;
-        } else if (data is Map && data['spaces'] is Map) {
-          final wrapper = data['spaces'] as Map;
-          pageItems = (wrapper['data'] as List?) ?? [];
-          currentPage = wrapper['current_page'] as int?;
-          lastPage = wrapper['last_page'] as int?;
-        } else if (data is Map && data['spaces'] is List) {
-          pageItems = data['spaces'] as List;
-        } else {
-          pageItems = [];
-        }
-
-        if (page == 1) {
-          print('SPACES_PAGE_INFO: currentPage=$currentPage lastPage=$lastPage itemsOnPage=${pageItems.length}');
-          if (pageItems.isNotEmpty) {
-            const encoder = JsonEncoder.withIndent('  ');
-            final jsonStr = encoder.convert(pageItems.first);
-            for (final line in jsonStr.split('\n')) {
-              print('FCOM_JSON: $line');
-            }
-          }
-        }
-
-        allSpacesJson.addAll(pageItems);
-
-        final hasMore = currentPage != null && lastPage != null && currentPage < lastPage;
-        // Guard `page > 20` cuma jaring pengaman supaya tidak infinite loop
-        // kalau field paginasi ternyata berbeda dari dugaan di atas.
-        if (!hasMore || pageItems.isEmpty || page > 20) break;
-        page++;
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('Sesi login telah habis. Silakan login ulang.');
+      } else if (response.statusCode != 200) {
+        throw Exception('Gagal memuat spaces: ${response.statusCode}');
       }
 
-      final spaces = allSpacesJson;
+      final data = json.decode(response.body);
+
+      // Respons `/spaces` TIDAK dipaginate (log menunjukkan current_page &
+      // last_page selalu null). Masalah "ada space yang tidak muncul" bukan
+      // karena halaman berikutnya tidak diambil, tapi karena FCOM menaruh
+      // space di beberapa tempat sekaligus dalam satu respons: ada yang di
+      // key `spaces`, ada yang dikelompokkan di bawah parent/kategori, dan
+      // ada yang di key lain lagi. Kalau kita cuma baca satu key, space
+      // seperti "Update - Certification" ikut hilang.
+      //
+      // Jadi di sini kita telusuri seluruh struktur JSON dan pungut apa pun
+      // yang berbentuk space (punya id + slug + title), lalu dedupe by id.
+      // Cara ini tahan terhadap perubahan/variasi bentuk respons.
+      final collected = <int, Map<String, dynamic>>{};
+      _collectSpaceLikeObjects(data, collected);
+
+      // Course adalah Space dengan `type: "course"` dan sudah punya tabnya
+      // sendiri, jadi jangan ikut ditampilkan di tab Spaces.
+      final spaces = collected.values
+          .where((json) => (json['type'] as String?) != 'course')
+          .toList();
+
+      if (data is Map) {
+        print('SPACES_ENVELOPE_KEYS: ${data.keys.toList()}');
+        // Cetak SETIAP entri mentah apa adanya, sebelum disaring collector.
+        // Ini yang menentukan apakah space hilang karena server memang tidak
+        // mengirimnya, atau karena tersaring di sisi aplikasi.
+        data.forEach((key, value) {
+          if (value is List) {
+            print('SPACES_RAW[$key]: ${value.length} entri');
+            for (final item in value) {
+              if (item is Map) {
+                print('SPACES_RAW_ITEM[$key]: id=${item['id']} slug=${item['slug']} type=${item['type']} privacy=${item['privacy']} status=${item['status']} title=${item['title']}');
+                // Gambar sengaja dicetak terpisah: kartu space "Update -
+                // Announcement" & "Update - Certification" tidak menampilkan
+                // gambar, perlu dipastikan apakah URL-nya memang kosong/null
+                // dari server atau ada tapi gagal dimuat.
+                print('SPACES_RAW_IMG[$key]: title=${item['title']} logo=${item['logo']} cover_photo=${item['cover_photo']}');
+              } else {
+                print('SPACES_RAW_ITEM[$key]: (bukan objek) $item');
+              }
+            }
+          } else if (value is Map) {
+            print('SPACES_RAW[$key]: objek dengan keys ${value.keys.toList()}');
+          }
+        });
+      }
+      print('SPACES_COLLECTED: total=${collected.length} nonCourse=${spaces.length}');
+      for (final s in spaces) {
+        print('SPACE_ITEM: id=${s['id']} type=${s['type']} privacy=${s['privacy']} status=${s['status']} title=${s['title']}');
+      }
 
       await _initJoinedCache();
 
@@ -291,6 +302,40 @@ class ApiService {
     }
   }
 
+  /// Telusuri seluruh struktur JSON respons dan pungut setiap objek yang
+  /// berbentuk Space, ke mana pun FCOM menaruhnya (langsung di key `spaces`,
+  /// dikelompokkan di bawah parent/kategori, atau di key lain). Hasilnya
+  /// di-dedupe berdasarkan `id` supaya space yang muncul di dua tempat tidak
+  /// dobel.
+  ///
+  /// Objek dianggap Space kalau punya `id`, `slug`, dan `title`. Key `settings`
+  /// dilewati karena isinya konfigurasi, bukan daftar space.
+  static void _collectSpaceLikeObjects(
+    dynamic node,
+    Map<int, Map<String, dynamic>> out,
+  ) {
+    if (node is List) {
+      for (final item in node) {
+        _collectSpaceLikeObjects(item, out);
+      }
+      return;
+    }
+    if (node is! Map) return;
+
+    final rawId = node['id'];
+    final id = rawId is int ? rawId : int.tryParse('$rawId');
+    if (id != null && node['slug'] is String && node['title'] is String) {
+      out.putIfAbsent(id, () => Map<String, dynamic>.from(node));
+    }
+
+    node.forEach((key, value) {
+      if (key == 'settings') return;
+      if (value is List || value is Map) {
+        _collectSpaceLikeObjects(value, out);
+      }
+    });
+  }
+
   /// Bergabung ke dalam suatu Space.
   static Future<bool> joinSpace(String spaceSlug) async {
     if (!AuthService.isLoggedIn) {
@@ -301,7 +346,7 @@ class ApiService {
       final response = await http.post(
         Uri.parse('$_baseUrl/spaces/$spaceSlug/join'),
         headers: _authHeaders,
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         await _addJoinedSpace(spaceSlug);
@@ -414,7 +459,7 @@ class ApiService {
             Uri.parse('$_baseUrl/courses/$courseId/enroll'),
             headers: _authHeaders,
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return null; // null = sukses
@@ -558,6 +603,40 @@ class ApiService {
             print('MEMBER_JSON: $line');
           }
         }
+
+        // Cari tahu APA KAH endpoint members memang mengirim data sosial, dan
+        // kalau iya dalam bentuk apa (URL penuh atau username saja). Selama
+        // ini bentuknya cuma ditebak, jadi ikon sosial bisa jadi tidak pernah
+        // muncul sama sekali karena field-nya memang tidak ada di respons.
+        // Cetak SEMUA key `meta` yang isinya tidak kosong, dari member mana
+        // pun di halaman ini. Sampel pertama (akun sendiri) belum tentu
+        // mengisi profil sosial, jadi memeriksa satu member saja menyesatkan.
+        final metaKeysSeen = <String>{};
+        var withSocial = 0;
+        for (final item in items) {
+          if (item is! Map) continue;
+          final meta = item['meta'] ??
+              (item['xprofile'] is Map ? item['xprofile']['meta'] : null);
+          if (meta is! Map) continue;
+
+          final filled = <String, dynamic>{};
+          meta.forEach((key, value) {
+            metaKeysSeen.add('$key');
+            final isEmptyish = value == null ||
+                (value is String && value.trim().isEmpty) ||
+                (value is List && value.isEmpty);
+            if (!isEmptyish) filled['$key'] = value;
+          });
+
+          if (filled.isNotEmpty) {
+            withSocial++;
+            if (withSocial <= 5) {
+              print('MEMBER_META_FILLED: ${item['username'] ?? item['slug']} -> ${json.encode(filled)}');
+            }
+          }
+        }
+        print('MEMBER_META_ALL_KEYS: ${metaKeysSeen.toList()}');
+        print('MEMBER_META_SUMMARY: $withSocial dari ${items.length} member punya isi meta');
       }
 
       return MembersPage(
@@ -580,7 +659,7 @@ class ApiService {
             Uri.parse('$_baseUrl/members/$memberId/${follow ? 'follow' : 'unfollow'}'),
             headers: _authHeaders,
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       print('Exception in toggleFollowMember: $e');

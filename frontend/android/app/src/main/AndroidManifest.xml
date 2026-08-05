@@ -42,5 +42,16 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Dibutuhkan url_launcher di Android 11+ (package visibility).
+             Tanpa ini, tap ikon sosial (LinkedIn/Instagram/dll) tidak
+             melakukan apa-apa karena app tidak boleh "melihat" browser. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
+        </intent>
     </queries>
 </manifest>

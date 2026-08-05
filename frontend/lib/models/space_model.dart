@@ -10,6 +10,10 @@ class SpaceModel {
   final bool isJoined;
   final String privacy;
 
+  /// Emoji dari `settings.emoji`. Dipakai sebagai penanda visual saat space
+  /// tidak punya logo/cover sama sekali, meniru tampilan di web.
+  final String emoji;
+
   SpaceModel({
     required this.id,
     required this.slug,
@@ -20,20 +24,42 @@ class SpaceModel {
     this.membersCount = 0,
     this.isJoined = false,
     this.privacy = 'public',
+    this.emoji = '',
   });
+
+  /// Ambil nilai String pertama yang benar-benar berisi.
+  ///
+  /// Operator `??` saja tidak cukup: API mengirim `""` (string kosong), bukan
+  /// `null`, untuk gambar yang belum diisi — sehingga fallback tidak pernah
+  /// jalan dan kartu space tampil tanpa gambar padahal ada sumber lain.
+  static String _firstNonEmpty(List<dynamic> candidates) {
+    for (final value in candidates) {
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return '';
+  }
 
   /// Factory untuk membuat object dari JSON response Fluent Community API.
   factory SpaceModel.fromJson(Map<String, dynamic> json) {
+    final settings = json['settings'] as Map<String, dynamic>? ?? const {};
+
     return SpaceModel(
       id: json['id'] ?? 0,
       slug: json['slug'] ?? '',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
-      logoUrl: json['logo'] ?? json['avatar'] ?? '',
-      coverPhotoUrl: json['cover_photo'] ?? json['cover'] ?? '',
+      logoUrl: _firstNonEmpty([json['logo'], json['avatar']]),
+      // `settings.og_image` sering terisi walau `cover_photo` kosong, jadi
+      // dipakai sebagai cadangan terakhir sebelum menyerah ke placeholder.
+      coverPhotoUrl: _firstNonEmpty([
+        json['cover_photo'],
+        json['cover'],
+        settings['og_image'],
+      ]),
       membersCount: json['members_count'] ?? json['member_count'] ?? 0,
       isJoined: json['is_joined'] ?? json['is_member'] ?? false,
       privacy: json['privacy'] ?? 'public',
+      emoji: _firstNonEmpty([settings['emoji']]),
     );
   }
 }

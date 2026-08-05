@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/services/webview_cookie_helper.dart';
 import 'package:magang_titc/constants/app_colors.dart';
 
 class AuthenticatedWebViewScreen extends StatefulWidget {
@@ -152,35 +152,7 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
   }
 
   Future<void> _initCookiesAndLoad() async {
-    final cookieManager = WebViewCookieManager();
-    final cookiesString = AuthService.cookies;
-
-    if (cookiesString != null && cookiesString.isNotEmpty) {
-      final parts = cookiesString.split(';');
-      for (final part in parts) {
-        final kv = part.trim().split('=');
-        if (kv.length >= 2) {
-          final name = kv[0];
-          final value = kv.sublist(1).join('=');
-          await cookieManager.setCookie(
-            WebViewCookie(
-              name: name,
-              value: value,
-              domain: 'titc.or.id',
-              path: '/',
-            ),
-          );
-          await cookieManager.setCookie(
-            WebViewCookie(
-              name: name,
-              value: value,
-              domain: '.titc.or.id',
-              path: '/',
-            ),
-          );
-        }
-      }
-    }
+    await WebViewCookieHelper.setupCookies();
 
     _controller.loadRequest(
       Uri.parse(widget.url),

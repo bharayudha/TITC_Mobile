@@ -8,6 +8,7 @@ import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/constants/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const Color _kAccent = Color(0xFF1E5AF5);
 
@@ -336,11 +337,18 @@ class _MembersListScreenState extends State<MembersListScreen> {
               children: [
                 for (final entry in member.socialLinks.entries)
                   Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: PhosphorIcon(
-                      _socialIcon(entry.key),
-                      size: 18,
-                      color: Colors.grey.shade600,
+                    padding: const EdgeInsets.only(right: 4),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => _openSocialLink(entry.key, entry.value),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: PhosphorIcon(
+                          _socialIcon(entry.key),
+                          size: 18,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -353,9 +361,11 @@ class _MembersListScreenState extends State<MembersListScreen> {
 
   /// Baris "Joined 2 months ago • Last seen 2 minutes ago" seperti di web.
   Widget _buildMetaLine(MemberModel member) {
+    final joined = _humanizeTime(member.joinedAt);
+    final lastSeen = _humanizeTime(member.lastActivity);
     final parts = <String>[
-      if (member.joinedAt.isNotEmpty) 'Joined ${member.joinedAt}',
-      if (member.lastActivity.isNotEmpty) 'Last seen ${member.lastActivity}',
+      if (joined.isNotEmpty) 'Joined $joined',
+      if (lastSeen.isNotEmpty) 'Last seen $lastSeen',
     ];
     if (parts.isEmpty) return const SizedBox.shrink();
 
@@ -364,6 +374,35 @@ class _MembersListScreenState extends State<MembersListScreen> {
       style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
       maxLines: 2,
     );
+  }
+
+  /// Ubah timestamp API (mis. "2026-07-21 13:42:26") jadi teks relatif ala
+  /// web ("15 days ago"). Kalau nilainya memang sudah berupa teks relatif
+  /// dari server, dipakai apa adanya.
+  static String _humanizeTime(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+
+    final parsed = DateTime.tryParse(value.replaceFirst(' ', 'T'));
+    if (parsed == null) return value;
+
+    final diff = DateTime.now().difference(parsed);
+    if (diff.isNegative) return 'just now';
+
+    if (diff.inSeconds < 60) return 'a few seconds ago';
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
+    }
+    if (diff.inHours < 24) {
+      return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
+    }
+    if (diff.inDays < 30) {
+      return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+    }
+    final months = (diff.inDays / 30).floor();
+    if (months < 12) return '$months month${months == 1 ? '' : 's'} ago';
+    final years = (diff.inDays / 365).floor();
+    return '$years year${years == 1 ? '' : 's'} ago';
   }
 
   Widget _buildAvatar(MemberModel member) {
@@ -446,6 +485,72 @@ class _MembersListScreenState extends State<MembersListScreen> {
         ),
       ),
     );
+  }
+
+  /// Buka tautan sosial di browser/aplikasi luar. Sengaja tidak dibuka di
+  /// WebView internal karena WebView di app ini menyuntikkan CSS khusus
+  /// portal FCOM yang akan merusak tampilan situs luar seperti LinkedIn.
+  Future<void> _openSocialLink(String provider, String rawValue) async {
+    final url = _normalizeSocialUrl(provider, rawValue);
+    final uri = url == null ? null : Uri.tryParse(url);
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Tautan $provider tidak valid: "$rawValue"')),
+      );
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Tidak bisa membuka $url')),
+      );
+    }
+  }
+
+  /// FCOM sering menyimpan profil sosial sebagai **username saja**
+  /// (mis. `titc.indonesia`) atau domain tanpa skema (`www.instagram.com/x`),
+  /// bukan URL lengkap. Fungsi ini melengkapinya jadi URL yang bisa dibuka.
+  static String? _normalizeSocialUrl(String provider, String rawValue) {
+    var value = rawValue.trim();
+    if (value.isEmpty) return null;
+
+    // Sudah URL lengkap -> pakai apa adanya.
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    // Domain tanpa skema (www.instagram.com/..., instagram.com/...).
+    if (value.contains('.') && value.contains('/')) {
+      return 'https://$value';
+    }
+    if (value.startsWith('www.')) return 'https://$value';
+
+    // Sisanya dianggap username/handle. Buang '@' dan '/' di depan.
+    value = value.replaceFirst(RegExp(r'^[@/]+'), '');
+    if (value.isEmpty) return null;
+
+    switch (provider.toLowerCase()) {
+      case 'instagram':
+        return 'https://www.instagram.com/$value';
+      case 'linkedin':
+        // Handle personal maupun company page sama-sama valid lewat /in/.
+        return 'https://www.linkedin.com/in/$value';
+      case 'facebook':
+        return 'https://www.facebook.com/$value';
+      case 'twitter':
+      case 'x':
+        return 'https://x.com/$value';
+      case 'youtube':
+        return 'https://www.youtube.com/@$value';
+      case 'github':
+        return 'https://github.com/$value';
+      case 'tiktok':
+        return 'https://www.tiktok.com/@$value';
+      default:
+        // Provider tidak dikenal & bukan URL: kalau mirip domain, coba buka.
+        return value.contains('.') ? 'https://$value' : null;
+    }
   }
 
   static IconData _socialIcon(String provider) {

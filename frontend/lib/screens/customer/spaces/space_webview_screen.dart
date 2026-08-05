@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/services/webview_cookie_helper.dart';
 
 /// Encode string Dart menjadi literal string JS yang aman (escape kutip,
 /// backslash, baris baru, dll) supaya CSS tambahan bisa disisipkan ke
@@ -60,6 +61,10 @@ class SpaceWebViewScreen extends StatefulWidget {
 class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
+
+  String get _targetUrl =>
+      widget.overrideUrl ??
+      'https://titc.or.id/portal/${widget.portalSegment}/${widget.spaceSlug}/${widget.initialPath}';
 
   String get _injectScript => r'''
 (function() {
@@ -318,46 +323,31 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
     _initCookiesAndLoad();
   }
 
+
   Future<void> _initCookiesAndLoad() async {
-    final cookieManager = WebViewCookieManager();
+    final hasCookies = await WebViewCookieHelper.setupCookies();
     final cookiesString = AuthService.cookies;
 
-    if (cookiesString != null && cookiesString.isNotEmpty) {
-      for (final part in cookiesString.split(';')) {
-        final kv = part.trim().split('=');
-        if (kv.length >= 2) {
-          final name = kv[0].trim();
-          final value = kv.sublist(1).join('=');
-          await cookieManager.setCookie(
-            WebViewCookie(name: name, value: value, domain: 'titc.or.id', path: '/'),
-          );
-          await cookieManager.setCookie(
-            WebViewCookie(name: name, value: value, domain: '.titc.or.id', path: '/'),
-          );
-        }
-      }
+    print('WEBVIEW_LOAD: target=$_targetUrl (cookie ${!hasCookies ? "KOSONG" : "${cookiesString?.length ?? 0} char"})');
+
+    // Cookie dibawa WebView lewat cookie jar yang di-set oleh helper.
+    // TIDAK boleh menambahkan header `Cookie` manual (bentrok, minta login)
+    // atau header `Cache-Control`/`Pragma` (juga minta login).
+    //
+    // Pre-warm: muat halaman portal root dulu secara silent untuk memberi
+    // kesempatan server menyetel cookie LiteSpeed Cache dan session cookie
+    // tambahan yang mungkin belum ada di cookie jar kita. Setelah itu baru
+    // navigate ke halaman tujuan.
+    if (hasCookies) {
+      // Muat portal root dulu untuk pre-warm cookie
+      await _controller.loadRequest(
+        Uri.parse('https://titc.or.id/portal/'),
+      );
+      // Tunggu sebentar untuk halaman portal dimuat dan cookie ter-set
+      await Future.delayed(const Duration(milliseconds: 2000));
     }
-
-    final url = widget.overrideUrl ??
-        'https://titc.or.id/portal/${widget.portalSegment}/${widget.spaceSlug}/${widget.initialPath}';
-    print('WEBVIEW_LOAD: $url (cookie ${cookiesString == null ? "KOSONG" : "${cookiesString.length} char"})');
-
-    await _controller.loadRequest(
-      Uri.parse(url),
-      // HANYA header anti-cache di sini, TANPA header 'Cookie' manual.
-      // WebView Android sudah membawa cookie lewat cookie jar (di atas);
-      // menambah 'Cookie' lagi sebagai header eksplisit sempat dicoba tapi
-      // ternyata membuat WebView mengirim header Cookie ganda/konflik
-      // dengan cookie jar-nya sendiri, sehingga server sama sekali tidak
-      // mengenali sesi (muncul diminta login ulang) — lebih parah dari
-      // sebelumnya. Situs pakai LiteSpeed Cache (cookie `_lscache_vary`),
-      // jadi anti-cache tetap dipertahankan supaya tidak disuguhi versi
-      // halaman yang ke-cache untuk pengunjung anonim.
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-      },
-    );
+    // Navigate ke halaman tujuan
+    await _controller.loadRequest(Uri.parse(_targetUrl));
   }
 
   @override
