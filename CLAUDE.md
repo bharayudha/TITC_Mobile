@@ -415,6 +415,28 @@ sesuai permintaan user agar mirip web: ☰ + "TITC Indonesia" + search + lonceng
   Home/Messages/Profil; di Home tidak ada yang bisa ditutup, dan memberi efek
   sentuh pada sesuatu yang tidak berbuat apa-apa itu menyesatkan.
 
+**Menu profil tersambung** (`widgets/shared/profile_menu.dart`). Dulu hanya
+"Lihat Profil" dan "Log Out" yang berfungsi.
+
+- **My Courses** → tab Courses, **My Spaces** → tab Spaces, sekaligus menutup
+  halaman yang menumpuk di atas shell.
+- **Certificate** → `https://titc.or.id/certificate-verification/` lewat
+  `AuthenticatedWebViewScreen` (WebView umum), **bukan** `SpaceWebViewScreen`:
+  itu halaman WordPress biasa, bukan portal FCOM, jadi CSS shell Vue tidak
+  relevan di sana.
+- Pindah tab dari luar shell dilakukan lewat `MainShell.openTab()` yang
+  menulis ke `MainShell.requestedTab` (`ValueNotifier<int?>`), lalu
+  `_MainShellState` mendengarkannya. **JANGAN diganti dengan
+  `pushAndRemoveUntil(MainShell(initialIndex: ...))`** — itu membuat shell
+  BARU sehingga semua tab yang sudah terbuka dibuang dan di-fetch ulang dari
+  nol, persis masalah yang dihindari mekanisme `_openedTabs`.
+- Nilainya dikosongkan segera setelah dibaca. Tanpa itu, memilih menu yang
+  sama dua kali berturut-turut tidak bereaksi di kali kedua, karena
+  `ValueNotifier` diam kalau nilainya tidak berubah.
+- Indeks tab diberi nama (`MainShell.tabHome/tabSpaces/tabCourses/tabMembers`)
+  supaya tidak ada angka telanjang yang diam-diam salah kalau urutan tab
+  digeser.
+
 ### BELUM SELESAI — baris breadcrumb + "Continue Course" masih meleset
 
 Header web (`.fhr_content_layout_header`, isinya breadcrumb + tombol
@@ -474,6 +496,62 @@ Keduanya ada karena portal FCOM butuh login sehingga DOM-nya **tidak bisa
 diperiksa dari luar** — dicoba `WebFetch` ke `/portal/course/.../lessons`, yang
 keluar hanya form login. Jadi app-nya sendiri yang harus melapor.
 
+### Hasil audit — DISERAHKAN KE TIM, belum dikerjakan
+
+Dua fitur diperiksa atas permintaan user dan sengaja **tidak** dikerjakan di
+sesi ini. Catatan ini supaya yang mengerjakan tidak perlu menelusuri ulang.
+
+#### Notifikasi — belum tersambung sama sekali
+
+Ada DUA hal berbeda yang sama-sama disebut "notifikasi", keduanya kosong:
+
+**(a) Daftar di ikon lonceng** — `widgets/shared/notifications_popup.dart`
+murni tampilan. Tab Recent/Unread/Mentions/Following berpindah secara visual,
+tapi `_buildBody()` selalu mengembalikan teks mati `'No notifications found'`
+apa pun tab yang dipilih. Tiga TODO di sana: ambil daftar dari service,
+"Mark all as read", dan "View All".
+**Tidak ada service-nya sama sekali** — grep `lib/services/` untuk
+"notification" nol hasil.
+Endpoint FCOM-nya belum diketahui pasti (dugaan
+`/wp-json/fluent-community/v2/notifications`) dan tidak bisa diverifikasi dari
+luar karena portal butuh login. Cara paling aman: bangun dulu sambil mencetak
+JSON mentah, lalu sesuaikan parser dari hasil log — pola yang sama dipakai tim
+untuk `_collectSpaceLikeObjects`.
+
+**(b) Push notification (FCM)** — `services/firebase_messaging_service.dart`
+**0 baris**, dan `pubspec.yaml` belum punya dependency Firebase apa pun.
+Plugin backend `backend/titc-mobile-notification/` masih rangka: kelima file
+PHP isinya cuma deklarasi class kosong 5 baris, dan
+`titc_mobile_notification_init()` hanya berisi komentar. Kalau diaktifkan di
+WordPress sekarang, plugin ini tidak melakukan apa pun.
+Komentarnya juga masih menyebut **BuddyBoss**, padahal proyek sudah pindah ke
+Fluent Community sejak lama (PRD §3) — tanda file ini belum disentuh sejak
+scaffolding awal.
+Perlu prasyarat dari perusahaan menurut PRD §8 (`google-services.json`, akses
+admin WordPress), statusnya belum diketahui.
+
+#### Search — sebagian saja yang tersambung
+
+**Search di app bar (ikon 🔍) praktis tombol mati.** Overlay-nya benar:
+`_close(query)` mengembalikan kata kunci lewat `Navigator.pop(query)`. Tapi di
+`top_app_bar.dart` pemanggilnya `onPressed: () => showSearchOverlay(context)` —
+`onPressed` bertipe `VoidCallback`, jadi `Future<String?>` yang berisi kata
+kuncinya **dibuang**. User mengetik, overlay menutup, tidak terjadi apa-apa.
+Tombol cakupan "ALL Post" di sebelahnya juga masih `onTap: () {}`.
+
+| Layar | Cara kerja | Terhubung ke web? |
+|---|---|---|
+| Members | `fetchMembers(search:)` + debounce 450ms + pagination | ✅ Ya, server yang mencari |
+| Spaces | Filter lokal atas data yang sudah dimuat | ❌ Tidak |
+| Courses | Filter lokal | ❌ Tidak |
+| Messages | Filter lokal atas daftar thread | ❌ Tidak |
+
+**Catatan penting untuk yang mengerjakan:** `ApiService.fetchSpaces()` dan
+`fetchCourses()` **sudah mendukung pencarian sisi server** — keduanya menerima
+parameter `search` dan mengirimkannya sebagai `?search=`, bahkan sudah sengaja
+tidak men-cache hasil pencarian supaya tidak mengotori cache daftar penuh.
+Layar Spaces & Courses tinggal memakainya, tidak perlu bikin dari nol.
+
 ---
 
 ## Status semua fitur
@@ -492,6 +570,11 @@ keluar hanya form login. Jadi app-nya sendiri yang harus melapor.
 | 10/15/20 Meeting Courses di drawer | ✅ Ditambahkan 6 Agt |
 | Navbar WebView = TitcAppBar | ✅ 6 Agt, tombol ⋮ web belum diverifikasi |
 | Judul navbar → pulang ke Home | ✅ 6 Agt |
+| Menu profil (My Courses/Spaces/Certificate) | ✅ 6 Agt |
+| Notifikasi in-app (lonceng) | ⬜ Belum dibuat — diserahkan ke tim |
+| Push notification (FCM + plugin PHP) | ⬜ Masih rangka kosong — diserahkan ke tim |
+| Search di app bar | ⬜ Tombol mati, query dibuang — diserahkan ke tim |
+| Search Spaces/Courses pakai server | ⬜ Jalur API sudah ada, layar belum memakai |
 | Header web (breadcrumb + Continue Course) | ❌ **Masih tumpang tindih / meleset** |
 | Tujuan tombol "Continue Course" | ❓ Belum diperiksa, pakai log `WEBVIEW_NAV:` |
 | Members list (2.256) | ✅ Dikonfirmasi user |

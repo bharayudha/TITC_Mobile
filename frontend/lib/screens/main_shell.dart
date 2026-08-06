@@ -18,6 +18,31 @@ class MainShell extends StatefulWidget {
 
   final int initialIndex;
 
+  /// Urutan tab, sesuai daftar [_MainShellState._tabs] dan ikon bottom nav.
+  static const int tabHome = 0;
+  static const int tabSpaces = 1;
+  static const int tabCourses = 2;
+  static const int tabMembers = 3;
+
+  /// Permintaan pindah tab dari luar subtree shell.
+  ///
+  /// Dibutuhkan karena menu profil menempel di [TitcAppBar], yang juga dipakai
+  /// halaman-halaman yang ditumpuk DI ATAS shell (detail Space/Course, Profil,
+  /// Messages). Dari sana `findAncestorStateOfType` tidak menemukan shell,
+  /// karena mereka berada di route yang berbeda.
+  ///
+  /// Sengaja tidak memakai `pushAndRemoveUntil(MainShell(initialIndex: ...))`:
+  /// itu membuat shell BARU, sehingga tab yang sudah terbuka dibuang dan semua
+  /// datanya di-fetch ulang dari nol — persis masalah yang dihindari oleh
+  /// mekanisme [_MainShellState._openedTabs] di bawah.
+  static final ValueNotifier<int?> requestedTab = ValueNotifier<int?>(null);
+
+  /// Tutup halaman yang menumpuk di atas shell, lalu pindah ke [index].
+  static void openTab(BuildContext context, int index) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    requestedTab.value = index;
+  }
+
   @override
   State<MainShell> createState() => _MainShellState();
 }
@@ -41,6 +66,32 @@ class _MainShellState extends State<MainShell> {
     CoursesListScreen(),
     MembersListScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    MainShell.requestedTab.addListener(_onTabRequested);
+  }
+
+  @override
+  void dispose() {
+    MainShell.requestedTab.removeListener(_onTabRequested);
+    super.dispose();
+  }
+
+  void _onTabRequested() {
+    final index = MainShell.requestedTab.value;
+    if (index == null) return;
+    // Langsung dikosongkan: permintaannya sekali pakai. Ini juga yang membuat
+    // permintaan tab yang sama dua kali berturut-turut tetap terkirim —
+    // ValueNotifier tidak memberi tahu kalau nilainya tidak berubah.
+    MainShell.requestedTab.value = null;
+    if (!mounted || index == _currentIndex) return;
+    setState(() {
+      _currentIndex = index;
+      _openedTabs.add(index);
+    });
+  }
 
   void _onNavTap(int index) {
     // Prep Test bukan tab: dibuka sebagai halaman baru di atas shell.

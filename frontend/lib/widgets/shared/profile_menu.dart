@@ -5,6 +5,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/constants/app_text_styles.dart';
 import 'package:magang_titc/screens/auth/login_screen.dart';
 import 'package:magang_titc/screens/customer/profile/profile_screen.dart';
+import 'package:magang_titc/screens/main_shell.dart';
+import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
 
@@ -95,6 +97,28 @@ class ProfileMenuButton extends StatelessWidget {
       );
       return;
     }
+    if (action == ProfileMenuAction.myCourses) {
+      MainShell.openTab(context, MainShell.tabCourses);
+      return;
+    }
+    if (action == ProfileMenuAction.mySpaces) {
+      MainShell.openTab(context, MainShell.tabSpaces);
+      return;
+    }
+    if (action == ProfileMenuAction.certificate) {
+      // Halaman WordPress biasa, bukan portal FCOM — jadi memakai WebView
+      // umum yang membersihkan header/footer tema WP, bukan
+      // SpaceWebViewScreen yang CSS-nya khusus shell Vue portal.
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const AuthenticatedWebViewScreen(
+            url: 'https://titc.or.id/certificate-verification/',
+            title: 'Certificate',
+          ),
+        ),
+      );
+      return;
+    }
     if (action == ProfileMenuAction.logout) {
       ApiService.clearCache();
       AuthService.logout().then((_) {
@@ -106,7 +130,6 @@ class ProfileMenuButton extends StatelessWidget {
         );
       });
     }
-    // TODO: sambungkan aksi lain ke halaman masing-masing.
   }
 
   @override
