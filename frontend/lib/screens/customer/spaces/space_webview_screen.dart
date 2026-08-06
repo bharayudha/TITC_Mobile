@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/widgets/customer/side_drawer.dart';
+import 'package:magang_titc/widgets/shared/top_app_bar.dart';
 import 'package:magang_titc/services/webview_cookie_helper.dart';
 
 /// Encode string Dart menjadi literal string JS yang aman (escape kutip,
@@ -108,28 +110,74 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
         display: none !important;
       }
 
-      /* ===== COLLAPSE: Container header tapi jangan display:none ===== */
-      /* Harus tetap di DOM agar BUTTON.fcom_dot_menu bisa diklik via JS */
+      /* ===== HEADER: tetap tampil (breadcrumb + "Continue Course") ===== */
+      /* Dulu di-collapse ke height:0 supaya judulnya tidak dobel dengan
+         AppBar Flutter. Tapi judul itu sudah dimatikan terpisah lewat
+         .fcom_page_title, jadi container-nya tidak perlu ikut dimatikan —
+         yang tersisa justru breadcrumb dan tombol aksi yang memang berguna.
+         Kuncinya: JANGAN pakai height:0 + overflow:visible. Kombinasi itu
+         membuat isinya tetap tergambar tanpa menempati ruang, sehingga
+         menimpa konten di bawahnya. Di sini header diberi tinggi natural
+         supaya ikut mengalir normal. */
       .fhr_content_layout_header {
-        height: 0 !important;
+        height: auto !important;
         min-height: 0 !important;
-        padding: 0 !important;
+        padding: 10px 12px !important;
         margin: 0 !important;
         overflow: visible !important;
         position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        /* Layar HP jauh lebih sempit dari desktop: tanpa ini breadcrumb dan
+           tombol saling desak sampai teksnya terpotong. */
+        flex-wrap: wrap !important;
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
-        background: transparent !important;
+        /* Putih, mengikuti tampilan web: baris breadcrumb + tombol berdiri
+           di atas latar abu halaman, terpisah dari kartu konten di bawah. */
+        background: #fff !important;
       }
 
-      /* ===== HIDE VISUALLY: Tombol ⋮ web (tetap di DOM untuk diklik) ===== */
+      /* Isi header dipaksa kembali ke aliran normal. CSS bawaan FCOM
+         meng-absolute-kan sebagian dari mereka (dirancang untuk header
+         desktop yang tinggi), akibatnya container menyisakan pita kosong
+         sementara isinya tergambar lebih ke bawah dan menimpa judul course.
+         .fcom_dot_menu dikecualikan: itu memang harus tetap absolute dan
+         transparan, dipakai hanya sebagai target .click() dari AppBar. */
+      /* Body konten naik menimpa header — terbukti dari probe DOM: header
+         menempati y=56..108, tapi body sudah mulai di y=52. Penyebabnya
+         margin/padding negatif bawaan FCOM, yang di desktop dipakai untuk
+         menyelipkan konten di bawah header sticky. Dinolkan supaya body
+         benar-benar mengalir SETELAH header. */
+      .fhr_content_layout_body {
+        margin-top: 0 !important;
+        top: auto !important;
+        position: static !important;
+      }
+
+      .fhr_content_layout_header > *:not(.fcom_dot_menu) {
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        left: auto !important;
+        transform: none !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+      }
+
+      /* ===== Tombol ⋮ web: tampilkan seperti di browser ===== */
+      /* Dulu disembunyikan (opacity 0) dan hanya dipakai sebagai target
+         .click() dari tombol ⋮ di AppBar Flutter, karena header web
+         di-collapse sehingga tombolnya tidak punya tempat. Header sekarang
+         tampil normal, jadi tombol aslinya dikembalikan ke tempatnya —
+         posisi dropdown-nya pun jadi benar sendiri tanpa perlu dipaksa. */
       .fcom_dot_menu {
-        opacity: 0 !important;
-        pointer-events: none !important;
-        position: absolute !important;
-        top: 0 !important;
-        right: 0 !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
       }
       /* ===== FIX: Body ===== */
       body {
@@ -255,22 +303,118 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       feedLayout.style.setProperty('max-width', '100%', 'important');
     }
 
-    // Collapse container header (jangan display:none agar tombol ⋮ tetap di DOM)
+    // Header dibiarkan tampil (breadcrumb + tombol "Continue Course"), tapi
+    // dipaksa punya tinggi natural. Inline style di sini menang atas
+    // stylesheet, jadi nilainya harus sama dengan aturan CSS di atas —
+    // kalau berbeda, header balik tumpang tindih setiap MutationObserver
+    // memanggil fixLayout() lagi.
     var layoutHeader = document.querySelector('.fhr_content_layout_header');
     if (layoutHeader) {
-      layoutHeader.style.setProperty('height', '0', 'important');
+      layoutHeader.style.setProperty('height', 'auto', 'important');
       layoutHeader.style.setProperty('min-height', '0', 'important');
-      layoutHeader.style.setProperty('padding', '0', 'important');
+      layoutHeader.style.setProperty('padding', '10px 12px', 'important');
       layoutHeader.style.setProperty('margin', '0', 'important');
       layoutHeader.style.setProperty('overflow', 'visible', 'important');
+      layoutHeader.style.setProperty('display', 'flex', 'important');
+      layoutHeader.style.setProperty('align-items', 'center', 'important');
+      layoutHeader.style.setProperty('justify-content', 'space-between', 'important');
+      layoutHeader.style.setProperty('flex-wrap', 'wrap', 'important');
+      layoutHeader.style.setProperty('gap', '10px', 'important');
+      layoutHeader.style.setProperty('background', '#fff', 'important');
+      layoutHeader.style.setProperty('z-index', '1', 'important');
+
+      // Induk dipaksa block. Kalau induknya grid (atau flex row), header dan
+      // body bisa ditempatkan di sel/kolom yang sama sehingga bertumpuk —
+      // dan dalam kasus itu menolkan margin body tidak menolong sama sekali.
+      // Ditangani lewat parentElement karena nama class-nya tidak diketahui.
+      var headerParent = layoutHeader.parentElement;
+      if (headerParent) {
+        headerParent.style.setProperty('display', 'block', 'important');
+        headerParent.style.setProperty('position', 'relative', 'important');
+      }
+
+      // Hapus pita kosong di atas header.
+      //
+      // FCOM memberi padding-top pada salah satu wrapper untuk menyediakan
+      // tempat bagi .fcom_top_menu yang position:fixed (tingginya ~56px —
+      // cocok dengan posisi header yang terbaca di probe). Menunya sudah kita
+      // sembunyikan, tapi paddingnya tertinggal dan menyisakan pita abu.
+      //
+      // Disapu ke SELURUH rantai induk, bukan cuma induk langsung, karena
+      // wrapper penyebabnya bisa berada beberapa tingkat di atas dan nama
+      // class-nya tidak diketahui dari luar.
+      var node = layoutHeader.parentElement;
+      while (node && node !== document.body) {
+        node.style.setProperty('padding-top', '0', 'important');
+        node.style.setProperty('margin-top', '0', 'important');
+        node = node.parentElement;
+      }
+
+      // Body dipaksa mengalir setelah header, bukan menyelip di bawahnya
+      // seperti rancangan desktop yang header-nya sticky.
+      var layoutBody = document.querySelector('.fhr_content_layout_body');
+      if (layoutBody) {
+        layoutBody.style.setProperty('margin-top', '0', 'important');
+        layoutBody.style.setProperty('padding-top', '0', 'important');
+        layoutBody.style.setProperty('position', 'static', 'important');
+        layoutBody.style.setProperty('top', 'auto', 'important');
+      }
     }
 
 
   }
 
+  // Laporkan posisi nyata header & isinya ke Dart. Dipakai untuk menemukan
+  // elemen mana yang bikin pita kosong / tumpang tindih, karena selector CSS
+  // tidak bisa diverifikasi dari luar (portal butuh login).
+  function reportHeader() {
+    try {
+      if (!window.TitcDebug) return;
+      var h = document.querySelector('.fhr_content_layout_header');
+      if (!h) { window.TitcDebug.postMessage('header tidak ketemu'); return; }
+
+      function describe(el) {
+        var r = el.getBoundingClientRect();
+        var cs = getComputedStyle(el);
+        return el.tagName + '.' + String(el.className || '').trim() +
+               ' [pos=' + cs.position +
+               ' top=' + Math.round(r.top) +
+               ' h=' + Math.round(r.height) +
+               ' mt=' + cs.marginTop +
+               ' mb=' + cs.marginBottom +
+               ' pt=' + cs.paddingTop + ']';
+      }
+
+      var out = ['HEADER ' + describe(h)];
+      // Seluruh rantai induk dilaporkan: header idealnya menempel di y=0.
+      // Kalau tidak, salah satu induk inilah yang menyumbang jarak — dan
+      // baris ini menunjukkan yang mana beserta angkanya. display juga ikut,
+      // untuk memisahkan penyebab "grid menumpuk" dari "padding tersisa".
+      var node = h.parentElement;
+      var level = 0;
+      while (node && node !== document.body && level < 6) {
+        out.push('INDUK[' + level + '] ' + describe(node) +
+                 ' display=' + getComputedStyle(node).display);
+        node = node.parentElement;
+        level++;
+      }
+      var prev = h.previousElementSibling;
+      out.push('SEBELUM: ' + (prev ? describe(prev) : 'tidak ada'));
+      var next = h.nextElementSibling;
+      out.push('SESUDAH: ' + (next ? describe(next) : 'tidak ada'));
+      for (var i = 0; i < h.children.length; i++) {
+        out.push('ANAK[' + i + '] ' + describe(h.children[i]));
+      }
+      window.TitcDebug.postMessage(out.join(' || '));
+    } catch (e) {
+      if (window.TitcDebug) window.TitcDebug.postMessage('error: ' + e);
+    }
+  }
+
   // Jalankan
   injectCSS();
   fixLayout();
+  setTimeout(reportHeader, 2000);
 
   [300, 800, 1500, 3000].forEach(function(ms) {
     setTimeout(function() { injectCSS(); fixLayout(); }, ms);
@@ -295,9 +439,25 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(
           'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
+      // Jalur pelaporan dari halaman web ke console Dart. DOM portal FCOM
+      // hanya bisa diperiksa setelah login, jadi app-nya sendiri yang
+      // melaporkan struktur header ketika layout masih meleset.
+      ..addJavaScriptChannel(
+        'TitcDebug',
+        onMessageReceived: (message) => print('WEBVIEW_DOM: ${message.message}'),
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
-          onNavigationRequest: (_) => NavigationDecision.navigate,
+          // Selalu navigate: kalau ditolak, WebView melempar link ke browser
+          // eksternal dan user merasa keluar dari aplikasi.
+          //
+          // URL-nya dicatat supaya tujuan tombol di dalam halaman web (mis.
+          // "Continue Course") bisa dilihat dari console — DOM portal FCOM
+          // hanya ada setelah login, jadi tidak bisa diperiksa dari luar.
+          onNavigationRequest: (request) {
+            print('WEBVIEW_NAV: ${request.url}');
+            return NavigationDecision.navigate;
+          },
           onPageStarted: (_) {
             if (mounted) setState(() => _isLoading = true);
           },
@@ -354,48 +514,17 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1877F2),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          widget.title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () {
-              // Klik BUTTON.fcom_dot_menu (verified via DOM debug)
-              _controller.runJavaScript('''
-                (function() {
-                  var dotBtn = document.querySelector('.fcom_dot_menu');
-                  if (!dotBtn) { console.log('[DEBUG] .fcom_dot_menu tidak ketemu'); return; }
-                  
-                  // Restore pointer-events agar bisa diklik
-                  dotBtn.style.setProperty('opacity', '1', 'important');
-                  dotBtn.style.setProperty('pointer-events', 'auto', 'important');
-                  
-                  // Klik tombolnya
-                  dotBtn.click();
-                  
-                  // Sembunyikan lagi setelah klik
-                  setTimeout(function() {
-                    dotBtn.style.setProperty('opacity', '0', 'important');
-                    dotBtn.style.setProperty('pointer-events', 'none', 'important');
-                  }, 100);
-                })();
-              ''');
-            },
-          ),
-        ],
-      ),
+      // Navbar yang sama persis dengan Home (dan dengan tampilan web):
+      // hamburger, "TITC Indonesia", search, lonceng, foto profil.
+      //
+      // Tombol ⋮ bawaan layar ini dilepas: dulu itu jembatan ke tombol ⋮
+      // milik web yang terpaksa disembunyikan waktu header web di-collapse.
+      // Sekarang header web tampil apa adanya, jadi tombol ⋮ aslinya muncul
+      // sendiri di dalam halaman — persis seperti di browser.
+      appBar: const TitcAppBar(),
+      // Wajib ada: hamburger di TitcAppBar memanggil Scaffold.of().openDrawer(),
+      // yang tidak berbuat apa-apa kalau Scaffold-nya tidak punya drawer.
+      drawer: const SideDrawer(),
       body: Stack(
         children: [
           Opacity(

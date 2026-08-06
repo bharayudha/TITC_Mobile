@@ -87,6 +87,22 @@ File penting:
   respons API. Menggantikan logika pagination yang sempat dibuat tapi salah
   sasaran (API /spaces tidak dipaginate).
 
+### Profil (commit `58726eb`)
+- Ikon profil di app bar (`widgets/shared/profile_menu.dart`) dulu selalu
+  `PhosphorIconsRegular.userCircle` generik; sekarang menampilkan foto profil
+  user seperti tampilan web, lewat widget `_ProfileAvatarIcon`.
+- Fallback bertingkat: inisial nama selama foto dimuat → balik ke ikon lama
+  kalau user belum punya foto atau URL-nya gagal diambil. Pemuatannya ikut
+  mengirim `AuthService.imageAuthHeaders` sama seperti call site gambar lain,
+  karena avatar termasuk media yang bisa privacy-gated.
+- `_userAvatarUrl` di `auth_service.dart` diubah jadi getter/setter di atas
+  `ValueNotifier avatarUrlNotifier`. Alasannya: app bar hidup di luar
+  `ProfileScreen`, jadi `setState` di layar profil tidak menjangkaunya —
+  padahal avatar harus langsung berganti begitu upload selesai
+  (`ApiService.uploadAvatar` → `AuthService.init()`), tanpa buka ulang halaman.
+  Semua kode lama tetap baca/tulis lewat nama yang sama, jadi tidak ada call
+  site yang perlu disesuaikan.
+
 ---
 
 ## Sesi 6 Agustus 2026 — Perbaikan Login Ulang Course WebView & Timeout
@@ -353,6 +369,113 @@ Urutan tes:
 
 ---
 
+## Sesi 6 Agustus 2026 (lanjutan) — Menu Drawer Tersambung & Perombakan Navbar WebView
+
+### Selesai
+
+**Semua item drawer (☰) kini bisa diklik** (`widgets/customer/side_drawer.dart`).
+Sebelumnya seluruh item `onTap: () {}` kosong.
+
+- MEMBERSHIP AREAS (6 item) → `SpaceWebViewScreen`.
+- TOEFL Preparation & English for Specific Purposes → course, mengikuti alur
+  `_onCourseAction` di `courses_list_screen.dart`: sudah enroll → langsung
+  `portalSegment: 'course'` + `initialPath: 'lessons'`; belum enroll → coba
+  `enrollCourse()` dan teruskan pesan penolakan dari server apa adanya.
+- Ditambahkan **10, 15, 20 Meeting Courses** yang ada di web tapi belum ada di app.
+- **Slug tidak di-hardcode.** Label drawer dicocokkan dengan judul dari
+  `fetchSpaces()`/`fetchCourses()`, lalu slug asli dari API yang dipakai — supaya
+  menu tetap benar kalau admin mengubah slug di WordPress. Helper generik
+  `_findByTitle<T>` (SpaceModel & CourseModel tidak punya supertype bersama).
+- Pencocokan sebagian hanya dipakai kalau hasilnya **tunggal**. Ada lima course
+  bernama nyaris sama ("3/7/10/15/20 Meeting Courses"); membuka yang salah lebih
+  membingungkan daripada jujur bilang tidak ketemu.
+
+**Navbar `SpaceWebViewScreen` diganti `TitcAppBar`** (sama persis dengan Home,
+sesuai permintaan user agar mirip web: ☰ + "TITC Indonesia" + search + lonceng
++ foto profil).
+
+- `drawer: const SideDrawer()` WAJIB ikut ditambahkan — hamburger di `TitcAppBar`
+  memanggil `Scaffold.of(context).openDrawer()` yang diam saja tanpa itu.
+- Tombol ⋮ Flutter **dilepas**, `.fcom_dot_menu` milik web dimunculkan kembali
+  (`opacity: 1`). Jembatan ⋮ buatan tim itu ada *karena* header web dulu
+  di-collapse ke 0px; setelah header ditampilkan normal, tombol aslinya punya
+  tempat dan masalah koordinat dropdown di PRD §11.2 hilang sendiri.
+  **Belum diverifikasi user** — kalau ⋮ ternyata tidak muncul/tidak jalan,
+  jembatan lama ada di riwayat git.
+- Konsekuensi: **tidak ada tombol back** di app bar. Sebagai gantinya, teks
+  "TITC Indonesia" diketuk = pulang ke Home.
+
+**Judul navbar sebagai tombol pulang** (`widgets/shared/top_app_bar.dart`).
+
+- Pakai `popUntil((route) => route.isFirst)`, **bukan** `maybePop()`. Berpindah
+  antar space/course lewat drawer menumpuk banyak halaman, jadi mundur selangkah
+  malah mendarat di space yang tadi dibuka. `MainShell` dijamin route pertama:
+  lewat `home:` di `app.dart` saat sesi hidup, lewat `pushReplacement` setelah login.
+- Hanya aktif kalau `Navigator.canPop()` true. `TitcAppBar` dipakai bersama oleh
+  Home/Messages/Profil; di Home tidak ada yang bisa ditutup, dan memberi efek
+  sentuh pada sesuatu yang tidak berbuat apa-apa itu menyesatkan.
+
+### BELUM SELESAI — baris breadcrumb + "Continue Course" masih meleset
+
+Header web (`.fhr_content_layout_header`, isinya breadcrumb + tombol
+"Continue Course") dulu di-collapse ke `height: 0`. User minta header itu
+**ditampilkan** seperti di web, rapi di bawah navbar, tidak tumpang tindih.
+Sampai akhir sesi **masih belum benar**.
+
+Kunci pemahaman: `height: 0` + `overflow: visible` membuat isi header tetap
+tergambar tanpa menempati ruang → menimpa konten di bawahnya. Itu penyebab
+tumpang tindih yang awalnya dilaporkan.
+
+**Data probe DOM (dari perangkat user, header masih di-collapse saat itu):**
+
+```
+HEADER  DIV.fhr_content_layout_header [pos=relative top=56 h=52]
+SEBELUM tidak ada
+SESUDAH DIV.fhr_content_layout_body   [pos=static  top=52 h=1306]
+ANAK[0] DIV.el-breadcrumb             [pos=static  top=75 h=14]
+ANAK[1] DIV.fhr_page_actions          [pos=static  top=66 h=32]
+```
+
+Dua fakta penting dari angka itu:
+1. Header anak pertama (`SEBELUM: tidak ada`) tapi mulai di `top=56` → ada 56px
+   jarak yang disumbang induk-induknya. 56px ≈ tinggi `.fcom_top_menu` yang
+   kita `display: none`; besar dugaan `padding-top` untuk menu `position: fixed`
+   itu tertinggal.
+2. Body mulai di `top=52`, padahal header menempati 56–108 → keduanya bertumpuk.
+
+**Sudah dicoba, belum menuntaskan** (jangan diulang tanpa data baru):
+- `overflow: hidden` pada header → menghilangkan tumpang tindih tapi ikut
+  menyembunyikan breadcrumb & tombol; user menolak, mau keduanya tetap tampil.
+- `.fhr_content_layout_header > *:not(.fcom_dot_menu) { position: static }` →
+  **berhasil** untuk isi header (probe membuktikan anak-anaknya jadi `static`
+  dan rapi di dalam kotak). Pertahankan.
+- `.fhr_content_layout_body { margin-top: 0; position: static }` → menyasar
+  hipotesis margin negatif; belum terbukti benar/salah.
+- Induk header dipaksa `display: block` → menyasar hipotesis induk `grid`
+  yang menumpuk header & body di sel sama; belum terbukti.
+- Sapu `padding-top`/`margin-top` = 0 ke **seluruh rantai induk** header sampai
+  `<body>` → menyasar pita kosong 56px; belum terbukti.
+
+**Langkah berikutnya:** jalankan app, buka course, ambil baris `WEBVIEW_DOM:`
+yang baru. Probe sekarang sudah melaporkan `INDUK[0..5]` lengkap dengan `top`,
+`mt`, `pt`, dan `display` masing-masing. Itu memisahkan dua hipotesis yang
+tersisa: kalau ada induk ber-`display: grid` → penyebabnya penumpukan sel;
+kalau ada induk dengan `pt`/`mt` bukan 0 → penyebabnya padding sisa.
+**Jangan menebak selector lagi — baca angkanya dulu.**
+
+### Alat debug yang ditambahkan (HAPUS SEBELUM RILIS)
+
+| Log | Isi | Lokasi |
+|---|---|---|
+| `WEBVIEW_DOM:` | Struktur & posisi header + rantai induk, dikirim lewat `JavaScriptChannel('TitcDebug')` | `space_webview_screen.dart` |
+| `WEBVIEW_NAV:` | Setiap URL yang dinavigasi di dalam WebView — dipakai untuk melacak tujuan tombol "Continue Course", yang belum sempat diperiksa | `space_webview_screen.dart` |
+
+Keduanya ada karena portal FCOM butuh login sehingga DOM-nya **tidak bisa
+diperiksa dari luar** — dicoba `WebFetch` ke `/portal/course/.../lessons`, yang
+keluar hanya form login. Jadi app-nya sendiri yang harus melapor.
+
+---
+
 ## Status semua fitur
 
 | Fitur | Status |
@@ -364,6 +487,13 @@ Urutan tes:
 | Komentar feed via WebView | ✅ |
 | Tab navigation (no reload) | ✅ |
 | Image caching | ✅ cached_network_image |
+| Foto profil jadi ikon app bar | ✅ Commit `58726eb`, belum diuji user |
+| Menu drawer (☰) tersambung | ✅ Space & Course, 6 Agt |
+| 10/15/20 Meeting Courses di drawer | ✅ Ditambahkan 6 Agt |
+| Navbar WebView = TitcAppBar | ✅ 6 Agt, tombol ⋮ web belum diverifikasi |
+| Judul navbar → pulang ke Home | ✅ 6 Agt |
+| Header web (breadcrumb + Continue Course) | ❌ **Masih tumpang tindih / meleset** |
+| Tujuan tombol "Continue Course" | ❓ Belum diperiksa, pakai log `WEBVIEW_NAV:` |
 | Members list (2.256) | ✅ Dikonfirmasi user |
 | Ikon sosial clickable | ✅ url_launcher |
 | Waktu relatif ("15 days ago") | ✅ |
