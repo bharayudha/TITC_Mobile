@@ -177,6 +177,10 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
         title: Text(
           widget.title,
           style: const TextStyle(color: Colors.black87),
+          // Sebagian pemanggil memakai judul panjang (mis. link cepat di Home
+          // "Daftar Tes TOEFL ITP Resmi ETS"), yang tanpa ini meluber.
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
       body: Stack(

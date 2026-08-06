@@ -3,8 +3,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/constants/app_text_styles.dart';
-import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
-import 'package:magang_titc/services/api_service.dart';
+import 'package:magang_titc/services/portal_navigator.dart';
 
 const Color _dangerColor = Color(0xFFE53935);
 
@@ -118,51 +117,16 @@ class SideDrawer extends StatelessWidget {
 
   /// Buka Space berdasarkan judulnya.
   ///
-  /// Slug-nya sengaja TIDAK di-hardcode: judul di drawer ditulis manual saat
-  /// slicing UI, sementara slug asli hanya diketahui server. Mencocokkan lewat
-  /// daftar space yang memang sudah ditarik app membuat menu ini tetap benar
-  /// kalau admin mengganti slug di WordPress.
+  /// Drawer ditutup lebih dulu, jadi `navigator` & `messenger` diambil
+  /// sebelum pop — setelah itu `context` sudah tidak mounted.
   Future<void> _openSpaceByTitle(BuildContext context, String label) async {
-    // Diambil sebelum drawer ditutup: setelah pop, `context` sudah tidak
-    // mounted sehingga tidak boleh dipakai lagi.
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     navigator.pop();
-
-    var space = _findByTitle(ApiService.cachedSpaces, label, (s) => s.title);
-
-    if (space == null) {
-      // Tab Spaces belum pernah dibuka, jadi daftarnya harus ditarik dulu.
-      // Server TITC bisa lambat (lihat catatan timeout 30 detik), karena itu
-      // user diberi tahu alih-alih dibiarkan menatap layar yang diam.
-      messenger.showSnackBar(
-        SnackBar(content: Text('Membuka $label…'), duration: const Duration(seconds: 2)),
-      );
-      try {
-        space = _findByTitle(await ApiService.fetchSpaces(), label, (s) => s.title);
-      } catch (_) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Gagal memuat $label. Periksa koneksi lalu coba lagi.')),
-        );
-        return;
-      }
-    }
-
-    final resolved = space;
-    if (resolved == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Space "$label" tidak ditemukan di akun ini.')),
-      );
-      return;
-    }
-
-    navigator.push(
-      MaterialPageRoute(
-        builder: (_) => SpaceWebViewScreen(
-          spaceSlug: resolved.slug,
-          title: resolved.title,
-        ),
-      ),
+    await PortalNavigator.openSpaceByTitle(
+      navigator: navigator,
+      messenger: messenger,
+      title: label,
     );
   }
 
@@ -177,98 +141,15 @@ class SideDrawer extends StatelessWidget {
     );
   }
 
-  /// Buka Course berdasarkan judulnya, mengikuti alur `_onCourseAction` di
-  /// `courses_list_screen.dart`: yang sudah enroll langsung ke daftar lesson,
-  /// yang belum dicoba didaftarkan lebih dulu.
   Future<void> _openCourseByTitle(BuildContext context, String label) async {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     navigator.pop();
-
-    var course = _findByTitle(ApiService.cachedCourses, label, (c) => c.title);
-
-    if (course == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Membuka $label…'), duration: const Duration(seconds: 2)),
-      );
-      try {
-        course = _findByTitle(await ApiService.fetchCourses(), label, (c) => c.title);
-      } catch (_) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Gagal memuat $label. Periksa koneksi lalu coba lagi.')),
-        );
-        return;
-      }
-    }
-
-    final resolved = course;
-    if (resolved == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Course "$label" tidak ditemukan di akun ini.')),
-      );
-      return;
-    }
-
-    if (!resolved.isEnrolled) {
-      // Course TITC umumnya didaftarkan manual oleh admin setelah pembelian,
-      // jadi enroll dari app sering ditolak. Pesan penolakan dari server
-      // diteruskan apa adanya karena isinya lebih spesifik daripada kalimat
-      // generik buatan app (lihat catatan di ApiService.enrollCourse).
-      final error = await ApiService.enrollCourse(resolved.id);
-      if (error != null) {
-        messenger.showSnackBar(SnackBar(content: Text(error)));
-        return;
-      }
-      // Enroll berhasil: daftar course yang tersimpan sudah basi (masih
-      // menandai course ini belum enroll), jadi dibuang agar tab Courses
-      // menampilkan status terbaru saat dibuka.
-      ApiService.cachedCourses = null;
-    }
-
-    navigator.push(
-      MaterialPageRoute(
-        builder: (_) => SpaceWebViewScreen(
-          spaceSlug: resolved.slug,
-          title: resolved.title,
-          portalSegment: 'course',
-          initialPath: 'lessons',
-        ),
-      ),
+    await PortalNavigator.openCourseByTitle(
+      navigator: navigator,
+      messenger: messenger,
+      title: label,
     );
-  }
-
-  /// Samakan bentuk judul sebelum dibandingkan — judul di drawer dan di API
-  /// kerap beda kapital, spasi, atau tanda hubung ("TOEFL - Mockup Test"
-  /// vs "TOEFL – Mockup Test").
-  String _normalizeTitle(String value) =>
-      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-
-  /// Cari entri yang judulnya cocok dengan [label]. Dibuat generik karena
-  /// SpaceModel dan CourseModel tidak berbagi supertype, padahal aturan
-  /// pencocokannya harus persis sama untuk keduanya.
-  T? _findByTitle<T>(List<T>? items, String label, String Function(T) titleOf) {
-    if (items == null || items.isEmpty) return null;
-    final target = _normalizeTitle(label);
-
-    for (final item in items) {
-      if (_normalizeTitle(titleOf(item)) == target) return item;
-    }
-
-    // Judul di web kadang punya imbuhan yang tidak ikut ditulis di drawer
-    // (mis. "FREE Placement Test 2025"), jadi dicoba sekali lagi dengan
-    // pencocokan sebagian sebelum menyerah.
-    //
-    // Hasilnya baru dipakai kalau cuma ada SATU kandidat. Beberapa course
-    // bernama sangat mirip ("3/7/10/15/20 Meeting Courses"), dan membuka
-    // course yang salah jauh lebih membingungkan bagi user daripada jujur
-    // bilang tidak ketemu.
-    final partial = <T>[];
-    for (final item in items) {
-      final title = _normalizeTitle(titleOf(item));
-      if (title.isEmpty) continue;
-      if (title.contains(target) || target.contains(title)) partial.add(item);
-    }
-    return partial.length == 1 ? partial.first : null;
   }
 
   Widget _buildSectionLabel(String label) {

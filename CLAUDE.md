@@ -25,6 +25,7 @@ File penting:
 | Auth, cookie, nonce, profil | `lib/services/auth_service.dart` |
 | Semua panggilan REST | `lib/services/api_service.dart` |
 | Cookie setup terpusat untuk WebView | `lib/services/webview_cookie_helper.dart` (**BARU, 6 Agt**) |
+| Buka Space/Course dari judul (drawer & Home) | `lib/services/portal_navigator.dart` (**BARU, 7 Agt**) |
 | Shell tab + bottom nav | `lib/screens/main_shell.dart` |
 | WebView Space/Course (CSS terverifikasi DOM) | `lib/screens/customer/spaces/space_webview_screen.dart` |
 | WebView umum (CSS tebakan, dipakai link preview) | `lib/screens/shared/authenticated_webview_screen.dart` |
@@ -437,6 +438,41 @@ sesuai permintaan user agar mirip web: ☰ + "TITC Indonesia" + search + lonceng
   supaya tidak ada angka telanjang yang diam-diam salah kalau urutan tab
   digeser.
 
+**Home disamakan dengan web** (`screens/customer/home/home_screen.dart`).
+
+- Ditambahkan deretan **link cepat** di bawah header Feed, digulir mendatar,
+  meniru Home web: Daftar Tes TOEFL ITP Resmi ETS, Daftar Preparation Test
+  Online, Check Readiness, Certificate Tracking, EPT Certificate Verification,
+  FREE Placement Test.
+- **Baris ikon shortcut di paling atas dihapus** (TOEFL ITP / Prep Test /
+  Readiness / Tracking / Placement). Isinya duplikat lima dari enam link cepat
+  di atas, dan di web memang hanya ada satu deret. Method
+  `_buildShortcutItem` ikut dihapus supaya tidak jadi kode mati.
+- Lima link membuka `AuthenticatedWebViewScreen`; FREE Placement Test adalah
+  Space portal sehingga slug-nya dicari lewat judul.
+
+> [!IMPORTANT]
+> **URL link cepat mudah salah — jangan "dibetulkan" tanpa cek.**
+> - Dua link pendaftaran memakai landing page Fluent Forms:
+>   `https://titc.or.id/?ff_landing=21` (Daftar Tes TOEFL ITP Resmi ETS) dan
+>   `https://titc.or.id/?ff_landing=15` (Daftar Preparation Test Online).
+>   Keduanya dikonfirmasi langsung oleh user dan sudah diverifikasi memuat
+>   "Form Pendaftaran" yang benar.
+>   **Halaman publik `titc.or.id/toefl-itp` BUKAN tujuan yang benar** —
+>   itu link dari homepage publik, sedangkan chip di portal member mengarah
+>   ke landing form. Sempat salah dipakai karena diambil dari homepage.
+>   URL `?ff_landing=<angka>` memang buram, tapi itu yang benar.
+> - Certificate Tracking → `/certificate-distribution/`.
+>   `/certificate-tracking/` **404**, jangan dipakai.
+
+**Helper baru: `services/portal_navigator.dart`.**
+Logika "buka Space/Course berdasarkan judul" tadinya method privat di
+`side_drawer.dart`. Karena Home juga membutuhkannya, diangkat jadi helper
+bersama alih-alih disalin (langkah yang sama dengan `WebViewCookieHelper`).
+Menerima `NavigatorState` & `ScaffoldMessengerState`, **bukan** `BuildContext`,
+karena drawer harus menutup dirinya lebih dulu dan setelah itu context-nya
+sudah tidak mounted.
+
 ### BELUM SELESAI — baris breadcrumb + "Continue Course" masih meleset
 
 Header web (`.fhr_content_layout_header`, isinya breadcrumb + tombol
@@ -571,6 +607,8 @@ Layar Spaces & Courses tinggal memakainya, tidak perlu bikin dari nol.
 | Navbar WebView = TitcAppBar | ✅ 6 Agt, tombol ⋮ web belum diverifikasi |
 | Judul navbar → pulang ke Home | ✅ 6 Agt |
 | Menu profil (My Courses/Spaces/Certificate) | ✅ 6 Agt |
+| Link cepat di Home (6 item, seperti web) | ✅ 7 Agt |
+| Baris ikon shortcut lama di Home | 🗑️ Dihapus 7 Agt, duplikat link cepat |
 | Notifikasi in-app (lonceng) | ⬜ Belum dibuat — diserahkan ke tim |
 | Push notification (FCM + plugin PHP) | ⬜ Masih rangka kosong — diserahkan ke tim |
 | Search di app bar | ⬜ Tombol mati, query dibuang — diserahkan ke tim |

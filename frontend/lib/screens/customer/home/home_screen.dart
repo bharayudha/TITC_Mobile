@@ -1,11 +1,29 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:magang_titc/constants/app_text_styles.dart';
+import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
+import 'package:magang_titc/services/portal_navigator.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import '../../../models/activity_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../spaces/space_webview_screen.dart';
+
+/// Satu link cepat di bawah header Feed, meniru deretan link di Home web.
+class _QuickLink {
+  /// Tujuannya halaman WordPress biasa.
+  const _QuickLink.page(this.emoji, this.label, this.url) : spaceTitle = null;
+
+  /// Tujuannya Space di portal FCOM. Yang disimpan judulnya, bukan slug —
+  /// slug aslinya dicari lewat API saat diketuk (lihat [PortalNavigator]).
+  const _QuickLink.space(this.emoji, this.label, this.spaceTitle) : url = null;
+
+  final String emoji;
+  final String label;
+  final String? url;
+  final String? spaceTitle;
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -46,23 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 1. Shortcut Menus (Mock)
-          SizedBox(
-            height: 90,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _buildShortcutItem('TOEFL ITP', PhosphorIconsRegular.fileText),
-                _buildShortcutItem('Prep Test', PhosphorIconsRegular.desktop),
-                _buildShortcutItem('Readiness', PhosphorIconsRegular.checkCircle),
-                _buildShortcutItem('Tracking', PhosphorIconsRegular.mapPin),
-                _buildShortcutItem('Placement', PhosphorIconsRegular.student),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          // 2. Promo Banner (Mock)
+          // 1. Promo Banner (Mock)
           Container(
             height: 150,
             decoration: BoxDecoration(
@@ -95,9 +97,14 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () {},
             ),
           ),
-          const SizedBox(height: 8),
-          
-          // 4. Activity Feed (FutureBuilder)
+          const SizedBox(height: 4),
+
+          // 4. Deretan link cepat, mengikuti Home web: satu baris di bawah
+          // header Feed yang bisa digulir mendatar.
+          _buildQuickLinks(context),
+          const SizedBox(height: 12),
+
+          // 5. Activity Feed (FutureBuilder)
           FutureBuilder<List<ActivityModel>>(
             future: _activitiesFuture,
             builder: (context, snapshot) {
@@ -129,22 +136,90 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildShortcutItem(String title, IconData icon) {
-    return Container(
-      width: 80,
-      margin: const EdgeInsets.only(right: 12),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            backgroundColor: Colors.blue.shade50,
-            radius: 24,
-            child: PhosphorIcon(icon, color: Colors.blue.shade700),
-          ),
-          const SizedBox(height: 8),
-          Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-        ],
+  /// Catatan URL yang mudah salah:
+  /// - Dua link pendaftaran memakai landing page Fluent Forms
+  ///   (`?ff_landing=`), bukan halaman biasa seperti `/toefl-itp`.
+  ///   Dikonfirmasi langsung oleh user.
+  /// - Certificate Tracking mengarah ke `/certificate-distribution/`;
+  ///   `/certificate-tracking/` tidak ada (404).
+  static const List<_QuickLink> _quickLinks = [
+    _QuickLink.page(
+      '⭐',
+      'Daftar Tes TOEFL ITP Resmi ETS',
+      'https://titc.or.id/?ff_landing=21',
+    ),
+    _QuickLink.page(
+      '⚡',
+      'Daftar Preparation Test Online',
+      'https://titc.or.id/?ff_landing=15',
+    ),
+    _QuickLink.page(
+      '💻',
+      'Check Readiness',
+      'https://titc.or.id/check-readiness/',
+    ),
+    _QuickLink.page(
+      '🎫',
+      'Certificate Tracking',
+      'https://titc.or.id/certificate-distribution/',
+    ),
+    _QuickLink.page(
+      '✔️',
+      'EPT Certificate Verification',
+      'https://titc.or.id/certificate-verification/',
+    ),
+    _QuickLink.space('💡', 'FREE Placement Test', 'FREE Placement Test'),
+  ];
+
+  Widget _buildQuickLinks(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _quickLinks.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 2),
+        itemBuilder: (context, index) {
+          final link = _quickLinks[index];
+          return InkWell(
+            onTap: () => _onQuickLinkTap(link),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  Text(link.emoji, style: emojiStyle(size: 14)),
+                  const SizedBox(width: 6),
+                  Text(
+                    link.label,
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  void _onQuickLinkTap(_QuickLink link) {
+    final url = link.url;
+    if (url != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AuthenticatedWebViewScreen(
+            url: url,
+            title: link.label,
+          ),
+        ),
+      );
+      return;
+    }
+    // Space di portal: slug-nya dicari lewat judul, sama seperti menu drawer.
+    PortalNavigator.openSpaceByTitle(
+      navigator: Navigator.of(context),
+      messenger: ScaffoldMessenger.of(context),
+      title: link.spaceTitle!,
     );
   }
 
