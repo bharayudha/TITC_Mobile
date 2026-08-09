@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
+import 'package:magang_titc/services/notifications_service.dart';
+
+import 'package:magang_titc/models/notification_model.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 
 const List<String> _notificationTabs = [
   'Recent',
@@ -51,6 +57,40 @@ class NotificationsPopup extends StatefulWidget {
 
 class _NotificationsPopupState extends State<NotificationsPopup> {
   int _selectedTab = 0;
+  bool _isLoading = true;
+  List<NotificationModel> _notifications = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final tabStr = _notificationTabs[_selectedTab].toLowerCase();
+      final data = await NotificationsService.fetchNotifications(type: tabStr);
+      if (mounted) {
+        setState(() {
+          _notifications = data;
+        });
+      }
+    } catch (e) {
+      print('Failed to load notifications: $e');
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,8 +140,18 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
           ),
           _buildOutlinedAction(
             label: 'Mark all as read',
-            // TODO: tandai semua notifikasi terbaca lewat service.
-            onTap: () {},
+            onTap: () async {
+              final success = await NotificationsService.markAllAsRead();
+              if (success && mounted) {
+                // Refresh list locally
+                setState(() {
+                  for (var n in _notifications) {
+                    n.isRead = true;
+                  }
+                });
+                _fetchNotifications();
+              }
+            },
           ),
         ],
       ),
@@ -126,7 +176,11 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
           children: List.generate(_notificationTabs.length, (index) {
             final selected = index == _selectedTab;
             return GestureDetector(
-              onTap: () => setState(() => _selectedTab = index),
+              onTap: () {
+                if (_selectedTab == index) return;
+                setState(() => _selectedTab = index);
+                _fetchNotifications();
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -157,12 +211,139 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
   }
 
   Widget _buildBody() {
-    // TODO: tampilkan daftar notifikasi dari service sesuai tab terpilih.
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 20, 16, 20),
-      child: Text(
-        'No notifications found',
-        style: TextStyle(fontSize: 14, color: Colors.black54),
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+        child: Text(
+          'Error: $_error',
+          style: const TextStyle(fontSize: 14, color: Colors.red),
+        ),
+      );
+    }
+
+    if (_notifications.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(16, 20, 16, 20),
+        child: Text(
+          'No notifications found',
+          style: TextStyle(fontSize: 14, color: Colors.black54),
+        ),
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 350),
+      child: ListView.separated(
+        shrinkWrap: true,
+        itemCount: _notifications.length,
+        separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.divider),
+        itemBuilder: (context, index) {
+          final notif = _notifications[index];
+          return _buildNotificationItem(notif);
+        },
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem(NotificationModel notif) {
+    return InkWell(
+      onTap: () {
+        String? targetUrl = notif.url;
+        if (targetUrl == null && notif.route != null) {
+           final routeName = notif.route!['name'];
+           final params = notif.route!['params'] as Map<String, dynamic>? ?? {};
+           if (routeName == 'space_feed' && params.containsKey('space')) {
+             targetUrl = 'https://titc.or.id/portal/spaces/${params['space']}';
+           } else {
+             targetUrl = 'https://titc.or.id/portal/';
+           }
+        }
+        targetUrl ??= 'https://titc.or.id/portal/';
+
+        // Decrement local badge counter if it was unread
+        if (!notif.isRead) {
+          setState(() {
+            notif.isRead = true;
+          });
+          if (NotificationsService.unreadCountNotifier.value > 0) {
+            NotificationsService.unreadCountNotifier.value -= 1;
+          }
+          // Optional: You can try to call API to mark this single item as read here
+          // e.g. NotificationsService.markAsRead(notif.id);
+        }
+
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SpaceWebViewScreen(
+              overrideUrl: targetUrl!,
+              title: 'Notification',
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        color: notif.isRead ? Colors.transparent : AppColors.primary.withOpacity(0.05),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (notif.actor != null)
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.grey.shade300,
+                backgroundImage: notif.actor!.avatarUrl.isNotEmpty
+                    ? CachedNetworkImageProvider(
+                        notif.actor!.avatarUrl,
+                        headers: AuthService.imageAuthHeaders,
+                      )
+                    : null,
+                child: notif.actor!.avatarUrl.isEmpty
+                    ? Text(
+                        notif.actor!.displayName.isNotEmpty ? notif.actor!.displayName[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade700,
+                        ),
+                      )
+                    : null,
+              )
+            else
+              const CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.divider,
+                child: Icon(Icons.notifications, size: 20, color: Colors.black54),
+              ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notif.content.replaceAll(RegExp(r'<[^>]*>'), ''), // Strip HTML
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black87,
+                      fontWeight: notif.isRead ? FontWeight.normal : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notif.dateNotified,
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

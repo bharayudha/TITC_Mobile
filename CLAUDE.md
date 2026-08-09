@@ -542,17 +542,12 @@ sesi ini. Catatan ini supaya yang mengerjakan tidak perlu menelusuri ulang.
 Ada DUA hal berbeda yang sama-sama disebut "notifikasi", keduanya kosong:
 
 **(a) Daftar di ikon lonceng** — `widgets/shared/notifications_popup.dart`
-murni tampilan. Tab Recent/Unread/Mentions/Following berpindah secara visual,
-tapi `_buildBody()` selalu mengembalikan teks mati `'No notifications found'`
-apa pun tab yang dipilih. Tiga TODO di sana: ambil daftar dari service,
-"Mark all as read", dan "View All".
-**Tidak ada service-nya sama sekali** — grep `lib/services/` untuk
-"notification" nol hasil.
-Endpoint FCOM-nya belum diketahui pasti (dugaan
-`/wp-json/fluent-community/v2/notifications`) dan tidak bisa diverifikasi dari
-luar karena portal butuh login. Cara paling aman: bangun dulu sambil mencetak
-JSON mentah, lalu sesuaikan parser dari hasil log — pola yang sama dipakai tim
-untuk `_collectSpaceLikeObjects`.
+**Status: ✅ SELESAI**.
+- **Model**: FCOM menyimpan data pengirim di dalam `xprofile` (bukan `actor`), dan informasi url di dalam objek `route` (nama route vue dan param slug). File `notification_model.dart` sudah diperbaiki untuk membongkar JSON ini.
+- **Service & Fetch**: Menggunakan endpoint `/wp-json/fluent-community/v2/notifications`. Karena API FCOM kadang mengabaikan parameter *query* `?type=`, penyaringan (*filtering*) untuk tab *Recent, Unread, Mentions, Following* dilakukan juga secara lokal (sisi klien).
+- **Polling Background**: `NotificationsService` memiliki `Timer.periodic` yang berjalan setiap 60 detik selama user *logged in*. Timer ini me- *request* ulang endpoint untuk menghitung jumlah *unread*. Ini memberikan pengalaman *Soft Real-time*: jika user membuka web dan membaca notifikasi, di siklus menit berikutnya badge aplikasi akan otomatis hilang.
+- **Navigasi Klik**: Membuka notifikasi sekarang menggunakan `SpaceWebViewScreen(overrideUrl: targetUrl)` alih-alih `AuthenticatedWebViewScreen`. Hal ini menjamin halaman *feed* yang terbuka langsung disuntik CSS/JS penyembunyi *header/footer* FCOM web, sehingga rasanya sangat *native*.
+- **Mark As Read**: Klik tunggal notifikasi akan mengubah status `isRead` lokal dan mengurangi angka *badge*. Klik tombol "Mark all as read" akan mengirimkan `POST` ke `/notifications/mark-all-read` (terverifikasi dari inspeksi dokumentasi API FCOM dev) dan mereset UI.
 
 **(b) Push notification (FCM)** — `services/firebase_messaging_service.dart`
 **0 baris**, dan `pubspec.yaml` belum punya dependency Firebase apa pun.
@@ -609,7 +604,7 @@ Layar Spaces & Courses tinggal memakainya, tidak perlu bikin dari nol.
 | Menu profil (My Courses/Spaces/Certificate) | ✅ 6 Agt |
 | Link cepat di Home (6 item, seperti web) | ✅ 7 Agt |
 | Baris ikon shortcut lama di Home | 🗑️ Dihapus 7 Agt, duplikat link cepat |
-| Notifikasi in-app (lonceng) | ⬜ Belum dibuat — diserahkan ke tim |
+| Notifikasi in-app (lonceng) | ✅ Selesai (Polling & FCOM parse) |
 | Push notification (FCM + plugin PHP) | ⬜ Masih rangka kosong — diserahkan ke tim |
 | Search di app bar | ⬜ Tombol mati, query dibuang — diserahkan ke tim |
 | Search Spaces/Courses pakai server | ⬜ Jalur API sudah ada, layar belum memakai |

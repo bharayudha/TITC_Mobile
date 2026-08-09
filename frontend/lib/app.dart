@@ -10,6 +10,7 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'TITC Indonesia',
       theme: ThemeData(
         colorScheme: .fromSeed(seedColor: const Color(0xFF1E5AF5)),

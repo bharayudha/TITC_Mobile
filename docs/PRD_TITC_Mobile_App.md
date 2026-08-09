@@ -92,7 +92,14 @@ Catatan: Plugin PHP ini berjalan di dalam WordPress dan bertugas sebagai "peneru
 - Chat pribadi antar user.
 - Data: `GET /wp-json/fluent-community/v2/chat/threads`
 
-### 5.7 Login
+### 5.7 Notifikasi In-App (Real-time Web Sync)
+- Menampilkan notifikasi interaktif pada ikon lonceng di *app bar*.
+- **Data & Endpoint**: `GET /wp-json/fluent-community/v2/notifications` (dengan filter *client-side* untuk tab *Unread*, *Mentions*, *Recent*, *Following* karena parameter query `?type=` sering diabaikan backend).
+- **Mekanisme "Real-time" (Polling)**: Karena arsitektur backend saat ini belum memiliki WebSocket atau eksekusi *push notification* FCM yang lengkap, aplikasi menjalankan **Polling Background** setiap 60 detik selama aplikasi aktif.
+- **Sinkronisasi Web**: Aplikasi selalu memeriksa jumlah notifikasi yang belum dibaca (`unreadCount`). Jika *user* membuka *web* dan membaca notifikasi di PC, pada siklus *polling* berikutnya aplikasi akan otomatis mendeteksi penurunan *unreadCount* dan memperbarui angka (badge merah) di lonceng. Begitu pula sebaliknya, klik notifikasi di aplikasi atau menekan *Mark all as read* (`POST /wp-json/fluent-community/v2/notifications/mark-all-read`) akan tersinkronisasi ke server.
+- **Navigasi Klik**: Membuka notifikasi (misal: *Space Feed*) akan menggunakan `SpaceWebViewScreen` yang otomatis menyuntikkan CSS *native-like shell*, sehingga user tidak merasa terlempar ke tampilan browser web desktop.
+
+### 5.8 Login
 - Autentikasi menggunakan form action `login` yang mengembalikan Cookie WordPress (`wordpress_logged_in`).
 - Disimpan lokal dengan `flutter_secure_storage`.
 - Signup menggunakan alur 2-Step (Submit Data -> Verifikasi Kode Email 2FA).

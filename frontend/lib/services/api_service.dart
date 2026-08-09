@@ -35,7 +35,7 @@ class ApiService {
 
   // Client HTTP dipakai bersama supaya koneksi ke titc.or.id bisa dipakai
   // ulang antar request (bukan handshake TCP/TLS baru tiap panggilan).
-  static final http.Client _client = http.Client();
+  static final http.Client client = http.Client();
 
   // Cache hasil fetch terakhir, dipakai layar (Home/Spaces) untuk tampil
   // instan saat tab dibuka lagi alih-alih fetch ulang dari nol setiap kali
@@ -69,7 +69,7 @@ class ApiService {
   }
 
   /// Headers standar yang menyertakan cookie autentikasi.
-  static Map<String, String> get _authHeaders {
+  static Map<String, String> get authHeaders {
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -87,25 +87,25 @@ class ApiService {
   /// Juga menangani timeout dan error jaringan: retry 1x setelah jeda 2
   /// detik sebelum throw. Server TITC bisa lambat (apalagi saat LiteSpeed
   /// Cache sedang memproses), jadi retry 1x cukup mengurangi false-timeout.
-  static Future<http.Response> _authorizedGet(Uri uri) async {
+  static Future<http.Response> authorizedGet(Uri uri) async {
     http.Response response;
     try {
-      response = await _client
-          .get(uri, headers: _authHeaders)
+      response = await client
+          .get(uri, headers: authHeaders)
           .timeout(const Duration(seconds: 30));
     } catch (e) {
       // Retry 1x untuk timeout / network error
-      print('_authorizedGet: first attempt failed ($e), retrying in 2s...');
+      print('authorizedGet: first attempt failed ($e), retrying in 2s...');
       await Future.delayed(const Duration(seconds: 2));
-      response = await _client
-          .get(uri, headers: _authHeaders)
+      response = await client
+          .get(uri, headers: authHeaders)
           .timeout(const Duration(seconds: 30));
     }
 
     if (response.statusCode == 401 || response.statusCode == 403) {
       await AuthService.refreshNonce();
-      response = await _client
-          .get(uri, headers: _authHeaders)
+      response = await client
+          .get(uri, headers: authHeaders)
           .timeout(const Duration(seconds: 30));
     }
 
@@ -132,9 +132,9 @@ class ApiService {
     try {
       print('--- FETCH FEEDS DEBUG ---');
       print('URL: $_baseUrl/feeds');
-      print('Headers: $_authHeaders');
+      print('Headers: $authHeaders');
 
-      final response = await _authorizedGet(Uri.parse('$_baseUrl/feeds'));
+      final response = await authorizedGet(Uri.parse('$_baseUrl/feeds'));
 
       print('Status Code: ${response.statusCode}');
       // Truncate response body to avoid flooding stdout
@@ -211,7 +211,7 @@ class ApiService {
         queryParameters: search.isNotEmpty ? {'search': search} : null,
       );
 
-      final response = await _authorizedGet(uri);
+      final response = await authorizedGet(uri);
 
       if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
@@ -345,7 +345,7 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/spaces/$spaceSlug/join'),
-        headers: _authHeaders,
+        headers: authHeaders,
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -389,7 +389,7 @@ class ApiService {
         queryParameters: search.isNotEmpty ? {'search': search} : null,
       );
 
-      final response = await _authorizedGet(uri);
+      final response = await authorizedGet(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -457,7 +457,7 @@ class ApiService {
       final response = await http
           .post(
             Uri.parse('$_baseUrl/courses/$courseId/enroll'),
-            headers: _authHeaders,
+            headers: authHeaders,
           )
           .timeout(const Duration(seconds: 30));
 
@@ -490,7 +490,7 @@ class ApiService {
         queryParameters: {'space_id': spaceId.toString()},
       );
 
-      final response = await _authorizedGet(uri);
+      final response = await authorizedGet(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -557,7 +557,7 @@ class ApiService {
         },
       );
 
-      final response = await _authorizedGet(uri);
+      final response = await authorizedGet(uri);
 
       if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
@@ -654,10 +654,10 @@ class ApiService {
   static Future<bool> toggleFollowMember(int memberId, {required bool follow}) async {
     if (!AuthService.isLoggedIn) return false;
     try {
-      final response = await _client
+      final response = await client
           .post(
             Uri.parse('$_baseUrl/members/$memberId/${follow ? 'follow' : 'unfollow'}'),
-            headers: _authHeaders,
+            headers: authHeaders,
           )
           .timeout(const Duration(seconds: 30));
       return response.statusCode == 200 || response.statusCode == 201;

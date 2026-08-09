@@ -5,9 +5,24 @@ import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/widgets/shared/notifications_popup.dart';
 import 'package:magang_titc/widgets/shared/profile_menu.dart';
 import 'package:magang_titc/widgets/shared/search_overlay.dart';
+import 'package:magang_titc/services/notifications_service.dart';
 
-class TitcAppBar extends StatelessWidget implements PreferredSizeWidget {
+class TitcAppBar extends StatefulWidget implements PreferredSizeWidget {
   const TitcAppBar({super.key});
+
+  @override
+  State<TitcAppBar> createState() => _TitcAppBarState();
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+}
+
+class _TitcAppBarState extends State<TitcAppBar> {
+  @override
+  void initState() {
+    super.initState();
+    NotificationsService.startPolling();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,12 +49,22 @@ class TitcAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           onPressed: () => showSearchOverlay(context),
         ),
-        IconButton(
-          icon: const PhosphorIcon(
-            PhosphorIconsRegular.bell,
-            color: Colors.black87,
-          ),
-          onPressed: () => showNotificationsPopup(context),
+        ValueListenableBuilder<int>(
+          valueListenable: NotificationsService.unreadCountNotifier,
+          builder: (context, unreadCount, child) {
+            return IconButton(
+              icon: Badge(
+                isLabelVisible: unreadCount > 0,
+                label: Text('$unreadCount'),
+                backgroundColor: Colors.red,
+                child: const PhosphorIcon(
+                  PhosphorIconsRegular.bell,
+                  color: Colors.black87,
+                ),
+              ),
+              onPressed: () => showNotificationsPopup(context),
+            );
+          },
         ),
         const ProfileMenuButton(),
       ],
@@ -87,6 +112,5 @@ class TitcAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
 }
