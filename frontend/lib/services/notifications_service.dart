@@ -42,25 +42,55 @@ class NotificationsService {
     }
   }
 
-  /// Menandai semua notifikasi sebagai telah dibaca
-  static Future<bool> markAllAsRead() async {
-    if (!AuthService.isLoggedIn) return false;
+  static Future<String?> markAllAsRead() async {
+    if (!AuthService.isLoggedIn) return 'Not logged in';
 
     try {
+      final headers = Map<String, String>.from(ApiService.authHeaders);
+      headers['Content-Type'] = 'application/json';
+
       final uri = Uri.parse('$_baseUrl/notifications/mark-all-read');
       final response = await ApiService.client.post(
         uri,
-        headers: ApiService.authHeaders,
+        headers: headers,
+        body: '{}',
       ).timeout(const Duration(seconds: 30));
 
       print('MarkAllAsRead response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
         unreadCountNotifier.value = 0;
+        return null; // Success
+      }
+      return 'HTTP ${response.statusCode}: ${response.body}';
+    } catch (e) {
+      print('MarkAllAsRead error: $e');
+      return e.toString();
+    }
+  }
+
+  /// Menandai satu notifikasi sebagai telah dibaca
+  static Future<bool> markAsRead(int id) async {
+    if (!AuthService.isLoggedIn) return false;
+
+    try {
+      final headers = Map<String, String>.from(ApiService.authHeaders);
+      headers['Content-Type'] = 'application/json';
+
+      final uri = Uri.parse('$_baseUrl/notifications/mark-read/$id');
+      final response = await ApiService.client.post(
+        uri,
+        headers: headers,
+        body: '{}',
+      ).timeout(const Duration(seconds: 30));
+
+      print('MarkAsRead response: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
         return true;
       }
     } catch (e) {
-      print('Error marking notifications as read: $e');
+      print('MarkAsRead error: $e');
     }
     return false;
   }
@@ -72,11 +102,14 @@ class NotificationsService {
     }
 
     try {
-      // The exact endpoint for notifications based on CLAUDE.md prediction
-      // It might accept query parameters like ?type=unread or ?filter=unread
-      final uri = Uri.parse('$_baseUrl/notifications').replace(
-        queryParameters: type != 'recent' ? {'type': type} : null,
-      );
+      Uri uri;
+      if (type == 'unread') {
+        uri = Uri.parse('$_baseUrl/notifications/unread');
+      } else {
+        uri = Uri.parse('$_baseUrl/notifications').replace(
+          queryParameters: type != 'recent' ? {'type': type} : null,
+        );
+      }
 
       final response = await ApiService.authorizedGet(uri);
 

@@ -141,15 +141,20 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
           _buildOutlinedAction(
             label: 'Mark all as read',
             onTap: () async {
-              final success = await NotificationsService.markAllAsRead();
-              if (success && mounted) {
-                // Refresh list locally
-                setState(() {
-                  for (var n in _notifications) {
-                    n.isRead = true;
-                  }
-                });
-                _fetchNotifications();
+              final error = await NotificationsService.markAllAsRead();
+              if (mounted) {
+                if (error == null) {
+                  setState(() {
+                    for (var n in _notifications) {
+                      n.isRead = true;
+                    }
+                  });
+                  _fetchNotifications();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $error')),
+                  );
+                }
               }
             },
           ),
@@ -275,8 +280,7 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
           if (NotificationsService.unreadCountNotifier.value > 0) {
             NotificationsService.unreadCountNotifier.value -= 1;
           }
-          // Optional: You can try to call API to mark this single item as read here
-          // e.g. NotificationsService.markAsRead(notif.id);
+          NotificationsService.markAsRead(notif.id);
         }
 
         Navigator.of(context).push(
