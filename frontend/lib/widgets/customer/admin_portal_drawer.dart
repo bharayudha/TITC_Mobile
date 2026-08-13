@@ -197,21 +197,34 @@ class AdminPortalDrawer extends StatelessWidget {
         onTap: () {
           Navigator.of(context).pop();
           onItemSelected?.call(label);
-          _clickWebSidebarLink(label);
+          clickSidebarLink(controller, label);
         },
       ),
     );
   }
 
-  /// Cari elemen di sidebar admin web (`aside.el-aside`) yang teksnya
+  /// Cari elemen di sidebar admin web (`.space_contents`) yang teksnya
   /// MENGANDUNG [label] (bukan sama persis — beberapa item web punya
   /// ikon/badge di dalam elemen yang sama, jadi textContent bisa
   /// kebawa spasi/karakter ekstra), lalu klik `<a>` terdekat.
   ///
+  /// Static & publik supaya bisa dipanggil dari luar juga: [SpaceWebViewScreen]
+  /// memakainya untuk otomatis membuka "General" begitu portal admin pertama
+  /// kali termuat. Sebelumnya halaman admin mendarat kosong/acak karena tidak
+  /// ada yang benar-benar men-trigger navigasi Vue Router — highlight
+  /// "General" di drawer Flutter cuma tampilan, bukan klik sungguhan. Konten
+  /// baru muncul setelah user pindah ke menu lain lalu balik lagi, karena
+  /// barulah itu klik sungguhan lewat method ini.
+  ///
+  /// Berisi retry beberapa kali dengan jeda, karena sidebar Vue tidak selalu
+  /// sudah ter-mount tepat saat dipanggil — terutama saat dipanggil otomatis
+  /// begitu halaman selesai dimuat, beda dengan tap user yang secara alami
+  /// baru terjadi setelah sidebar-nya sempat terlihat duluan.
+  ///
   /// Dilaporkan lewat channel `TitcDebug` yang sudah ada di
   /// [SpaceWebViewScreen] (muncul sebagai log `WEBVIEW_DOM:`) supaya kalau
   /// masih gagal, penyebabnya kelihatan dari log alih-alih menebak lagi.
-  void _clickWebSidebarLink(String label) {
+  static void clickSidebarLink(WebViewController controller, String label) {
     final escaped = label
         .replaceAll('\\', r'\\')
         .replaceAll("'", r"\'");
@@ -220,51 +233,56 @@ class AdminPortalDrawer extends StatelessWidget {
         function report(msg) {
           if (window.TitcDebug) window.TitcDebug.postMessage('ADMIN_DRAWER: ' + msg);
         }
-        // Sidebar "Portal Settings" dirender di dalam .space_contents,
-        // dikonfirmasi lewat probe DOM (bukan aside.el-aside seperti
-        // dugaan awal di Space/Course).
-        var sidebar = document.querySelector('.space_contents');
-        if (!sidebar) {
-          // Fallback kalau strukturnya berubah lagi: cari langsung dari
-          // teks "Portal Settings" dan laporkan ancestor-nya supaya
-          // selector yang benar ketahuan dari log, bukan tebakan lagi.
-          var all = document.querySelectorAll('body *');
-          var anchor = null;
-          for (var k = 0; k < all.length; k++) {
-            var t = (all[k].textContent || '').trim();
-            if (t.indexOf('Portal Settings') === 0 && t.length < 200) {
-              anchor = all[k];
+        function attempt(tries) {
+          // Sidebar "Portal Settings" dirender di dalam .space_contents,
+          // dikonfirmasi lewat probe DOM (bukan aside.el-aside seperti
+          // dugaan awal di Space/Course).
+          var sidebar = document.querySelector('.space_contents');
+          if (!sidebar) {
+            if (tries < 8) { setTimeout(function() { attempt(tries + 1); }, 300); return; }
+            // Fallback kalau strukturnya berubah lagi: cari langsung dari
+            // teks "Portal Settings" dan laporkan ancestor-nya supaya
+            // selector yang benar ketahuan dari log, bukan tebakan lagi.
+            var all = document.querySelectorAll('body *');
+            var anchor = null;
+            for (var k = 0; k < all.length; k++) {
+              var t = (all[k].textContent || '').trim();
+              if (t.indexOf('Portal Settings') === 0 && t.length < 200) {
+                anchor = all[k];
+              }
             }
+            if (!anchor) { report('.space_contents & teks "Portal Settings" tidak ketemu sama sekali'); return; }
+            var chain = [];
+            var node = anchor;
+            for (var d = 0; d < 6 && node; d++) {
+              chain.push(node.tagName + (node.className ? '.' + String(node.className).replace(/\\s+/g, '.') : ''));
+              node = node.parentElement;
+            }
+            report('.space_contents tidak ketemu. Ancestor dari teks "Portal Settings": ' + chain.join(' < '));
+            return;
           }
-          if (!anchor) { report('.space_contents & teks "Portal Settings" tidak ketemu sama sekali'); return; }
-          var chain = [];
-          var node = anchor;
-          for (var d = 0; d < 6 && node; d++) {
-            chain.push(node.tagName + (node.className ? '.' + String(node.className).replace(/\\s+/g, '.') : ''));
-            node = node.parentElement;
+          var all = sidebar.querySelectorAll('a, li, [role="menuitem"], button');
+          var match = null;
+          for (var i = 0; i < all.length; i++) {
+            var text = (all[i].textContent || '').replace(/\\s+/g, ' ').trim();
+            if (text.indexOf('$escaped') !== -1) { match = all[i]; break; }
           }
-          report('.space_contents tidak ketemu. Ancestor dari teks "Portal Settings": ' + chain.join(' < '));
-          return;
-        }
-        var all = sidebar.querySelectorAll('a, li, [role="menuitem"], button');
-        var match = null;
-        for (var i = 0; i < all.length; i++) {
-          var text = (all[i].textContent || '').replace(/\\s+/g, ' ').trim();
-          if (text.indexOf('$escaped') !== -1) { match = all[i]; break; }
-        }
-        if (!match) {
-          var seen = [];
-          for (var j = 0; j < Math.min(all.length, 20); j++) {
-            seen.push((all[j].textContent || '').replace(/\\s+/g, ' ').trim());
+          if (!match) {
+            if (tries < 8) { setTimeout(function() { attempt(tries + 1); }, 300); return; }
+            var seen = [];
+            for (var j = 0; j < Math.min(all.length, 20); j++) {
+              seen.push((all[j].textContent || '').replace(/\\s+/g, ' ').trim());
+            }
+            report('tidak ketemu match untuk "$escaped". Teks yang ada: ' + JSON.stringify(seen));
+            return;
           }
-          report('tidak ketemu match untuk "$escaped". Teks yang ada: ' + JSON.stringify(seen));
-          return;
+          // Kalau yang match bukan <a>, cari <a> di dalam/di sekitarnya.
+          var link = match.tagName === 'A' ? match : match.querySelector('a');
+          var target = link || match;
+          report('klik (percobaan ' + tries + '): ' + target.tagName + ' href=' + (target.href || '-'));
+          target.click();
         }
-        // Kalau yang match bukan <a>, cari <a> di dalam/di sekitarnya.
-        var link = match.tagName === 'A' ? match : match.querySelector('a');
-        var target = link || match;
-        report('klik: ' + target.tagName + ' href=' + (target.href || '-'));
-        target.click();
+        attempt(0);
       })();
     ''');
   }

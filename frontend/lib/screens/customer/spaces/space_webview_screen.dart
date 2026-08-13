@@ -71,6 +71,14 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
 
+  /// True selama fase pre-warm (`_initCookiesAndLoad` memuat portal root
+  /// dulu untuk mengambil cookie tambahan) sebelum berpindah ke URL tujuan
+  /// sesungguhnya. Portal root ini TIDAK PERNAH ditampilkan ke user — kalau
+  /// `onPageFinished`-nya ikut mematikan `_isLoading`, spinner mati lalu
+  /// hidup lagi begitu navigasi ke URL tujuan dimulai ("loading 2 kali").
+  /// Selama flag ini true, `onPageFinished` mengabaikan reveal.
+  bool _isPrewarming = false;
+
   /// Label item sidebar admin yang di-highlight [AdminPortalDrawer].
   ///
   /// Sempat dicoba dideteksi dari DOM (class `is-active`/`router-link-
@@ -83,6 +91,11 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   /// perlu menebak dari DOM. "General" jadi default awal karena itu
   /// halaman yang dimuat pertama kali saat masuk `/portal/admin/`.
   String? _activeAdminLabel;
+
+  /// Supaya auto-navigasi ke "General" (lihat `onPageFinished` di bawah)
+  /// cuma jalan sekali per layar ini — sekali dipicu, tap manual user
+  /// setelahnya tidak boleh ditimpa lagi.
+  bool _autoOpenedAdminGeneral = false;
 
   String get _targetUrl =>
       widget.overrideUrl ??
@@ -515,6 +528,29 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
                 })();
               ''');
             }
+            // Portal admin ('/portal/admin/') mendarat di halaman yang
+            // Vue Router-nya belum dinavigasikan ke sub-menu mana pun kalau
+            // dibuka lewat full page load (bukan klik dari dalam SPA) — beda
+            // dengan drawer Flutter yang sudah menyalakan highlight
+            // "General" seolah-olah sudah di sana. Tanpa baris ini, halaman
+            // tampak kosong/loading acak sampai user pindah menu lalu balik
+            // lagi (barulah itu klik sungguhan yang menavigasikan Vue
+            // Router). Dicek `url` (bukan `widget.useAdminDrawer` saja)
+            // supaya tidak ikut terpicu saat pre-warm memuat portal root di
+            // `_initCookiesAndLoad`, dan `_autoOpenedAdminGeneral` memastikan
+            // ini cuma sekali — tap manual user sesudahnya tidak boleh
+            // ditimpa balik ke General.
+            if (widget.useAdminDrawer &&
+                !_autoOpenedAdminGeneral &&
+                url.contains('/portal/admin')) {
+              _autoOpenedAdminGeneral = true;
+              AdminPortalDrawer.clickSidebarLink(_controller, 'General');
+            }
+
+            // Halaman pre-warm tidak boleh mematikan spinner — lihat
+            // penjelasan di deklarasi field `_isPrewarming`.
+            if (_isPrewarming) return;
+
             Future.delayed(const Duration(milliseconds: 700), () {
               if (mounted) setState(() => _isLoading = false);
             });
@@ -540,12 +576,14 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
     // tambahan yang mungkin belum ada di cookie jar kita. Setelah itu baru
     // navigate ke halaman tujuan.
     if (hasCookies) {
+      _isPrewarming = true;
       // Muat portal root dulu untuk pre-warm cookie
       await _controller.loadRequest(
         Uri.parse('https://titc.or.id/portal/'),
       );
       // Tunggu sebentar untuk halaman portal dimuat dan cookie ter-set
       await Future.delayed(const Duration(milliseconds: 2000));
+      _isPrewarming = false;
     }
     // Navigate ke halaman tujuan
     await _controller.loadRequest(Uri.parse(_targetUrl));

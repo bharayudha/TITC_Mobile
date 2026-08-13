@@ -735,3 +735,36 @@ sisi server.
   sebelum/sesudah, dan hasil verifikasi bertanggal → **RIWAYAT_PERCAKAPAN.md**.
   Alasannya: CLAUDE.md dibaca ulang otomatis tiap sesi, jadi isi yang basi
   bukan sekadar sampah — ia menyesatkan sesi berikutnya.
+
+### ✅ SELESAI — Perbaikan Feed Home & Double Loading WebView
+
+Rencana di bawah ini (dulu "dibatalkan agar tidak merusak stabilitas") **sudah diterapkan**:
+
+1. **Double Loading WebView (`SpaceWebViewScreen`)** — persis rencana di atas:
+   `bool _isPrewarming` di-set `true` sebelum pre-warm portal root, `false`
+   sesudahnya; `onPageFinished` skip reveal (`if (_isPrewarming) return;`)
+   selama flag itu true. Berlaku untuk SEMUA pemakai `SpaceWebViewScreen`
+   (View Space, Admin Settings, dll) karena satu file yang sama.
+2. **Feed Home tidak tampil semua** — akar masalah baru: `/feeds` dipanggil
+   TANPA parameter halaman sama sekali, jadi hanya batch pertama (±10 item)
+   yang pernah termuat, selamanya — bukan soal parsing. Ditambah
+   `ApiService.fetchActivitiesPage({page, perPage})` (parameter sama persis
+   dengan `searchFeeds`, terverifikasi DevTools) dan infinite scroll di
+   `home_screen.dart` (`ScrollController` + `_loadMore` saat mendekati
+   bawah). `fetchActivities()` lama sekarang jadi alias page 1.
+3. **Like real-time** — `ApiService.toggleFeedLike(feedId, {like})`:
+   `POST .../feeds/{id}/react` body `{"reaction":"like"}` untuk like
+   (endpoint ini yang terverifikasi), `DELETE` ke endpoint sama untuk
+   unlike (konvensi toggle REST FCOM, **belum ada capture DevTools
+   terpisah** — kalau gagal, UI di-revert otomatis oleh `_toggleLike`,
+   jadi aman meski dugaan method HTTP-nya salah). `Set<int> _likedFeedIds`
+   untuk optimistic UI persis seperti rencana.
+4. **Kotak feed bisa diklik** — seluruh `Card` dibungkus `InkWell` →
+   `_openComments`. Ikon Like dibungkus `GestureDetector(behavior:
+   HitTestBehavior.opaque)` supaya tap-nya tidak ikut ditelan `InkWell`
+   kotak utama.
+
+**Belum diverifikasi user.** Yang perlu dicek terutama: apakah `DELETE
+.../feeds/{id}/react` benar-benar unlike (poin 3) — kalau ternyata salah,
+tap kedua pada like akan terlihat "gagal" (snackbar merah) lalu balik ke
+status liked, bukan crash.

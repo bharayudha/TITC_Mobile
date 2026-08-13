@@ -33,35 +33,150 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late Future<List<ActivityModel>> _activitiesFuture;
+  final List<ActivityModel> _activities = [];
+  final ScrollController _scrollController = ScrollController();
+
+  /// Feed yang di-like OLEH USER di sesi ini, dipakai untuk optimistic UI
+  /// update tombol Like — lihat [_toggleLike]. `/feeds` tidak mengembalikan
+  /// status "sudah di-like atau belum" per user, jadi status awal semua
+  /// item selalu dianggap belum di-like (sama seperti tampilan awal
+  /// sebelumnya, bukan regresi).
+  final Set<int> _likedFeedIds = {};
+
+  bool _isLoadingFirstPage = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _nextPage = 1;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     final cached = ApiService.cachedActivities;
     if (cached != null) {
       // Tampilkan data lama dulu supaya tidak loading dari nol tiap kali
       // tab ini dibuka lagi, lalu diam-diam refresh di belakang layar.
-      _activitiesFuture = Future.value(cached);
-      ApiService.fetchActivities()
-          .then((fresh) {
-            if (mounted) setState(() => _activitiesFuture = Future.value(fresh));
-          })
-          .catchError((_) {});
+      _activities.addAll(cached);
+      _isLoadingFirstPage = false;
+      _nextPage = 2;
+      ApiService.fetchActivities().then((fresh) {
+        if (!mounted) return;
+        setState(() {
+          _activities
+            ..clear()
+            ..addAll(fresh);
+          _nextPage = 2;
+          _hasMore = fresh.length >= ApiService.feedsPerPage;
+        });
+      }).catchError((_) {});
     } else {
-      _activitiesFuture = ApiService.fetchActivities();
+      _loadFirstPage();
     }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // Muat halaman berikutnya sedikit sebelum benar-benar mentok di bawah
+    // supaya scroll terasa mulus tanpa jeda.
+    if (position.pixels >= position.maxScrollExtent - 400) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
+    setState(() {
+      _isLoadingFirstPage = true;
+      _error = null;
+    });
+    try {
+      final page = await ApiService.fetchActivitiesPage(page: 1);
+      if (!mounted) return;
+      setState(() {
+        _activities
+          ..clear()
+          ..addAll(page);
+        _nextPage = 2;
+        _hasMore = page.length >= ApiService.feedsPerPage;
+        _isLoadingFirstPage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _isLoadingFirstPage = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore || _isLoadingFirstPage) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final page = await ApiService.fetchActivitiesPage(page: _nextPage);
+      if (!mounted) return;
+      setState(() {
+        _activities.addAll(page);
+        _nextPage += 1;
+        _hasMore = page.length >= ApiService.feedsPerPage;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Gagal memuat halaman tambahan tidak boleh menghapus feed yang sudah
+      // tampil — cukup hentikan pemuatan berikutnya.
+      setState(() {
+        _isLoadingMore = false;
+        _hasMore = false;
+      });
+    }
+  }
+
+  /// Like/unlike optimistic: tampilan berubah seketika, lalu dikirim ke
+  /// server. Kalau server menolak, tampilan dikembalikan seperti semula
+  /// (revert) supaya app tidak pernah berbohong soal status like sesungguhnya
+  /// — inilah yang membuat like "terkoneksi realtime dengan web", bukan
+  /// cuma efek visual lokal.
+  Future<void> _toggleLike(ActivityModel activity) async {
+    final wasLiked = _likedFeedIds.contains(activity.id);
+    final wantLike = !wasLiked;
+
+    setState(() {
+      if (wantLike) {
+        _likedFeedIds.add(activity.id);
+      } else {
+        _likedFeedIds.remove(activity.id);
+      }
+    });
+
+    final ok = await ApiService.toggleFeedLike(activity.id, like: wantLike);
+    if (!mounted || ok) return;
+
+    setState(() {
+      if (wasLiked) {
+        _likedFeedIds.add(activity.id);
+      } else {
+        _likedFeedIds.remove(activity.id);
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(wantLike ? 'Gagal menyukai post.' : 'Gagal batal menyukai post.')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: () async {
-        setState(() {
-          _activitiesFuture = ApiService.fetchActivities();
-        });
-      },
+      onRefresh: _loadFirstPage,
       child: ListView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           // 1. Promo Banner (Mock)
@@ -104,33 +219,36 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildQuickLinks(context),
           const SizedBox(height: 12),
 
-          // 5. Activity Feed (FutureBuilder)
-          FutureBuilder<List<ActivityModel>>(
-            future: _activitiesFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              } else if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(child: Text('Belum ada aktivitas.'));
-              }
-
-              return ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: snapshot.data!.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final activity = snapshot.data![index];
-                  return _buildActivityCard(activity);
-                },
-              );
-            },
-          ),
+          // 5. Activity Feed — dimuat bertahap (infinite scroll). `/feeds`
+          // cuma mengembalikan sejumlah item per panggilan, jadi feed di web
+          // yang jumlahnya lebih banyak baru bisa disamakan kalau app terus
+          // meminta halaman berikutnya saat user scroll ke bawah.
+          if (_isLoadingFirstPage)
+            const Padding(
+              padding: EdgeInsets.all(32.0),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            Center(child: Text('Error: $_error'))
+          else if (_activities.isEmpty)
+            const Center(child: Text('Belum ada aktivitas.'))
+          else ...[
+            for (final activity in _activities) ...[
+              _buildActivityCard(activity),
+              const SizedBox(height: 12),
+            ],
+            if (_isLoadingMore)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -310,68 +428,100 @@ class _HomeScreenState extends State<HomeScreen> {
   ''';
 
   Widget _buildActivityCard(ActivityModel activity) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: Colors.grey.shade300,
-                  backgroundImage: activity.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(activity.avatarUrl, headers: AuthService.imageAuthHeaders) : null,
-                  child: activity.avatarUrl.isEmpty ? Text(activity.authorName[0]) : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(activity.authorName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      if (activity.date.isNotEmpty)
-                        Text(activity.date.split('T')[0], style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                    ],
+    final isLiked = _likedFeedIds.contains(activity.id);
+    // `activity.likeCount` datang dari server dan tidak berubah sendiri;
+    // hasil like/unlike lokal ditambahkan di atasnya sebagai selisih, bukan
+    // memutasi model.
+    final displayedLikeCount = activity.likeCount + (isLiked ? 1 : 0);
+    final likeColor = isLiked ? const Color(0xFFE0245E) : Colors.grey.shade600;
+
+    // Seluruh kartu bisa diketuk untuk membuka post + komentar, meniru web.
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openComments(activity),
+      child: Card(
+        elevation: 0,
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: Colors.grey.shade300,
+                    backgroundImage: activity.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(activity.avatarUrl, headers: AuthService.imageAuthHeaders) : null,
+                    child: activity.avatarUrl.isEmpty ? Text(activity.authorName[0]) : null,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              // Simple strip HTML
-              activity.content.replaceAll(RegExp(r'<[^>]*>'), ''),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                PhosphorIcon(PhosphorIconsRegular.heart, size: 20, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
-                Text('${activity.likeCount}', style: TextStyle(color: Colors.grey.shade600)),
-                const SizedBox(width: 16),
-                InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: () => _openComments(activity),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        PhosphorIcon(PhosphorIconsRegular.chatCircle, size: 20, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text('${activity.commentCount}', style: TextStyle(color: Colors.grey.shade600)),
+                        Text(activity.authorName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        if (activity.date.isNotEmpty)
+                          Text(activity.date.split('T')[0], style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                       ],
                     ),
                   ),
-                ),
-              ],
-            )
-          ],
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                // Simple strip HTML
+                activity.content.replaceAll(RegExp(r'<[^>]*>'), ''),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  // GestureDetector opaque: tombol Like ada DI DALAM kartu
+                  // yang seluruhnya sudah bisa diketuk untuk buka komentar.
+                  // Tanpa opaque + onTap sendiri di sini, tap like akan ikut
+                  // "ditelan" InkWell kotak utama dan malah membuka komentar.
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _toggleLike(activity),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          PhosphorIcon(
+                            isLiked ? PhosphorIconsFill.heart : PhosphorIconsRegular.heart,
+                            size: 20,
+                            color: likeColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text('$displayedLikeCount', style: TextStyle(color: likeColor)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _openComments(activity),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          PhosphorIcon(PhosphorIconsRegular.chatCircle, size: 20, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text('${activity.commentCount}', style: TextStyle(color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
         ),
       ),
     );

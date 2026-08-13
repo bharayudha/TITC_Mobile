@@ -113,16 +113,42 @@ class ApiService {
     return response;
   }
 
-  /// Ambil daftar feed/activity dari Fluent Community. Di-dedupe: kalau
-  /// beberapa tab dibuka berdekatan sama-sama memicu fetch ini, mereka
+  /// Ukuran halaman feed Home, disamakan dengan nilai yang tertangkap dari
+  /// request asli portal web (lihat dokumentasi [searchFeeds]).
+  static const int feedsPerPage = 10;
+
+  /// Ambil halaman pertama feed/activity dari Fluent Community. Di-dedupe:
+  /// kalau beberapa tab dibuka berdekatan sama-sama memicu fetch ini, mereka
   /// berbagi satu request yang sama alih-alih menembak beberapa request
   /// paralel ke host yang sama (penyebab lambat/timeout saat pindah tab).
   static Future<List<ActivityModel>>? _activitiesInFlight;
 
   static Future<List<ActivityModel>> fetchActivities() {
-    return _activitiesInFlight ??= _doFetchActivities().whenComplete(() {
+    return _activitiesInFlight ??=
+        _doFetchActivitiesPage(page: 1, perPage: feedsPerPage).whenComplete(() {
       _activitiesInFlight = null;
     });
+  }
+
+  /// Ambil SATU halaman feed, dipakai untuk infinite scroll di Home.
+  ///
+  /// `/feeds` TIDAK mengembalikan seluruh feed sekaligus — sebelumnya Home
+  /// memanggil endpoint ini tanpa parameter halaman sama sekali, jadi hanya
+  /// batch pertama yang pernah termuat sepanjang app berjalan. Itu sebabnya
+  /// feed di app terlihat lebih sedikit daripada di web walau sudah di-scroll
+  /// sampai bawah — bukan masalah parsing, tapi tidak pernah ada yang minta
+  /// halaman berikutnya. Parameter query sama persis dengan [searchFeeds]
+  /// (dikonfirmasi dari request asli portal web via DevTools), minus
+  /// parameter pencarian.
+  ///
+  /// Halaman pertama tidak di-dedupe di sini (itu tugas [fetchActivities]);
+  /// halaman berikutnya juga sengaja tidak di-dedupe karena hampir tidak
+  /// pernah ada dua request bersamaan untuk halaman lanjutan yang sama.
+  static Future<List<ActivityModel>> fetchActivitiesPage({
+    required int page,
+    int perPage = feedsPerPage,
+  }) {
+    return _doFetchActivitiesPage(page: page, perPage: perPage);
   }
 
   /// Bongkar daftar item feed dari berbagai bentuk respons yang mungkin
@@ -207,17 +233,29 @@ class ApiService {
     }
   }
 
-  static Future<List<ActivityModel>> _doFetchActivities() async {
+  static Future<List<ActivityModel>> _doFetchActivitiesPage({
+    required int page,
+    required int perPage,
+  }) async {
     if (!AuthService.isLoggedIn) {
       throw Exception('Anda harus login terlebih dahulu.');
     }
 
     try {
-      print('--- FETCH FEEDS DEBUG ---');
-      print('URL: $_baseUrl/feeds');
-      print('Headers: $authHeaders');
+      final uri = Uri.parse('$_baseUrl/feeds').replace(
+        queryParameters: <String, String>{
+          'feed_base_url': 'feeds',
+          'page': '$page',
+          'per_page': '$perPage',
+          'space': '',
+          'order_by_type': 'latest',
+        },
+      );
 
-      final response = await authorizedGet(Uri.parse('$_baseUrl/feeds'));
+      print('--- FETCH FEEDS DEBUG ---');
+      print('URL: $uri');
+
+      final response = await authorizedGet(uri);
 
       print('Status Code: ${response.statusCode}');
       // Truncate response body to avoid flooding stdout
@@ -235,7 +273,10 @@ class ApiService {
         final activities = feeds
             .map((json) => ActivityModel.fromFluentCommunity(json))
             .toList();
-        cachedActivities = activities;
+        // Cache cuma halaman pertama — itu yang dipakai Home untuk tampil
+        // instan saat tab dibuka lagi. Halaman lanjutan (infinite scroll)
+        // tidak masuk cache supaya tidak salah dianggap "daftar penuh".
+        if (page == 1) cachedActivities = activities;
         return activities;
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
@@ -750,6 +791,39 @@ class ApiService {
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       print('Exception in toggleFollowMember: $e');
+      return false;
+    }
+  }
+
+  /// Kirim/batalkan reaksi "like" pada satu item feed, langsung ke server —
+  /// bukan cuma perubahan tampilan lokal, supaya statusnya benar-benar
+  /// tersimpan dan sinkron dengan portal web secara realtime.
+  ///
+  /// Endpoint `POST .../feeds/{id}/react` dengan body `{"reaction": "like"}`
+  /// dikonfirmasi dari inspeksi request asli portal web. Untuk batal-like
+  /// dipakai `DELETE` ke endpoint yang sama, mengikuti konvensi toggle REST
+  /// yang lazim di FCOM — belum ada capture DevTools terpisah untuk arah
+  /// ini, tapi kegagalannya aman: pemanggil ([HomeScreen]) sudah membalikkan
+  /// (revert) status like optimistic-nya kalau method ini mengembalikan
+  /// `false`, jadi tidak ada risiko UI ketinggalan status server meski
+  /// dugaan method HTTP-nya ternyata salah.
+  static Future<bool> toggleFeedLike(int feedId, {required bool like}) async {
+    if (!AuthService.isLoggedIn) return false;
+    try {
+      final uri = Uri.parse('$_baseUrl/feeds/$feedId/react');
+      final body = json.encode({'reaction': 'like'});
+      final response = like
+          ? await client
+              .post(uri, headers: authHeaders, body: body)
+              .timeout(const Duration(seconds: 15))
+          : await client
+              .delete(uri, headers: authHeaders, body: body)
+              .timeout(const Duration(seconds: 15));
+      return response.statusCode == 200 ||
+          response.statusCode == 201 ||
+          response.statusCode == 204;
+    } catch (e) {
+      print('Exception in toggleFeedLike: $e');
       return false;
     }
   }
