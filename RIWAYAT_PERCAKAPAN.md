@@ -328,3 +328,98 @@ struktur JSON** yang parser tidak baca.
 - Debug logging masih aktif dengan prefix: `COURSE_JSON`, `COURSE_PARSED`,
   `FCOM_JSON`, `SPACES_ENVELOPE_KEYS`, `SPACES_COLLECTED`, `SPACE_ITEM`,
   `MEMBERS_PAGE_INFO`, `MEMBER_JSON`, `WEBVIEW_LOAD`. **Hapus sebelum rilis.**
+
+---
+
+## Sesi 13 Agustus 2026 — Search & space yang hilang
+
+Aturannya sejak sesi ini: kronologi & hipotesis yang gugur ditulis di sini,
+aturan yang masih berlaku ditulis di CLAUDE.md.
+
+### Permintaan A — "kenapa muncul tulisan gitu" (error di Feed)
+
+Feed menampilkan pesan error. Log menunjukkan
+`type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>?'`.
+
+**Akar masalah:** PHP menserialisasi array asosiatif **kosong** sebagai `[]`,
+bukan `{}`. Jadi `json['x'] as Map<String, dynamic>?` melempar exception alih-alih
+menghasilkan null.
+
+Efek samping yang ikut ketahuan: pola `json['xprofile'] ?? json['actor']` di
+`notification_model.dart` tidak pernah jatuh ke `actor`, karena `[]` bukan null.
+Dan rantai `x as Map? ?? y as Map?` sama sekali tidak menolong — cast kiri sudah
+melempar sebelum `??` dievaluasi.
+
+**Tindakan:** file baru `lib/models/json_utils.dart` (`asJsonMap`, `asJsonList`,
+`asJsonString`), diterapkan ke 6 model.
+
+### Permintaan B — Search disamakan dengan web
+
+User mengirim tangkapan layar search bar web: ada dropdown "All Posts" yang
+isinya **Membership Areas**, plus baris centang "Search in:".
+
+Parameter API didapat dari cURL DevTools yang dikirim user langsung — bukan
+tebakan:
+```
+/feeds?feed_base_url=feeds&page=1&per_page=20&space=&order_by_type=latest
+       &search=free&search_in[0]=post_content
+```
+
+**Tindakan:** `searchFeeds()` baru di `api_service.dart`, `search_overlay.dart`
+ditulis ulang mengembalikan `SearchRequest`, file baru
+`search_results_screen.dart`, dan `top_app_bar.dart` diperbaiki agar `await`
+hasil overlay (sebelumnya `Future`-nya dibuang — itu sebabnya tombol search
+terasa mati).
+
+### Permintaan C — "kamu ketinggalan TOEFL Mockup Test"
+
+Ini bagian yang paling banyak salah duga. Ditulis lengkap supaya tidak diulang.
+
+**Hipotesis 1 — filter `type == 'course'` di app membuang space itu.**
+❌ GUGUR. Log sendiri membantahnya: `total=6 nonCourse=6` (dan sebelumnya
+`total=5 nonCourse=5`). Tidak ada satu pun yang terbuang oleh filter.
+Komentar kode yang terlanjur saya tulis berdasarkan dugaan ini ikut diralat.
+
+**Hipotesis 2 — server memang cuma punya 5 space.**
+❌ GUGUR. User mengirim tangkapan layar web: di sana jelas ada 6.
+
+**Hipotesis 3 — `/spaces` hanya mengembalikan space yang sudah di-join.**
+✅ TERBUKTI. Petunjuk penentunya: di web, "TOEFL - Mockup Test" adalah
+satu-satunya kartu yang tombolnya **"Join"**, sisanya "View Space".
+
+**Hipotesis 4 — web memakai endpoint lain.**
+✅ TERBUKTI lewat cURL DevTools user:
+`/spaces/discover?type=all&search=&sort_by=alphabetical&page=1&per_page=24`
+
+**Kejutan setelah pindah endpoint:** log `SPACE_KEYS` menunjukkan respons
+`discover` **tidak punya** `is_joined` maupun `is_member` — yang ada
+`space_pivot`. Tanpa menyadari ini, perbaikan tadi akan "berhasil" tapi semua
+space menampilkan tombol "Join", termasuk yang sudah diikuti.
+
+**Hasil:** satu perubahan endpoint memperbaiki empat hal — toggle All/Joined di
+tab Spaces (dulu dua-duanya identik), TOEFL - Mockup Test di drawer, isi
+dropdown search, dan pencarian space sisi server.
+
+### Permintaan D — "ni bug baru ni jadi ikutan yang course nya"
+
+Dropdown search ikut menampilkan grup "Courses" (10/15/20 Meeting Courses, dst)
+yang tidak ada di web.
+
+**Penyebab:** tambalan dari Hipotesis 1 yang sudah gugur. Waktu itu saya
+menambahkan seluruh course ke dropdown sebagai jalan pintas, dan setelah
+penyebab asli ketemu tambalan itu tidak dicabut.
+
+**Tindakan:** grup Courses, field `_courses`, panggilan `fetchCourses()`, dan
+import `course_model.dart` dihapus dari `search_overlay.dart`. Fallback ke
+daftar course di `portal_navigator.dart` **dipertahankan** — lahir dari dugaan
+yang sama, tapi masuk akal berdiri sendiri karena label drawer memang tidak tahu
+sebuah area itu space atau course.
+
+**Pelajaran:** tambalan berbasis dugaan harus dicabut begitu penyebab asli
+ketemu, bukan ditinggal "siapa tahu berguna".
+
+### Kondisi akhir sesi
+
+`flutter analyze` → **0 error**. Sisa 104 issue semuanya `avoid_print` (debug
+log yang disengaja) plus 3 `unused_import` bawaan tim di `profile_screen.dart`,
+`test_fetch.dart`, `test_js.dart`.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/space_model.dart';
@@ -22,6 +24,7 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
   List<SpaceModel> _allFetchedSpaces = [];
   String _searchQuery = '';
   String _sortBy = 'Alphabetical'; // Default sort
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -29,12 +32,37 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
     _loadSpaces(useCache: true);
   }
 
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  /// Pencarian dikirim ke server, bukan disaring di HP. Filter lokal hanya
+  /// menemukan space yang kebetulan sudah termuat, sedangkan di web semuanya
+  /// dicari di server.
+  ///
+  /// Diberi jeda 450ms (sama seperti layar Members) supaya tiap huruf yang
+  /// diketik tidak memicu satu request ke server TITC yang memang lambat.
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      final query = value.trim();
+      if (query == _searchQuery) return;
+      _searchQuery = query;
+      _loadSpaces();
+    });
+  }
+
   /// Muat daftar spaces. Kalau [useCache] true dan ada data lama, data itu
   /// langsung ditampilkan (tidak loading dari nol tiap kali tab ini dibuka
   /// lagi) sambil diam-diam refresh di belakang layar. Pull-to-refresh dan
   /// aksi join selalu memaksa fetch baru (useCache: false).
   void _loadSpaces({bool useCache = false}) {
-    final cached = ApiService.cachedSpaces;
+    // Cache hanya berisi daftar penuh, jadi tidak boleh dipakai saat sedang
+    // mencari — kalau dipakai, hasil pencarian akan tertimpa daftar lengkap.
+    final cached = _searchQuery.isEmpty ? ApiService.cachedSpaces : null;
     if (useCache && cached != null) {
       setState(() {
         _allFetchedSpaces = cached;
@@ -52,7 +80,7 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
     }
 
     setState(() {
-      _spacesFuture = ApiService.fetchSpaces().then((spaces) {
+      _spacesFuture = ApiService.fetchSpaces(search: _searchQuery).then((spaces) {
         _allFetchedSpaces = spaces;
         return spaces;
       });
@@ -89,19 +117,21 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                           return const Center(child: Text('Belum ada space.'));
                         }
 
-                        // Local Filtering
+                        final query = _searchQuery.toLowerCase();
                         var filteredSpaces = _allFetchedSpaces.where((space) {
-                          // Tab filter
+                          // Filter tab Joined/All: murni pilihan lokal.
                           if (!_showAllSpaces && !space.isJoined) return false;
-                          
-                          // Search filter
-                          if (_searchQuery.isNotEmpty) {
-                            if (!space.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
-                                !space.description.toLowerCase().contains(_searchQuery.toLowerCase())) {
-                              return false;
-                            }
-                          }
-                          return true;
+
+                          // Penyaring cadangan. Kata kunci SUDAH dikirim ke
+                          // server lewat ?search=, tapi belum terbukti apakah
+                          // endpoint /spaces benar-benar menghormatinya —
+                          // endpoint ini bahkan tidak dipaginate. Kalau server
+                          // mengabaikannya, tanpa penyaring ini pencarian akan
+                          // menampilkan SELURUH space apa pun yang diketik,
+                          // dan terlihat seperti rusak.
+                          if (query.isEmpty) return true;
+                          return space.title.toLowerCase().contains(query) ||
+                              space.description.toLowerCase().contains(query);
                         }).toList();
 
                         // Local Sorting
@@ -112,7 +142,14 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                         }
 
                         if (filteredSpaces.isEmpty) {
-                           return const Center(child: Text('Tidak ada space di kategori ini.'));
+                          return Center(
+                            child: Text(
+                              _searchQuery.isEmpty
+                                  ? 'Tidak ada space di kategori ini.'
+                                  : 'Tidak ada space yang cocok dengan "$_searchQuery".',
+                              textAlign: TextAlign.center,
+                            ),
+                          );
                         }
 
                         return ListView.separated(
@@ -148,7 +185,7 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
         children: [
           // Search Field
           TextField(
-            onChanged: (value) => setState(() => _searchQuery = value),
+            onChanged: _onSearchChanged,
             decoration: InputDecoration(
               hintText: 'Search Space...',
               hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),

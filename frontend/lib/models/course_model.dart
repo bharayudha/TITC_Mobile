@@ -1,3 +1,5 @@
+import 'package:magang_titc/models/json_utils.dart';
+
 /// Model untuk satu entitas Course dari Fluent Community.
 ///
 /// Endpoint Course berbagi struktur dasar yang sama dengan Space
@@ -46,7 +48,7 @@ class CourseModel {
 
   /// Factory untuk membuat object dari JSON response Fluent Community API.
   factory CourseModel.fromJson(Map<String, dynamic> json) {
-    final settings = json['settings'] as Map<String, dynamic>? ?? const {};
+    final settings = asJsonMap(json['settings']);
 
     return CourseModel(
       id: json['id'] ?? 0,

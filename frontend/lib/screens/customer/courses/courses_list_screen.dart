@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/course_model.dart';
@@ -22,6 +24,7 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
   List<CourseModel> _allFetchedCourses = [];
   String _searchQuery = '';
   String _sortBy = 'Alphabetical';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -29,12 +32,32 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
     _loadCourses(useCache: true);
   }
 
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  /// Pencarian dikirim ke server, bukan disaring di HP — lihat catatan yang
+  /// sama di `spaces_list_screen.dart`. Jeda 450ms mengikuti layar Members.
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      final query = value.trim();
+      if (query == _searchQuery) return;
+      _searchQuery = query;
+      _loadCourses();
+    });
+  }
+
   /// Muat daftar courses. Kalau [useCache] true dan ada data lama, data itu
   /// langsung ditampilkan (tidak loading dari nol tiap kali tab ini dibuka
   /// lagi) sambil diam-diam refresh di belakang layar. Pull-to-refresh dan
   /// aksi enroll selalu memaksa fetch baru (useCache: false).
   void _loadCourses({bool useCache = false}) {
-    final cached = ApiService.cachedCourses;
+    // Cache hanya berisi daftar penuh, jadi tidak dipakai saat sedang mencari.
+    final cached = _searchQuery.isEmpty ? ApiService.cachedCourses : null;
     if (useCache && cached != null) {
       setState(() {
         _allFetchedCourses = cached;
@@ -52,7 +75,8 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
     }
 
     setState(() {
-      _coursesFuture = ApiService.fetchCourses().then((courses) {
+      _coursesFuture =
+          ApiService.fetchCourses(search: _searchQuery).then((courses) {
         _allFetchedCourses = courses;
         return courses;
       });
@@ -89,17 +113,21 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                           return const Center(child: Text('Belum ada course.'));
                         }
 
-                        // Local Filtering
-                        var filteredCourses = _allFetchedCourses.where((course) {
-                          if (!_showAllCourses && !course.isEnrolled) return false;
-
-                          if (_searchQuery.isNotEmpty) {
-                            if (!course.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
-                                !course.description.toLowerCase().contains(_searchQuery.toLowerCase())) {
-                              return false;
-                            }
+                        final query = _searchQuery.toLowerCase();
+                        var filteredCourses =
+                            _allFetchedCourses.where((course) {
+                          // Filter tab Enrolled/All: murni pilihan lokal.
+                          if (!_showAllCourses && !course.isEnrolled) {
+                            return false;
                           }
-                          return true;
+
+                          // Penyaring cadangan — alasannya sama dengan yang
+                          // dijelaskan di `spaces_list_screen.dart`: kata
+                          // kunci sudah dikirim ke server, tapi belum terbukti
+                          // endpoint-nya menghormati ?search=.
+                          if (query.isEmpty) return true;
+                          return course.title.toLowerCase().contains(query) ||
+                              course.description.toLowerCase().contains(query);
                         }).toList();
 
                         // Local Sorting
@@ -110,7 +138,14 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                         }
 
                         if (filteredCourses.isEmpty) {
-                          return const Center(child: Text('Tidak ada course di kategori ini.'));
+                          return Center(
+                            child: Text(
+                              _searchQuery.isEmpty
+                                  ? 'Tidak ada course di kategori ini.'
+                                  : 'Tidak ada course yang cocok dengan "$_searchQuery".',
+                              textAlign: TextAlign.center,
+                            ),
+                          );
                         }
 
                         return ListView.separated(
@@ -145,7 +180,7 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
       child: Column(
         children: [
           TextField(
-            onChanged: (value) => setState(() => _searchQuery = value),
+            onChanged: _onSearchChanged,
             decoration: InputDecoration(
               hintText: 'Search Course...',
               hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),

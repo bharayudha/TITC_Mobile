@@ -1,3 +1,5 @@
+import 'package:magang_titc/models/json_utils.dart';
+
 /// Model untuk satu item feed/activity dari Fluent Community.
 class ActivityModel {
   final int id;
@@ -33,16 +35,17 @@ class ActivityModel {
   /// Factory dari JSON response Fluent Community `/feeds`.
   factory ActivityModel.fromFluentCommunity(Map<String, dynamic> json) {
     // User info di v2 seringkali ada di 'xprofile' bukan 'user'
-    final user = json['xprofile'] as Map<String, dynamic>? ?? json['user'] as Map<String, dynamic>? ?? {};
-    final space = json['space'] as Map<String, dynamic>? ?? {};
-    final meta = json['meta'] as Map<String, dynamic>? ?? {};
-    
+    var user = asJsonMap(json['xprofile']);
+    if (user.isEmpty) user = asJsonMap(json['user']);
+    final space = asJsonMap(json['space']);
+    final meta = asJsonMap(json['meta']);
+
     // Parse preview data if available
-    final previewData = meta['preview_data'] as Map<String, dynamic>?;
+    final previewData = asJsonMap(meta['preview_data']);
     String? linkUrl;
     String? linkTitle;
     String? linkDesc;
-    if (previewData != null) {
+    if (previewData.isNotEmpty) {
       linkUrl = previewData['url'] ?? previewData['link'];
       linkTitle = previewData['title'];
       linkDesc = previewData['description'];

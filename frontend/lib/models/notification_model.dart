@@ -1,5 +1,5 @@
 import 'package:magang_titc/models/member_model.dart';
-import 'package:magang_titc/models/activity_model.dart';
+import 'package:magang_titc/models/json_utils.dart';
 
 class NotificationModel {
   final int id;
@@ -25,8 +25,14 @@ class NotificationModel {
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
-    final actorJson = json['xprofile'] ?? json['actor'];
-    
+    // Lewat asJsonMap, bukan dipakai apa adanya: kalau `xprofile` kosong PHP
+    // mengirimnya sebagai `[]`, dan `MemberModel.fromJson([])` gagal karena
+    // parameternya bertipe Map. Cek isNotEmpty juga menggantikan cek null,
+    // sebab `[]` bukan null tapi tetap tidak berisi apa-apa.
+    final actorJson = asJsonMap(json['xprofile']).isNotEmpty
+        ? asJsonMap(json['xprofile'])
+        : asJsonMap(json['actor']);
+
     // Some endpoints return 'read_at', others might use 'is_read'
     bool readStatus = false;
     if (json.containsKey('read_at')) {
@@ -41,10 +47,10 @@ class NotificationModel {
       componentKey: json['component_key'] ?? json['src_object_type'] ?? '',
       isRead: readStatus,
       dateNotified: json['created_at'] ?? json['date_notified'] ?? '',
-      actor: actorJson != null ? MemberModel.fromJson(actorJson) : null,
+      actor: actorJson.isNotEmpty ? MemberModel.fromJson(actorJson) : null,
       url: json['url'] ?? json['link'],
       content: json['content'] ?? json['message'] ?? 'Notification',
-      route: json['route'] as Map<String, dynamic>?,
+      route: asJsonMap(json['route']),
     );
   }
 }

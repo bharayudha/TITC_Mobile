@@ -42,7 +42,16 @@ class PortalNavigator {
 
     final resolved = space;
     if (resolved == null) {
-      _notify(messenger, 'Space "$title" tidak ditemukan di akun ini.');
+      // Belum tentu tidak ada: `fetchSpaces()` sengaja membuang entri bertipe
+      // `course` supaya tab Spaces tidak kemasukan course. Judul yang dipakai
+      // pemanggil (label drawer) tidak selalu tahu sebuah area itu space atau
+      // course, jadi dicoba sekali lagi ke daftar course sebelum menyerah.
+      await openCourseByTitle(
+        navigator: navigator,
+        messenger: messenger,
+        title: title,
+        notFoundMessage: 'Space "$title" tidak ditemukan di akun ini.',
+      );
       return;
     }
 
@@ -59,10 +68,14 @@ class PortalNavigator {
   /// Mengikuti alur `_onCourseAction` di `courses_list_screen.dart`: yang
   /// sudah enroll langsung ke daftar lesson, yang belum dicoba didaftarkan
   /// lebih dulu.
+  /// [notFoundMessage] dipakai saat fungsi ini dipanggil sebagai cadangan
+  /// dari [openSpaceByTitle] — pesannya harus menyebut "Space", bukan
+  /// "Course", karena dari sudut pandang user itulah yang dia tekan.
   static Future<void> openCourseByTitle({
     required NavigatorState navigator,
     required ScaffoldMessengerState messenger,
     required String title,
+    String? notFoundMessage,
   }) async {
     var course = _findByTitle(ApiService.cachedCourses, title, (c) => c.title);
 
@@ -82,7 +95,10 @@ class PortalNavigator {
 
     final resolved = course;
     if (resolved == null) {
-      _notify(messenger, 'Course "$title" tidak ditemukan di akun ini.');
+      _notify(
+        messenger,
+        notFoundMessage ?? 'Course "$title" tidak ditemukan di akun ini.',
+      );
       return;
     }
 

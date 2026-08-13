@@ -310,18 +310,39 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
     // memanggil fixLayout() lagi.
     var layoutHeader = document.querySelector('.fhr_content_layout_header');
     if (layoutHeader) {
-      layoutHeader.style.setProperty('height', 'auto', 'important');
-      layoutHeader.style.setProperty('min-height', '0', 'important');
-      layoutHeader.style.setProperty('padding', '10px 12px', 'important');
-      layoutHeader.style.setProperty('margin', '0', 'important');
-      layoutHeader.style.setProperty('overflow', 'visible', 'important');
-      layoutHeader.style.setProperty('display', 'flex', 'important');
-      layoutHeader.style.setProperty('align-items', 'center', 'important');
-      layoutHeader.style.setProperty('justify-content', 'space-between', 'important');
-      layoutHeader.style.setProperty('flex-wrap', 'wrap', 'important');
-      layoutHeader.style.setProperty('gap', '10px', 'important');
-      layoutHeader.style.setProperty('background', '#fff', 'important');
-      layoutHeader.style.setProperty('z-index', '1', 'important');
+      // Halaman Space tidak punya breadcrumb maupun tombol "Continue Course"
+      // seperti halaman Course. Judul & nav-nya sudah kita sembunyikan
+      // (digantikan AppBar Flutter), jadi yang tersisa cuma tombol ⋮ — dan
+      // header-nya tampil sebagai pita putih kosong yang terlihat seperti bug.
+      // Kalau tidak ada isi yang benar-benar terlihat, header disembunyikan.
+      var hasContent = false;
+      Array.prototype.forEach.call(layoutHeader.children, function(child) {
+        // Tombol ⋮ tidak dihitung: dia sendirian tidak cukup jadi alasan
+        // menampilkan sebaris header kosong.
+        if (child.classList && child.classList.contains('fcom_dot_menu')) return;
+        var cs = getComputedStyle(child);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        if (child.getBoundingClientRect().height > 0) hasContent = true;
+      });
+
+      // Sengaja BUKAN early-return: perbaikan pita kosong di atas dan posisi
+      // body di bawah tetap harus dijalankan walau header-nya disembunyikan.
+      if (hasContent) {
+        layoutHeader.style.setProperty('height', 'auto', 'important');
+        layoutHeader.style.setProperty('min-height', '0', 'important');
+        layoutHeader.style.setProperty('padding', '10px 12px', 'important');
+        layoutHeader.style.setProperty('margin', '0', 'important');
+        layoutHeader.style.setProperty('overflow', 'visible', 'important');
+        layoutHeader.style.setProperty('display', 'flex', 'important');
+        layoutHeader.style.setProperty('align-items', 'center', 'important');
+        layoutHeader.style.setProperty('justify-content', 'space-between', 'important');
+        layoutHeader.style.setProperty('flex-wrap', 'wrap', 'important');
+        layoutHeader.style.setProperty('gap', '10px', 'important');
+        layoutHeader.style.setProperty('background', '#fff', 'important');
+        layoutHeader.style.setProperty('z-index', '1', 'important');
+      } else {
+        layoutHeader.style.setProperty('display', 'none', 'important');
+      }
 
       // Induk dipaksa block. Kalau induknya grid (atau flex row), header dan
       // body bisa ditempatkan di sel/kolom yang sama sehingga bertumpuk —

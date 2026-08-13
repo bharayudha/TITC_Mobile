@@ -585,6 +585,86 @@ Layar Spaces & Courses tinggal memakainya, tidak perlu bikin dari nol.
 
 ---
 
+## Sesi 13 Agustus 2026 — Search tersambung & daftar Spaces diperbaiki
+
+### Perilaku API yang tidak terduga (BACA SEBELUM MENGUBAH `api_service.dart`)
+
+Empat hal berikut **tidak bisa disimpulkan dari membaca kode** — ketahuannya
+hanya setelah membandingkan respons server dengan tampilan web. Kronologi
+lengkapnya ada di RIWAYAT_PERCAKAPAN.md.
+
+**1. `/spaces` hanya mengembalikan space yang SUDAH di-join user.**
+Bukan daftar lengkap. Ini penyebab "TOEFL - Mockup Test" muncul di web tapi
+hilang di app — satu-satunya space yang belum di-join.
+→ Untuk daftar lengkap pakai **`/spaces/discover?type=all&sort_by=alphabetical`**.
+Endpoint inilah yang dipakai portal web (dikonfirmasi lewat cURL DevTools user).
+
+> [!IMPORTANT]
+> Jangan cari penyebab space hilang di parser. Sempat diduga filter
+> `type == 'course'` yang membuangnya — **salah**, dibantah log sendiri
+> (`total=6 nonCourse=6`, tidak ada yang terbuang). Masalahnya di endpoint,
+> bukan di parsing.
+
+**2. `/spaces/discover` TIDAK mengirim `is_joined` maupun `is_member`.**
+Penanda keanggotaan ada di **`space_pivot`** — baris relasi user↔space: terisi
+kalau anggota, kosong/null kalau bukan. Tanpa cek ini semua space dianggap
+belum di-join, jadi space yang sudah diikuti pun menampilkan tombol "Join".
+Lihat `space_model.dart`.
+
+> **Petunjuk untuk tim backend:** di dalam `space_pivot` ada field `role`
+> (`member`, dst). Ini kemungkinan besar sumber yang dicari untuk membedakan
+> admin/moderator **komunitas FCOM** — role WordPress-nya tetap `subscriber`
+> untuk semua akun, jadi penandanya memang bukan di sana.
+
+**3. Endpoint search post FCOM.**
+`/feeds?search=<kata>&search_in[0]=post_content&search_in[1]=comments`
+plus `feed_base_url=feeds`, `order_by_type=latest`, dan `space=<slug>` (kosong =
+semua). Parameter disalin persis dari cURL DevTools user. Nilai `comments`
+untuk `search_in[1]` masih **inferensi** — yang tertangkap hanya `post_content`.
+
+**4. PHP menserialisasi array asosiatif KOSONG sebagai `[]`, bukan `{}`.**
+Ini jebakan paling sering memakan korban di proyek ini. Akibatnya
+`json['x'] as Map<String, dynamic>?` **melempar exception**, bukan menghasilkan
+null — dan `json['a'] ?? json['b']` tidak pernah jatuh ke `b` karena `[]` bukan
+null. Penyebab crash feed `type 'List<dynamic>' is not a subtype of type
+'Map<String, dynamic>?'`.
+→ Selalu lewat helper di **`lib/models/json_utils.dart`**
+(`asJsonMap` / `asJsonList` / `asJsonString`). Sudah dipakai di 6 model.
+
+> [!WARNING]
+> Rantai `x as Map? ?? y as Map?` **tidak menyelamatkan apa pun** — cast kiri
+> sudah melempar sebelum `??` sempat dievaluasi.
+
+### Selesai di sesi ini
+
+**Search app bar berfungsi penuh** (dulu tombol mati, query dibuang).
+- `top_app_bar.dart`: `onPressed` di-`async` + `await` hasil overlay, lalu push
+  `SearchResultsScreen`. Sebelumnya `Future<String?>`-nya dibuang begitu saja.
+- `search_overlay.dart` ditulis ulang: mengembalikan `SearchRequest`
+  (`query`, `spaceSlug`, `spaceLabel`, `includeComments`), dropdown cakupan
+  **"All Posts" + grup "Membership Areas"**, dan baris centang "Search in:"
+  (Post Title & Content selalu aktif, Comments opsional) — meniru web.
+- File baru `screens/customer/search/search_results_screen.dart` menampilkan
+  hasil sebagai kartu post; diketuk → `SpaceWebViewScreen(overrideUrl: permalink)`.
+- `ApiService.searchFeeds()` baru. Logika ekstraksi item dipakai bersama feed
+  Home lewat `_extractFeedItems()` supaya tidak ada dua parser yang bisa
+  berbeda diam-diam.
+
+**Daftar Spaces jadi lengkap.** Satu perubahan endpoint memperbaiki empat hal
+sekaligus: toggle All/Joined di tab Spaces (dulu dua-duanya isinya sama),
+"TOEFL - Mockup Test" di drawer, isi dropdown search, dan pencarian space
+sisi server.
+
+> [!NOTE]
+> Grup **"Courses" di dropdown search sengaja DIHAPUS.** Itu tambalan dari
+> dugaan yang sudah terbukti salah (lihat blok IMPORTANT di atas) dan membuat
+> dropdown berisi 9 entri yang tidak ada di web. Jangan dikembalikan.
+> Yang **dipertahankan**: fallback ke daftar course di `portal_navigator.dart` —
+> label drawer memang tidak tahu sebuah area itu space atau course, jadi itu
+> jaring pengaman yang masuk akal berdiri sendiri.
+
+---
+
 ## Status semua fitur
 
 | Fitur | Status |
@@ -606,24 +686,32 @@ Layar Spaces & Courses tinggal memakainya, tidak perlu bikin dari nol.
 | Baris ikon shortcut lama di Home | 🗑️ Dihapus 7 Agt, duplikat link cepat |
 | Notifikasi in-app (lonceng) | ✅ Selesai (Polling & FCOM parse) |
 | Push notification (FCM + plugin PHP) | ⬜ Masih rangka kosong — diserahkan ke tim |
-| Search di app bar | ⬜ Tombol mati, query dibuang — diserahkan ke tim |
+| Search di app bar | ✅ Selesai 13 Agt — cakupan per space + opsi Comments |
 | Search Spaces/Courses pakai server | ⬜ Jalur API sudah ada, layar belum memakai |
+| Daftar Spaces lengkap (6/6) | ✅ 13 Agt, lewat `/spaces/discover?type=all` |
+| Tombol Join/View Space benar | ✅ 13 Agt, lewat `space_pivot` |
+| Deteksi admin/moderator FCOM | ⬜ Diserahkan ke tim backend — petunjuk: `space_pivot.role` |
 | Header web (breadcrumb + Continue Course) | ❌ **Masih tumpang tindih / meleset** |
 | Tujuan tombol "Continue Course" | ❓ Belum diperiksa, pakai log `WEBVIEW_NAV:` |
 | Members list (2.256) | ✅ Dikonfirmasi user |
 | Ikon sosial clickable | ✅ url_launcher |
 | Waktu relatif ("15 days ago") | ✅ |
 | Timeout 15s → 30s + retry | ✅ Diperbaiki 6 Agt |
-| Spaces parser rekursif | ✅ (belum diverifikasi 6/6 space muncul) |
+| Spaces parser rekursif | ✅ Masih dipakai — tapi penyebab space hilang ternyata di endpoint, bukan parser (13 Agt) |
 
 ---
 
 ## Catatan penting
 
-- Debug logging aktif dengan prefix: `COURSE_JSON`, `COURSE_PARSED`,
-  `FCOM_JSON`, `SPACES_ENVELOPE_KEYS`, `SPACES_COLLECTED`, `SPACE_ITEM`,
-  `MEMBERS_PAGE_INFO`, `MEMBER_JSON`, `WEBVIEW_LOAD`, `WEBVIEW_SESSION`.
-  **Hapus semua sebelum rilis.**
+- Debug logging aktif — daftar terverifikasi per 13 Agt (hasil grep, bukan
+  ingatan): `SEARCH_FEEDS`, `URL`, `SPACES_ENVELOPE_KEYS`, `SPACES_COLLECTED`,
+  `SPACE_ITEM`, `SPACE_KEYS`, `COURSE_JSON`, `COURSE_PARSED`,
+  `MEMBERS_PAGE_INFO`, `MEMBER_JSON`, `MEMBER_META_FILLED`,
+  `MEMBER_META_ALL_KEYS`, `MEMBER_META_SUMMARY` (`api_service.dart`),
+  `URL` (`notifications_service.dart`), `WEBVIEW_DOM`, `WEBVIEW_NAV`,
+  `WEBVIEW_LOAD` (`space_webview_screen.dart`).
+  **Hapus semua sebelum rilis.** Prefix `URL` sengaja disebut walau generik —
+  paling mudah terlewat saat menyapu.
 - `flutter analyze` bersih dari error; sisa peringatan semuanya `avoid_print`
   bawaan (debug log yang memang disengaja sementara).
 - File tidak terpakai (bukan bagian runtime): `lib/services/courses_service.dart`,
@@ -632,3 +720,18 @@ Layar Spaces & Courses tinggal memakainya, tidak perlu bikin dari nol.
 - Asisten di sesi ini (Antigravity) BISA login ke situs via tool browser/DOM —
   berbeda dari sesi Claude Code sebelumnya yang tidak bisa. Gunakan akun
   testing untuk verifikasi perilaku runtime jika diperlukan.
+
+  > [!WARNING]
+  > **Berlaku HANYA untuk Antigravity, jangan dianggap umum.** Sesi Claude Code
+  > tidak punya akses browser — portal FCOM butuh login, dan `WebFetch` ke
+  > `/portal/...` hanya mengembalikan form login. Karena itu setiap verifikasi
+  > perilaku runtime butuh **user yang menjalankan app dan mengirim log**, atau
+  > cURL dari DevTools browser user. Beberapa temuan terpenting di dokumen ini
+  > (endpoint `discover`, parameter search) datang persis dari cURL semacam itu.
+
+- **Rute dokumen** (disepakati 13 Agt): CLAUDE.md hanya untuk **aturan yang
+  masih berlaku** — perilaku API tak terduga, "jangan diulang", status fitur,
+  sisa utang. Kronologi investigasi, hipotesis yang gugur, diff kode
+  sebelum/sesudah, dan hasil verifikasi bertanggal → **RIWAYAT_PERCAKAPAN.md**.
+  Alasannya: CLAUDE.md dibaca ulang otomatis tiap sesi, jadi isi yang basi
+  bukan sekadar sampah — ia menyesatkan sesi berikutnya.

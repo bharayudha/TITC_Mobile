@@ -1,3 +1,5 @@
+import 'package:magang_titc/models/json_utils.dart';
+
 /// Model untuk satu entitas Member dari Fluent Community.
 class MemberModel {
   final int id;
@@ -31,7 +33,7 @@ class MemberModel {
   factory MemberModel.fromJson(Map<String, dynamic> json) {
     // Beberapa endpoint FCOM membungkus detail profil di `xprofile`, sebagian
     // lain menaruhnya langsung di root — dukung dua-duanya.
-    final xprofile = json['xprofile'] as Map<String, dynamic>? ?? const {};
+    final xprofile = asJsonMap(json['xprofile']);
     T? pick<T>(String key) => (json[key] ?? xprofile[key]) as T?;
 
     return MemberModel(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
+import 'package:magang_titc/screens/customer/search/search_results_screen.dart';
 import 'package:magang_titc/widgets/shared/notifications_popup.dart';
 import 'package:magang_titc/widgets/shared/profile_menu.dart';
 import 'package:magang_titc/widgets/shared/search_overlay.dart';
@@ -47,7 +48,19 @@ class _TitcAppBarState extends State<TitcAppBar> {
             PhosphorIconsRegular.magnifyingGlass,
             color: Colors.black87,
           ),
-          onPressed: () => showSearchOverlay(context),
+          // Hasil overlay WAJIB ditunggu. Sebelumnya dipanggil sebagai
+          // `() => showSearchOverlay(context)`, dan karena onPressed bertipe
+          // VoidCallback, Future berisi kata kuncinya terbuang — user
+          // mengetik lalu tidak terjadi apa-apa.
+          onPressed: () async {
+            final request = await showSearchOverlay(context);
+            if (request == null || !context.mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SearchResultsScreen(request: request),
+              ),
+            );
+          },
         ),
         ValueListenableBuilder<int>(
           valueListenable: NotificationsService.unreadCountNotifier,

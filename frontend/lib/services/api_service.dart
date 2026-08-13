@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -124,6 +125,88 @@ class ApiService {
     });
   }
 
+  /// Bongkar daftar item feed dari berbagai bentuk respons yang mungkin
+  /// dikembalikan Fluent Community: array langsung, `{data: [...]}`,
+  /// `{activities: {data: [...]}}`, atau `{feeds: {data: [...]}}`.
+  ///
+  /// Dipakai bersama oleh feed Home dan pencarian post, karena keduanya
+  /// menembak endpoint `/feeds` yang sama.
+  static List<dynamic> _extractFeedItems(dynamic data) {
+    if (data is List) return data;
+    if (data is! Map) return const [];
+
+    for (final key in ['feeds', 'activities']) {
+      final section = data[key];
+      if (section is Map && section['data'] is List) {
+        return section['data'] as List;
+      }
+      if (section is List) return section;
+    }
+    if (data['data'] is List) return data['data'] as List;
+    return const [];
+  }
+
+  /// Cari post lewat endpoint `/feeds` — endpoint yang sama dengan feed Home,
+  /// hanya diberi parameter pencarian.
+  ///
+  /// Bentuk parameternya disalin dari request asli portal web (hasil inspeksi
+  /// DevTools, mengikuti metode PRD §13):
+  ///
+  /// ```
+  /// GET /feeds?page=1&per_page=10&space=&order_by_type=latest
+  ///            &search=free&search_in[0]=post_content
+  /// ```
+  ///
+  /// [spaceSlug] kosong berarti "All Posts"; diisi slug space untuk
+  /// mempersempit ke satu Membership Area.
+  static Future<List<ActivityModel>> searchFeeds({
+    required String query,
+    String spaceSlug = '',
+    bool includeComments = false,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    if (!AuthService.isLoggedIn) {
+      throw Exception('Anda harus login terlebih dahulu.');
+    }
+
+    // `post_content` terverifikasi dari request web. `comments` menyusul
+    // pola yang sama untuk centang "Comments" — kalau server tidak
+    // mengenalinya, dia diabaikan dan hasilnya kembali ke judul+isi saja,
+    // bukan error.
+    final searchIn = <String>['post_content', if (includeComments) 'comments'];
+
+    final uri = Uri.parse('$_baseUrl/feeds').replace(
+      queryParameters: <String, String>{
+        'feed_base_url': 'feeds',
+        'page': '$page',
+        'per_page': '$perPage',
+        'space': spaceSlug,
+        'order_by_type': 'latest',
+        'search': query,
+        for (var i = 0; i < searchIn.length; i++)
+          'search_in[$i]': searchIn[i],
+      },
+    );
+
+    try {
+      final response = await authorizedGet(uri);
+      print('SEARCH_FEEDS: $uri → ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return _extractFeedItems(json.decode(response.body))
+            .map((e) => ActivityModel.fromFluentCommunity(e))
+            .toList();
+      }
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('Sesi login telah habis. Silakan login ulang.');
+      }
+      throw Exception('Gagal mencari post: ${response.statusCode}');
+    } catch (e) {
+      throw Exception('Terjadi kesalahan: $e');
+    }
+  }
+
   static Future<List<ActivityModel>> _doFetchActivities() async {
     if (!AuthService.isLoggedIn) {
       throw Exception('Anda harus login terlebih dahulu.');
@@ -147,31 +230,7 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        // Fluent Community biasanya mengembalikan format:
-        // { "data": [...], "meta": {...} } atau langsung array
-        List<dynamic> feeds;
-        if (data is List) {
-          feeds = data;
-        } else if (data is Map && data.containsKey('data')) {
-          feeds = data['data'] as List;
-        } else if (data is Map && data.containsKey('activities')) {
-          // Response format for /activities is usually {"activities": {"data": [...]}}
-          if (data['activities'] is Map && data['activities'].containsKey('data')) {
-            feeds = data['activities']['data'] as List;
-          } else {
-            feeds = [];
-          }
-        } else if (data is Map && data.containsKey('feeds')) {
-          if (data['feeds'] is Map && data['feeds'].containsKey('data')) {
-            feeds = data['feeds']['data'] as List;
-          } else if (data['feeds'] is List) {
-            feeds = data['feeds'] as List;
-          } else {
-            feeds = [];
-          }
-        } else {
-          feeds = [];
-        }
+        final feeds = _extractFeedItems(data);
 
         final activities = feeds
             .map((json) => ActivityModel.fromFluentCommunity(json))
@@ -207,8 +266,29 @@ class ApiService {
     }
 
     try {
-      final uri = Uri.parse('$_baseUrl/spaces').replace(
-        queryParameters: search.isNotEmpty ? {'search': search} : null,
+      // Pakai `/spaces/discover?type=all`, BUKAN `/spaces`.
+      //
+      // `/spaces` hanya mengembalikan space yang sudah di-join user — terbukti
+      // dari log: server mengirim 5 space, semuanya ber-badge "Member" di web,
+      // sementara "TOEFL - Mockup Test" (belum di-join, tombolnya "Join")
+      // tidak ikut. Akibatnya toggle All/Joined di tab Spaces jadi percuma
+      // karena keduanya menampilkan daftar yang sama, dan user tidak pernah
+      // bisa menemukan space baru untuk di-join lewat app.
+      //
+      // Endpoint & parameter di bawah disalin dari request asli portal web
+      // (hasil inspeksi DevTools, metode PRD §13):
+      //   GET /spaces/discover?type=all&search=&sort_by=alphabetical
+      //                       &page=1&per_page=24
+      final uri = Uri.parse('$_baseUrl/spaces/discover').replace(
+        queryParameters: <String, String>{
+          'type': 'all',
+          'search': search,
+          'sort_by': 'alphabetical',
+          'page': '1',
+          // Web memakai 24; dinaikkan karena app menampilkan seluruh daftar
+          // sekaligus (tanpa pagination) dan jumlah space bisa bertambah.
+          'per_page': '100',
+        },
       );
 
       final response = await authorizedGet(uri);
@@ -269,6 +349,13 @@ class ApiService {
       print('SPACES_COLLECTED: total=${collected.length} nonCourse=${spaces.length}');
       for (final s in spaces) {
         print('SPACE_ITEM: id=${s['id']} type=${s['type']} privacy=${s['privacy']} status=${s['status']} title=${s['title']}');
+      }
+      // Nama field keanggotaan di respons `discover` belum diketahui —
+      // SpaceModel baru mencoba `is_joined` dan `is_member`. Daftar key entri
+      // pertama dicetak sekali supaya ketahuan field aslinya, karena tanpa itu
+      // badge "Member"/tombol Join di app bisa salah tampil.
+      if (spaces.isNotEmpty) {
+        print('SPACE_KEYS: ${spaces.first.keys.toList()}');
       }
 
       await _initJoinedCache();

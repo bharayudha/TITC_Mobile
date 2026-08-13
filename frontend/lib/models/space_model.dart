@@ -1,3 +1,5 @@
+import 'package:magang_titc/models/json_utils.dart';
+
 /// Model untuk satu entitas Space (Grup) dari Fluent Community.
 class SpaceModel {
   final int id;
@@ -41,7 +43,7 @@ class SpaceModel {
 
   /// Factory untuk membuat object dari JSON response Fluent Community API.
   factory SpaceModel.fromJson(Map<String, dynamic> json) {
-    final settings = json['settings'] as Map<String, dynamic>? ?? const {};
+    final settings = asJsonMap(json['settings']);
 
     return SpaceModel(
       id: json['id'] ?? 0,
@@ -57,7 +59,17 @@ class SpaceModel {
         settings['og_image'],
       ]),
       membersCount: json['members_count'] ?? json['member_count'] ?? 0,
-      isJoined: json['is_joined'] ?? json['is_member'] ?? false,
+      // `/spaces/discover` TIDAK mengirim `is_joined`/`is_member`. Yang ada
+      // `space_pivot`, yaitu baris relasi user↔space: terisi kalau user
+      // anggota, kosong/null kalau bukan. Tanpa cek ini semua space dianggap
+      // belum di-join, sehingga space yang sudah diikuti pun menampilkan
+      // tombol "Join".
+      //
+      // Dua field lama tetap dicoba lebih dulu supaya respons endpoint lain
+      // yang memang mengirimnya tetap terbaca.
+      isJoined: json['is_joined'] ??
+          json['is_member'] ??
+          asJsonMap(json['space_pivot']).isNotEmpty,
       privacy: json['privacy'] ?? 'public',
       emoji: _firstNonEmpty([settings['emoji']]),
     );

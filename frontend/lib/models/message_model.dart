@@ -1,3 +1,5 @@
+import 'package:magang_titc/models/json_utils.dart';
+
 /// Model untuk satu thread chat (community/direct/group) dari Fluent Community.
 class ChatThreadModel {
   final int id;
@@ -32,15 +34,15 @@ class ChatThreadModel {
   /// (akun test tidak punya DM aktif), jadi di-fallback ke beberapa
   /// kemungkinan key yang lazim dipakai Fluent Community.
   factory ChatThreadModel.fromJson(Map<String, dynamic> json, {String type = 'community'}) {
-    final info = json['info'] as Map<String, dynamic>? ?? {};
-    final otherUser = json['recipient'] as Map<String, dynamic>? ??
-        json['other_user'] as Map<String, dynamic>? ??
-        json['xprofile'] as Map<String, dynamic>? ??
-        {};
+    final info = asJsonMap(json['info']);
+    var otherUser = asJsonMap(json['recipient']);
+    if (otherUser.isEmpty) otherUser = asJsonMap(json['other_user']);
+    if (otherUser.isEmpty) otherUser = asJsonMap(json['xprofile']);
 
-    final messages = json['messages'] as List<dynamic>? ?? [];
-    final latestMessage = messages.isNotEmpty ? messages.first as Map<String, dynamic> : null;
-    final latestText = latestMessage?['text'] as String? ?? '';
+    final messages = asJsonList(json['messages']);
+    final latestMessage =
+        messages.isNotEmpty ? asJsonMap(messages.first) : const {};
+    final latestText = asJsonString(latestMessage['text']) ?? '';
 
     return ChatThreadModel(
       id: json['id'] ?? 0,
@@ -98,8 +100,8 @@ class ChatMessageModel {
   });
 
   factory ChatMessageModel.fromJson(Map<String, dynamic> json) {
-    final xprofile = json['xprofile'] as Map<String, dynamic>? ?? {};
-    final rawText = json['text'] as String? ?? '';
+    final xprofile = asJsonMap(json['xprofile']);
+    final rawText = asJsonString(json['text']) ?? '';
 
     return ChatMessageModel(
       id: json['id'] ?? 0,
