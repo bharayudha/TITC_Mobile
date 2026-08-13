@@ -381,6 +381,7 @@ class AuthService {
             'requires_2fa': true,
             'two_fa_token': twoFaToken,
             'cookies': allCookies,
+            'nonce': nonce,
             'message': 'Kode verifikasi telah dikirim ke email Anda.',
           };
         }
@@ -408,10 +409,20 @@ class AuthService {
   }
 
   /// Verifikasi kode 2FA dari Email untuk menyelesaikan pendaftaran.
+  ///
+  /// Server memvalidasi ulang seluruh field pendaftaran di step ini (bukan
+  /// cuma nonce + kode OTP) — di web, form OTP adalah form yang sama dengan
+  /// form registrasi awal (cuma disisipi field baru), jadi field lama tetap
+  /// ikut ter-submit. Tanpanya server menolak dengan "Username is not valid".
   static Future<Map<String, dynamic>> verifyRegistration2FA(
     String twoFaToken,
     String verificationCode,
     String cookies,
+    String nonce,
+    String fullName,
+    String email,
+    String username,
+    String password,
   ) async {
     try {
       final response = await _client.post(
@@ -425,6 +436,15 @@ class AuthService {
         },
         body: {
           'action': 'fcom_user_registration',
+          'full_name': fullName,
+          'email': email,
+          'username': username,
+          'password': password,
+          'conf_password': password,
+          'terms': 'on',
+          'register': 'yes',
+          '_fcom_signup_nonce': nonce,
+          'redirect_to': '/portal',
           '__two_fa_signed_token': twoFaToken,
           '_email_verification_code': verificationCode,
         },
@@ -438,9 +458,11 @@ class AuthService {
         final body = response.body;
         if (body.contains('redirect_url') ||
             allCookies.contains('wordpress_logged_in')) {
-          _cookies = allCookies;
-          _wpNonce = await _fetchRestNonce(allCookies);
-          await _storage.write(key: _cookiesKey, value: allCookies);
+          // Sengaja tidak menyimpan cookie/nonce di sini: berbeda dari
+          // login(), path ini tidak mengisi _userName/_userEmail atau
+          // mengambil profil, jadi kalau langsung dipakai masuk ke MainShell
+          // widget yang butuh data user akan crash. User diarahkan ke
+          // LoginScreen untuk login manual lewat login() yang lengkap.
           return {'success': true, 'message': 'Pendaftaran berhasil!'};
         }
 
@@ -548,6 +570,7 @@ class AuthService {
         final mergedCookies = _mergeCookies(allCookies, loginCookies);
         _cookies = mergedCookies;
         _wpNonce = null; // reset, jangan pakai nonce akun sebelumnya
+        _isAdminCache = null; // reset, jangan pakai status admin akun lama
         _userEmail = email;
         _userName = email.split('@').first; // Fallback username
         _userSlug = null;
@@ -579,8 +602,53 @@ class AuthService {
     }
   }
 
+  /// Cek apakah user yang sedang login adalah admin/manager komunitas
+  /// Fluent Community (BUKAN admin WordPress — role WP semua akun tetap
+  /// `subscriber`, dikonfirmasi dari respons `/wp/v2/users/me?context=edit`).
+  ///
+  /// `/wp-json/fluent-community/v2/admin/managers` adalah endpoint yang
+  /// dipakai halaman **Community Managers** (`/portal/admin/settings/
+  /// moderators` di web, dikonfirmasi lewat cURL DevTools user) — cuma bisa
+  /// diakses akun yang statusnya admin/manager komunitas. Non-admin
+  /// diharapkan ditolak (403/401), jadi status HTTP-nya sendiri sudah cukup
+  /// jadi penanda, tanpa perlu tahu skema/field permission yang persis.
+  ///
+  /// Hasilnya di-cache di memori (reset saat login/logout) supaya widget
+  /// yang sering dibuka ulang (mis. drawer) tidak memanggil network tiap
+  /// kali dibuka.
+  static bool? _isAdminCache;
+
+  static Future<bool> isCurrentUserAdmin() async {
+    if (_isAdminCache != null) return _isAdminCache!;
+    final cookies = _cookies;
+    if (cookies == null) return false;
+    final nonce = _wpNonce ?? await _fetchRestNonceWithRetry(cookies);
+    if (nonce == null) return false;
+    try {
+      final response = await _client
+          .get(
+            Uri.parse(
+              '$_baseUrl/wp-json/fluent-community/v2/admin/managers?page=1&per_page=1',
+            ),
+            headers: {
+              'Cookie': cookies,
+              'X-WP-Nonce': nonce,
+              'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
+              'Referer': 'https://titc.or.id/portal/',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+      final isAdmin = response.statusCode == 200;
+      _isAdminCache = isAdmin;
+      return isAdmin;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Logout: hapus cookies dan data user.
   static Future<void> logout() async {
+    _isAdminCache = null;
     _cookies = null;
     _wpNonce = null;
     _userEmail = null;
@@ -623,8 +691,12 @@ class AuthService {
 
   /// Extract nonce dari HTML form register Fluent Community.
   static String? _extractSignupNonce(String html) {
-    // Cari input hidden _fcom_signup_nonce
-    final regex = RegExp(r'name="_fcom_signup_nonce"\s+value="([^"]+)"');
+    // Cari input hidden _fcom_signup_nonce. Form register memakai kutip
+    // tunggal (name='_fcom_signup_nonce' value='...'), beda dari form login
+    // yang memakai kutip ganda — regex harus menerima keduanya.
+    final regex = RegExp(
+      '''name=['"]_fcom_signup_nonce['"]\\s+value=['"]([^'"]+)['"]''',
+    );
     final match = regex.firstMatch(html);
     return match?.group(1);
   }

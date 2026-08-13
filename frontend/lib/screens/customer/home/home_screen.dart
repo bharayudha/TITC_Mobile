@@ -137,9 +137,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Catatan URL yang mudah salah:
-  /// - Dua link pendaftaran memakai landing page Fluent Forms
-  ///   (`?ff_landing=`), bukan halaman biasa seperti `/toefl-itp`.
+  /// - Daftar Tes TOEFL ITP Resmi ETS memakai landing page Fluent Forms
+  ///   (`?ff_landing=21`), bukan halaman biasa seperti `/toefl-itp`.
   ///   Dikonfirmasi langsung oleh user.
+  /// - Daftar Preparation Test Online mengarah ke
+  ///   `/institutional-preparation-test/` (diubah dari `?ff_landing=15`).
   /// - Certificate Tracking mengarah ke `/certificate-distribution/`;
   ///   `/certificate-tracking/` tidak ada (404).
   static const List<_QuickLink> _quickLinks = [
@@ -151,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _QuickLink.page(
       '⚡',
       'Daftar Preparation Test Online',
-      'https://titc.or.id/?ff_landing=15',
+      'https://titc.or.id/institutional-preparation-test/',
     ),
     _QuickLink.page(
       '💻',

@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/screens/auth/signup_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/widgets/shared/whatsapp_help_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -82,10 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
-          Positioned(
+          const Positioned(
             right: 16,
             bottom: 16,
-            child: _buildChatBubble(),
+            child: WhatsAppHelpButton(),
           ),
         ],
       ),
@@ -339,19 +340,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildChatBubble() {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: const BoxDecoration(
-        color: Color(0xFF29B6F6),
-        shape: BoxShape.circle,
-      ),
-      child: const PhosphorIcon(
-        PhosphorIconsRegular.headset,
-        color: Colors.white,
-        size: 30,
-      ),
-    );
-  }
 }

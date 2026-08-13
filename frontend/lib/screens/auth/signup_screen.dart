@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-import 'package:magang_titc/screens/main_shell.dart';
+import 'package:magang_titc/screens/auth/login_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/widgets/shared/whatsapp_help_button.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -69,7 +70,11 @@ class _SignupScreenState extends State<SignupScreen> {
           setState(() {
             _isLoading = false;
           });
-          _show2FADialog(result['two_fa_token'], result['cookies']);
+          _show2FADialog(
+            result['two_fa_token'],
+            result['cookies'],
+            result['nonce'],
+          );
         } else {
           // Fallback if no 2FA
           ScaffoldMessenger.of(context).showSnackBar(
@@ -92,7 +97,11 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  Future<void> _show2FADialog(String twoFaToken, String cookies) async {
+  Future<void> _show2FADialog(
+    String twoFaToken,
+    String cookies,
+    String nonce,
+  ) async {
     final otpController = TextEditingController();
     bool isVerifying = false;
 
@@ -138,6 +147,11 @@ class _SignupScreenState extends State<SignupScreen> {
                             twoFaToken,
                             otpController.text.trim(),
                             cookies,
+                            nonce,
+                            _fullNameController.text.trim(),
+                            _emailController.text.trim(),
+                            _usernameController.text.trim(),
+                            _passwordController.text,
                           );
 
                           setStateDialog(() => isVerifying = false);
@@ -145,8 +159,16 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (!mounted) return;
                           if (res['success'] == true) {
                             Navigator.of(context).pop(); // Tutup dialog
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Pendaftaran berhasil! Silakan login.',
+                                ),
+                              ),
+                            );
                             Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(builder: (_) => const MainShell()),
+                              MaterialPageRoute(builder: (_) => const LoginScreen()),
                             );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -188,10 +210,10 @@ class _SignupScreenState extends State<SignupScreen> {
               ],
             ),
           ),
-          Positioned(
+          const Positioned(
             right: 16,
             bottom: 16,
-            child: _buildChatBubble(),
+            child: WhatsAppHelpButton(),
           ),
         ],
       ),
@@ -473,19 +495,4 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildChatBubble() {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: const BoxDecoration(
-        color: Color(0xFF29B6F6),
-        shape: BoxShape.circle,
-      ),
-      child: const PhosphorIcon(
-        PhosphorIconsRegular.headset,
-        color: Colors.white,
-        size: 30,
-      ),
-    );
-  }
 }

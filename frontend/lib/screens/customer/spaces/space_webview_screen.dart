@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/widgets/customer/admin_portal_drawer.dart';
 import 'package:magang_titc/widgets/customer/side_drawer.dart';
 import 'package:magang_titc/widgets/shared/top_app_bar.dart';
 import 'package:magang_titc/services/webview_cookie_helper.dart';
@@ -43,6 +44,11 @@ class SpaceWebViewScreen extends StatefulWidget {
   /// memfullscreen-kan modal komentar Element Plus.
   final String? extraCss;
 
+  /// Pakai [AdminPortalDrawer] (struktur Portal Settings/Course Management/
+  /// Reports) alih-alih [SideDrawer] member biasa. Dipakai untuk halaman
+  /// `/portal/admin/`.
+  final bool useAdminDrawer;
+
   const SpaceWebViewScreen({
     super.key,
     this.spaceSlug,
@@ -51,6 +57,7 @@ class SpaceWebViewScreen extends StatefulWidget {
     this.initialPath = 'home',
     this.overrideUrl,
     this.extraCss,
+    this.useAdminDrawer = false,
   }) : assert(
          spaceSlug != null || overrideUrl != null,
          'Harus isi spaceSlug atau overrideUrl',
@@ -63,6 +70,19 @@ class SpaceWebViewScreen extends StatefulWidget {
 class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
+
+  /// Label item sidebar admin yang di-highlight [AdminPortalDrawer].
+  ///
+  /// Sempat dicoba dideteksi dari DOM (class `is-active`/`router-link-
+  /// active` dsb.), tapi ternyata setiap item sidebar admin punya class
+  /// statis unik per item (`settings_inner_menu_customization`, dst) yang
+  /// TIDAK PERNAH berubah — bukan penanda status aktif. Web tidak
+  /// menyediakan cara yang bisa diandalkan untuk membaca item aktif dari
+  /// luar. Jadi dilacak dari tap terakhir di drawer sendiri — kita yang
+  /// memicu navigasinya, jadi sudah pasti tahu item mana yang aktif tanpa
+  /// perlu menebak dari DOM. "General" jadi default awal karena itu
+  /// halaman yang dimuat pertama kali saat masuk `/portal/admin/`.
+  String? _activeAdminLabel;
 
   String get _targetUrl =>
       widget.overrideUrl ??
@@ -456,6 +476,7 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.useAdminDrawer) _activeAdminLabel = 'General';
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(
@@ -504,7 +525,6 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
     _initCookiesAndLoad();
   }
 
-
   Future<void> _initCookiesAndLoad() async {
     final hasCookies = await WebViewCookieHelper.setupCookies();
     final cookiesString = AuthService.cookies;
@@ -545,7 +565,14 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       appBar: const TitcAppBar(),
       // Wajib ada: hamburger di TitcAppBar memanggil Scaffold.of().openDrawer(),
       // yang tidak berbuat apa-apa kalau Scaffold-nya tidak punya drawer.
-      drawer: const SideDrawer(),
+      drawer: widget.useAdminDrawer
+          ? AdminPortalDrawer(
+              controller: _controller,
+              activeLabel: _activeAdminLabel,
+              onItemSelected: (label) =>
+                  setState(() => _activeAdminLabel = label),
+            )
+          : const SideDrawer(),
       body: Stack(
         children: [
           Opacity(

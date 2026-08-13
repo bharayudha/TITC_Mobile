@@ -3,9 +3,9 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/constants/app_text_styles.dart';
+import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
+import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/portal_navigator.dart';
-
-const Color _dangerColor = Color(0xFFE53935);
 
 /// Versi drawer dengan ikon emoji: tampilannya mengikuti font emoji bawaan
 /// perangkat (Noto di Android, Apple Color Emoji di iOS).
@@ -51,20 +51,27 @@ class SideDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            const AppDivider(),
-            // Settings & Logout pakai ikon vektor: keduanya aksi sistem,
-            // bukan item konten, dan warnanya perlu bisa diatur.
-            const SizedBox(height: 4),
-            _buildIconItem(
-              icon: PhosphorIconsRegular.gear,
-              label: 'Settings',
+            // Settings hanya untuk admin, jadi FutureBuilder-nya bisa saja
+            // tidak merender apa pun — divider & spacing ikut di dalam
+            // builder supaya user biasa tidak melihat ruang kosong ganjil.
+            FutureBuilder<bool>(
+              future: AuthService.isCurrentUserAdmin(),
+              builder: (context, snapshot) {
+                if (snapshot.data != true) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    const AppDivider(),
+                    const SizedBox(height: 4),
+                    _buildIconItem(
+                      icon: PhosphorIconsRegular.gear,
+                      label: 'Settings',
+                      onTap: () => _openAdminPortal(context),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                );
+              },
             ),
-            _buildIconItem(
-              icon: PhosphorIconsRegular.signOut,
-              label: 'Logout',
-              color: _dangerColor,
-            ),
-            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -189,11 +196,57 @@ class SideDrawer extends StatelessWidget {
     required IconData icon,
     required String label,
     Color color = Colors.black87,
+    VoidCallback? onTap,
   }) {
     return _buildTile(
       leading: Center(child: PhosphorIcon(icon, color: color, size: 20)),
       label: label,
       labelColor: color,
+      onTap: onTap,
+    );
+  }
+
+  /// CSS dasar SpaceWebViewScreen menyembunyikan `.spaces` & `.space_contents`
+  /// karena di halaman Space/Course itu adalah daftar Space kiri yang
+  /// memang harus disembunyikan demi tampilan native. Tapi di
+  /// `/portal/admin/`, sidebar "Portal Settings" (General, Managers, dst)
+  /// ternyata dirender DI DALAM `.space_contents`/`.spaces` yang sama
+  /// (dikonfirmasi lewat probe DOM: `H4 < DIV.fcom_admin_menu < DIV <
+  /// DIV.space_contents < DIV.spaces` — bukan `aside.el-aside` seperti
+  /// dugaan awal). Selector di sini disamakan persis dengan aturan dasarnya
+  /// supaya spesifisitasnya sama — override yang datang belakangan baru
+  /// menang kalau spesifisitasnya minimal setara, bukan cuma soal urutan.
+  static const String _adminSidebarCss = '''
+    .spaces, .space_contents {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      position: static !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      float: none !important;
+      margin: 0 !important;
+      padding: 8px 0 !important;
+      box-sizing: border-box !important;
+    }
+  ''';
+
+  /// Buka portal admin Fluent Community (`/portal/admin/`). Dipakai key
+  /// SpaceWebViewScreen yang sama dengan Space/Course lain supaya shell
+  /// CSS/JS-nya (yang sudah diverifikasi DOM) ikut berlaku di sini.
+  void _openAdminPortal(BuildContext context) {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => const SpaceWebViewScreen(
+          title: 'Admin',
+          overrideUrl: 'https://titc.or.id/portal/admin/',
+          extraCss: _adminSidebarCss,
+          useAdminDrawer: true,
+        ),
+      ),
     );
   }
 

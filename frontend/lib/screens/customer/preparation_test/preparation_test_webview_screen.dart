@@ -4,7 +4,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:magang_titc/constants/app_colors.dart';
 
 const String preparationTestUrl =
-    'https://titc.or.id/preparation-test-athority-dydfdh353536sfjsfsfywff90adajqadahsafaf835jc7fsisnfhgsjsgd/';
+    'https://titc.or.id/institutional-preparation-test/';
 
 class PreparationTestWebviewScreen extends StatefulWidget {
   const PreparationTestWebviewScreen({super.key});
