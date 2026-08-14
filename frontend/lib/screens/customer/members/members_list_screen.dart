@@ -9,6 +9,7 @@ import 'package:magang_titc/widgets/shared/admin_only.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/constants/app_colors.dart';
+import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const Color _kAccent = Color(0xFF1E5AF5);
@@ -298,96 +299,197 @@ class _MembersListScreenState extends State<MembersListScreen> {
   }
 
   Widget _buildMemberCard(MemberModel member) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildAvatar(member),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member.displayName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (member.username.isNotEmpty) ...[
-                      const SizedBox(height: 2),
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: member.username.isNotEmpty
+          ? () => _openMemberProfile(member)
+          : null,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildAvatar(member),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        '@${member.username}',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
+                        member.displayName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Colors.black87,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (member.username.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '@${member.username}',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      _buildMetaLine(member),
                     ],
-                    const SizedBox(height: 4),
-                    _buildMetaLine(member),
-                  ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildFollowButton(member),
+              ],
+            ),
+            if (member.bio.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                member.bio.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontSize: 13,
+                  height: 1.4,
                 ),
               ),
-              const SizedBox(width: 8),
-              _buildFollowButton(member),
             ],
-          ),
-          if (member.bio.trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              member.bio.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-          ],
-          if (member.socialLinks.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                for (final entry in member.socialLinks.entries)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () => _openSocialLink(entry.key, entry.value),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: PhosphorIcon(
-                          _socialIcon(entry.key),
-                          size: 18,
-                          color: Colors.grey.shade600,
+            if (member.socialLinks.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  for (final entry in member.socialLinks.entries)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () => _openSocialLink(entry.key, entry.value),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: PhosphorIcon(
+                            _socialIcon(entry.key),
+                            size: 18,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
+
+  /// Buka profil member di WebView — URL profil FCOM: `/portal/u/{username}`.
+  /// Pakai AuthenticatedWebViewScreen agar CSS-nya tidak menyembunyikan
+  /// nav-tab profil (About/Posts/Spaces/Courses) yang di SpaceWebViewScreen
+  /// ikut ter-hidden bersama `.fcom_desktop_only`.
+  void _openMemberProfile(MemberModel member) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AuthenticatedWebViewScreen(
+          title: member.displayName,
+          url: 'https://titc.or.id/portal/u/${member.username}',
+          extraCss: _memberProfileCss,
+        ),
+      ),
+    );
+  }
+
+  /// CSS khusus halaman profil member di Fluent Community.
+  /// Menyembunyikan top-nav FCOM, sidebar kiri, footer WP,
+  /// tapi MEMPERTAHANKAN tab profil (About/Posts/Spaces/Courses)
+  /// dan kolom konten utama agar dapat di-scroll dan diklik.
+  static const String _memberProfileCss = '''
+    /* Sembunyikan top-nav FCOM */
+    .fcom_top_menu, .fcom_mobile_menu, .fcom_space_opener_btn {
+      display: none !important;
+    }
+    /* Sembunyikan sidebar kiri (daftar spaces) */
+    .spaces, .space_contents, #fluent_community_sidebar_menu,
+    .fcom_sidebar_wrap, .fcom_side_footer, .space_opener,
+    aside.el-aside:not(.fcom_resp_side) {
+      display: none !important;
+      width: 0 !important;
+    }
+    /* Sembunyikan header & footer WordPress */
+    header, .site-header, #masthead, footer, .site-footer,
+    #colophon, .bb-mobile-panel, .bb-mobile-header {
+      display: none !important;
+    }
+    /* Hapus padding-top sisa dari top-menu yang sudah disembunyikan */
+    body {
+      padding-top: 0 !important;
+      margin-top: 0 !important;
+      overflow-x: hidden !important;
+      background: #f5f6f8 !important;
+    }
+    /* Buat semua wrapper jadi full-width */
+    .fcom_wrap, .fluent_com, .fhr_content, #fluent_comminity_body, .fhr_wrap {
+      max-width: 100% !important;
+      width: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      box-sizing: border-box !important;
+    }
+    .el-container {
+      display: flex !important;
+      flex-direction: column !important;
+      width: 100% !important;
+    }
+    .el-main {
+      width: 100% !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+    /* Profil: banner foto cover */
+    .fcom_cover_photo_wrap {
+      width: 100% !important;
+      max-height: 160px !important;
+      overflow: hidden !important;
+    }
+    /* Konten profil utama */
+    .fcom_profile_wrap, .fcom_profile_content {
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 0 12px 80px !important;
+      box-sizing: border-box !important;
+    }
+    /* Tab navigasi profil (About/Posts/Spaces/Courses) — JANGAN disembunyikan */
+    .fcom_profile_nav, .fcom_profile_tabs, .fcom-tabs {
+      display: flex !important;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+    /* Kembalikan button ke inline agar tombol Follow/Message tidak full-width */
+    button {
+      width: auto !important;
+      display: inline-flex !important;
+      margin-top: 0 !important;
+    }
+    /* Right sidebar (Recent Activities) tampil di bawah konten utama */
+    .fcom_resp_side, aside.fcom_resp_side {
+      display: block !important;
+      width: 100% !important;
+    }
+  ''';
 
   /// Baris "Joined 2 months ago • Last seen 2 minutes ago" seperti di web.
   Widget _buildMetaLine(MemberModel member) {
@@ -683,56 +785,49 @@ class _MembersListScreenState extends State<MembersListScreen> {
     );
   }
 
-  /// Baris filter status member, khusus admin/manager komunitas — dipakai
-  /// untuk menyaring anggota yang masih Pending persetujuan atau yang
-  /// di-Blokir, sesuatu yang cuma relevan buat yang mengelola komunitas.
-  /// Nilai chip harus persis sama dengan yang dikirim ke server (lihat
-  /// `ApiService.fetchMembers`).
+  /// Dropdown filter status member — hanya tampil untuk admin
+  /// (dibungkus [AdminOnly] di [_buildHeader]).
+  /// Nilai string cocok dengan parameter `status` di [ApiService.fetchMembers].
   Widget _buildStatusFilterRow() {
     const options = <(String, String)>[
-      ('', 'All'),
+      ('', 'All Members'),
       ('active', 'Active'),
       ('pending', 'Pending'),
       ('blocked', 'Blocked'),
     ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      reverse: true, // Supaya kalau panjang, ujung kanannya yang merapat ke kanan
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (value, label) in options) ...[
-            _buildStatusChip(value: value, label: label),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
 
-  Widget _buildStatusChip({required String value, required String label}) {
-    final selected = _statusFilter == value;
-    return GestureDetector(
-      onTap: () => _onStatusFilterChanged(value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF1FF) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? _kAccent : Colors.grey.shade300,
-          ),
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: _statusFilter,
+        isDense: true,
+        icon: const Icon(Icons.arrow_drop_down, size: 18),
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: _kAccent,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? _kAccent : Colors.black54,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
-        ),
+        selectedItemBuilder: (_) => [
+          for (final (_, label) in options)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _kAccent,
+                ),
+              ),
+            ),
+        ],
+        items: [
+          for (final (value, label) in options)
+            DropdownMenuItem<String>(
+              value: value,
+              child: Text(label),
+            ),
+        ],
+        onChanged: (v) => _onStatusFilterChanged(v ?? ''),
       ),
     );
   }
