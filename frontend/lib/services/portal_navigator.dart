@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:magang_titc/models/course_model.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 import 'package:magang_titc/services/api_service.dart';
 
@@ -129,6 +130,24 @@ class PortalNavigator {
       ),
     );
   }
+
+  /// Cari course untuk keperluan TAMPILAN — mis. menentukan ikon gembok di
+  /// drawer, meniru web yang menandai kelas yang belum bisa diakses.
+  ///
+  /// Sengaja memakai [_findByTitle] yang sama dengan [openCourseByTitle],
+  /// bukan pencocokan sendiri di sisi UI. Kalau aturannya disalin ulang,
+  /// suatu saat keduanya pasti melenceng — dan gembok yang tidak cocok
+  /// dengan apa yang terjadi saat ditekan lebih membingungkan daripada
+  /// tidak ada gembok sama sekali.
+  ///
+  /// Mengembalikan `null` kalau [courses] belum termuat atau judulnya tidak
+  /// ketemu; pemanggil harus memperlakukan itu sebagai "belum tahu",
+  /// **bukan** "terkunci".
+  static CourseModel? findCourseByTitle(
+    List<CourseModel>? courses,
+    String title,
+  ) =>
+      _findByTitle(courses, title, (c) => c.title);
 
   static void _notify(ScaffoldMessengerState messenger, String message) {
     messenger.showSnackBar(
