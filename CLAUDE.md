@@ -768,3 +768,156 @@ Rencana di bawah ini (dulu "dibatalkan agar tidak merusak stabilitas") **sudah d
 .../feeds/{id}/react` benar-benar unlike (poin 3) — kalau ternyata salah,
 tap kedua pada like akan terlihat "gagal" (snackbar merah) lalu balik ke
 status liked, bukan crash.
+
+---
+
+## Track Record — 14–15 Agustus 2026
+
+### Commit yang Terlibat
+- `3120a67` — `fix space dan courses admin`
+- `ebf3819` — `fix members`
+
+---
+
+### Masalah 1 — Fitur "New Course" (tombol admin di tab Courses)
+
+**Masalah:** Belum ada tombol "New Course" untuk admin di halaman Courses.
+Klik tombol membuka halaman yang salah (admin panel root `/portal/admin/`)
+sehingga user bingung.
+
+**Investigasi:** Dilakukan analisis DOM langsung ke `https://titc.or.id/portal/courses`
+dengan login akun admin (`fahrurrizqi544@gmail.com`). Ditemukan bahwa tombol
+"New Course" di website adalah `button.fcom_primary_button` yang ketika diklik
+membuka sebuah **`el-drawer`** (bukan `el-dialog`) dari sisi kanan layar.
+
+**Solusi:**
+- Tombol "New Course" ditambahkan di header `courses_list_screen.dart` dibungkus
+  widget `AdminOnly` sehingga hanya muncul saat login sebagai admin.
+- Klik tombol membuka `AuthenticatedWebViewScreen` dengan `url: 'https://titc.or.id/portal/courses'`
+  dan `autoClickText: 'New Course'`. `WebViewClickHelper.clickElementByText` otomatis
+  mencari tombol berteks "New Course" di halaman lalu `.click()` dengan retry hingga 8×.
+- CSS `_courseSpaceDrawerCss` ditambahkan via `extraCss` untuk memaksa `.el-drawer`
+  menjadi fullscreen (`width: 100%`) agar pas di layar HP.
+- Data langsung tersimpan ke server karena user berinteraksi dengan form asli website
+  melalui WebView (real-time, tanpa duplikasi logic).
+
+**File diubah:** `lib/screens/customer/courses/courses_list_screen.dart`
+
+---
+
+### Masalah 2 — Fitur "New Space" (tombol admin di tab Spaces)
+
+**Masalah:** Tombol "New Space" sudah ada di UI tapi tidak berfungsi — halaman
+tidak tampil apa-apa atau masuk ke halaman yang salah.
+
+**Investigasi:** URL yang dipakai adalah `/portal/spaces` (tidak ada). URL yang benar
+adalah `/portal/discover/spaces`. Selain itu CSS lama menargetkan `.el-dialog`
+padahal setelah klik "New Space" yang muncul adalah **`.el-drawer`** (dikonfirmasi
+dari screenshot DOM langsung di browser).
+
+**Solusi:**
+- URL diperbaiki dari `/portal/spaces` → `/portal/discover/spaces`.
+- `_openNewSpace` di `spaces_list_screen.dart` menggunakan `AuthenticatedWebViewScreen`
+  dengan `autoClickText: 'New Space'`.
+- CSS `_newSpaceExtraCss` diubah dari menargetkan `.el-dialog` menjadi `.el-drawer`
+  dengan `width: 100%; height: 100vh` agar drawer "Choose a Space Type" tampil penuh.
+
+**File diubah:** `lib/screens/customer/spaces/spaces_list_screen.dart`
+
+---
+
+### Masalah 3 — Fitur "View Space Groups" (menu ⋮ di tab Spaces)
+
+**Masalah:** Menu titik tiga (⋮) di samping tombol "New Space" perlu menampilkan
+opsi "View Space Groups".
+
+**Solusi:**
+- Menu ⋮ menggunakan `PopupMenuButton` di `spaces_list_screen.dart`, dibungkus `AdminOnly`.
+- Klik "View Space Groups" membuka `SpaceWebViewScreen` dengan `useAdminDrawer: true`
+  dan `initialAdminLabel: 'Space Groups'` sehingga langsung masuk ke halaman
+  Space Groups di panel admin Fluent Community.
+- Sudah berfungsi dan tidak diubah lagi setelah bekerja.
+
+**File diubah:** `lib/screens/customer/spaces/spaces_list_screen.dart`
+
+---
+
+### Masalah 4 — Filter Active/Pending/Blocked (tab Members) terlalu memakan tempat
+
+**Masalah:** Filter status member (All/Active/Pending/Blocked) ditampilkan sebagai
+deretan chip horizontal yang bisa di-scroll. Di layar HP kecil, chip ini memakan
+banyak ruang di sebelah judul section dan terasa tidak ergonomis.
+
+**Solusi:**
+- Widget `_buildStatusFilterRow` diubah dari `SingleChildScrollView` + deretan chip
+  menjadi `DropdownButtonHideUnderline` + `DropdownButton<String>`.
+- Dropdown ringkas, teks berwarna aksen biru, dan dipasang di dalam `AdminOnly`
+  sehingga tetap hanya muncul untuk admin.
+- Logika filter (`_onStatusFilterChanged` → `_loadFirstPage`) tidak berubah sama sekali.
+
+**File diubah:** `lib/screens/customer/members/members_list_screen.dart`
+
+---
+
+### Masalah 5 — Klik nama member tidak melakukan apa-apa
+
+**Masalah:** Di daftar member, mengetuk kartu member (nama/avatar/bio) tidak
+menavigasi ke profil member. Profil tidak bisa dibuka sama sekali dari tab Members.
+
+**Solusi:**
+- Widget `_buildMemberCard` dibungkus dengan `InkWell` (ripple effect) dengan
+  `onTap: () => _openMemberProfile(member)`.
+- `_openMemberProfile` membuka `AuthenticatedWebViewScreen` dengan URL
+  `https://titc.or.id/portal/u/{member.username}`.
+
+**File diubah:** `lib/screens/customer/members/members_list_screen.dart`
+
+---
+
+### Masalah 6 — Tampilan halaman profil member "aneh" di WebView
+
+**Masalah:** Setelah klik member, halaman profil terbuka tapi tampilannya aneh:
+tab navigasi profil (About/Posts/Spaces/Courses/Comments) hilang, tombol
+Follow/Message menjadi penuh lebar layar (tidak normal).
+
+**Investigasi:**
+- Profil awalnya dibuka dengan `SpaceWebViewScreen` yang punya aturan CSS
+  `nav.fcom_desktop_only { display: none !important }`. Di halaman Space biasa,
+  selector ini menyembunyikan navigasi tab ruang-space (benar). Namun di halaman
+  profil (`/portal/u/{username}`), class `fcom_desktop_only` juga dipakai pada
+  **tab navigasi profil** — sehingga tab About/Posts/Spaces/Courses ikut tersembunyi.
+- `AuthenticatedWebViewScreen` (CSS base) memaksa semua `button { width: 100%; display: block }`
+  yang merusak tombol Follow/Message.
+
+**Solusi:**
+- Ganti `SpaceWebViewScreen` → `AuthenticatedWebViewScreen` dengan CSS kustom
+  `_memberProfileCss` yang:
+  - Menyembunyikan: `.fcom_top_menu`, sidebar kiri (`.spaces`, `.fcom_sidebar_wrap`),
+    header & footer WordPress — sama seperti SpaceWebViewScreen.
+  - **Tidak** menyembunyikan tab profil: selector `nav.fcom_desktop_only` TIDAK
+    dimasukkan ke CSS, sehingga tab About/Posts/dll tetap tampil.
+  - Override tombol: `button { width: auto !important; display: inline-flex !important }`
+    membalik paksa CSS base AuthenticatedWebViewScreen agar Follow/Message normal.
+  - Konten profil: `.fcom_profile_wrap` diberi `padding: 0 12px 80px` agar ada
+    jarak bawah (tidak tertutup bottom nav Flutter).
+- Semua fitur profil (Follow, Message, tab Posts, Courses, dll) berfungsi penuh
+  dan real-time karena user berinteraksi langsung dengan website asli melalui WebView.
+
+**File diubah:** `lib/screens/customer/members/members_list_screen.dart`
+
+---
+
+### Catatan Teknis Tambahan (14–15 Agt 2026)
+
+- **`AdminOnly` widget** (`lib/widgets/shared/admin_only.dart`) dibuat baru: menampilkan
+  child hanya jika `AuthService.isCurrentUserAdmin()` mengembalikan `true`.
+- **`AuthService.isCurrentUserAdmin`** sementara di-hardcode mengenali email
+  `fahrurrizqi544@gmail.com` sebagai admin karena endpoint `/admin/managers` FCOM
+  mengembalikan 401 untuk akun tersebut meskipun punya hak admin WordPress.
+- **`WebViewClickHelper`** (`lib/services/webview_click_helper.dart`) dibuat baru:
+  utility statis untuk meng-klik elemen web berdasarkan teks dengan retry 8× (jeda
+  300ms tiap percobaan) — dipakai oleh New Course dan New Space.
+- **`AdminActionWebViewScreen`** (`lib/screens/customer/admin/admin_action_webview_screen.dart`)
+  dibuat sebagai generik WebView admin, namun akhirnya tidak dipakai untuk New Course
+  dan New Space (diganti `AuthenticatedWebViewScreen` + `extraCss` yang lebih fleksibel).
+  File tetap ada untuk keperluan di masa depan.
