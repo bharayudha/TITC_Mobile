@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:magang_titc/models/member_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/widgets/shared/admin_only.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/constants/app_colors.dart';
@@ -41,6 +42,10 @@ class _MembersListScreenState extends State<MembersListScreen> {
   String _searchQuery = '';
   Timer? _searchDebounce;
 
+  /// Filter Active/Pending/Blocked, khusus admin — lihat [_buildStatusFilter].
+  /// Kosong berarti semua status, sama seperti sebelum filter ini ada.
+  String _statusFilter = '';
+
   @override
   void initState() {
     super.initState();
@@ -73,7 +78,11 @@ class _MembersListScreenState extends State<MembersListScreen> {
     });
 
     try {
-      final page = await ApiService.fetchMembers(search: _searchQuery, page: 1);
+      final page = await ApiService.fetchMembers(
+        search: _searchQuery,
+        page: 1,
+        status: _statusFilter,
+      );
       if (!mounted) return;
       setState(() {
         _members
@@ -98,8 +107,11 @@ class _MembersListScreenState extends State<MembersListScreen> {
     setState(() => _isLoadingMore = true);
 
     try {
-      final page =
-          await ApiService.fetchMembers(search: _searchQuery, page: _nextPage);
+      final page = await ApiService.fetchMembers(
+        search: _searchQuery,
+        page: _nextPage,
+        status: _statusFilter,
+      );
       if (!mounted) return;
       setState(() {
         _members.addAll(page.members);
@@ -126,6 +138,12 @@ class _MembersListScreenState extends State<MembersListScreen> {
       setState(() => _searchQuery = value.trim());
       _loadFirstPage();
     });
+  }
+
+  void _onStatusFilterChanged(String status) {
+    if (status == _statusFilter) return;
+    setState(() => _statusFilter = status);
+    _loadFirstPage();
   }
 
   Future<void> _onFollowPressed(MemberModel member) async {
@@ -183,7 +201,19 @@ class _MembersListScreenState extends State<MembersListScreen> {
     final title = _total > 0
         ? 'All Members (${_formatCount(_total)})'
         : 'All Members';
-    return SectionHeader(title: title);
+    return SectionHeader(
+      title: title,
+      trailing: Flexible(
+        child: AdminOnly(
+          builder: (context) => Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Flexible(child: _buildStatusFilterRow()),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   static String _formatCount(int value) {
@@ -647,7 +677,62 @@ class _MembersListScreenState extends State<MembersListScreen> {
               ),
             ],
           ),
+          // Filter status member dipindah ke SectionHeader (Top Tabs)
         ],
+      ),
+    );
+  }
+
+  /// Baris filter status member, khusus admin/manager komunitas — dipakai
+  /// untuk menyaring anggota yang masih Pending persetujuan atau yang
+  /// di-Blokir, sesuatu yang cuma relevan buat yang mengelola komunitas.
+  /// Nilai chip harus persis sama dengan yang dikirim ke server (lihat
+  /// `ApiService.fetchMembers`).
+  Widget _buildStatusFilterRow() {
+    const options = <(String, String)>[
+      ('', 'All'),
+      ('active', 'Active'),
+      ('pending', 'Pending'),
+      ('blocked', 'Blocked'),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      reverse: true, // Supaya kalau panjang, ujung kanannya yang merapat ke kanan
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (value, label) in options) ...[
+            _buildStatusChip(value: value, label: label),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip({required String value, required String label}) {
+    final selected = _statusFilter == value;
+    return GestureDetector(
+      onTap: () => _onStatusFilterChanged(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAF1FF) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? _kAccent : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? _kAccent : Colors.black54,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }

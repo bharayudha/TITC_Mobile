@@ -36,12 +36,35 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<ActivityModel> _activities = [];
   final ScrollController _scrollController = ScrollController();
 
-  /// Feed yang di-like OLEH USER di sesi ini, dipakai untuk optimistic UI
-  /// update tombol Like — lihat [_toggleLike]. `/feeds` tidak mengembalikan
-  /// status "sudah di-like atau belum" per user, jadi status awal semua
-  /// item selalu dianggap belum di-like (sama seperti tampilan awal
-  /// sebelumnya, bukan regresi).
+  /// Feed yang tampil ter-like, dipakai untuk optimistic UI update tombol
+  /// Like — lihat [_toggleLike]. Diisi dari DUA sumber:
+  ///
+  /// 1. Cache lokal persisten ([_seedLikedFromLocalCache],
+  ///    `ApiService.getLikedFeedIdsCache`) — sumber UTAMA & yang paling bisa
+  ///    diandalkan, karena field "sudah di-like" dari server (`/feeds`)
+  ///    belum diketahui namanya dan ternyata tidak konsisten. Inilah yang
+  ///    membuat status like tetap benar setelah hot restart.
+  /// 2. `ActivityModel.isLikedByMe` dari server ([_seedLikedFromServer]) —
+  ///    sumber TAMBAHAN, berguna kalau field-nya kebetulan cocok atau akun
+  ///    yang sama login di perangkat lain (cache lokal tidak ikut).
   final Set<int> _likedFeedIds = {};
+
+  /// Tandai feed yang tersimpan LOKAL di perangkat sebagai sudah di-like —
+  /// lihat catatan lengkap di [_likedFeedIds]. Dipanggil sekali di
+  /// [initState], berjalan independen dari pemuatan feed itu sendiri.
+  Future<void> _seedLikedFromLocalCache() async {
+    final ids = await ApiService.getLikedFeedIdsCache();
+    if (!mounted || ids.isEmpty) return;
+    setState(() => _likedFeedIds.addAll(ids));
+  }
+
+  /// Tandai feed yang menurut SERVER sudah di-like user saat ini. Dipanggil
+  /// setiap kali daftar feed baru masuk (initial load, refresh, load more).
+  void _seedLikedFromServer(List<ActivityModel> activities) {
+    for (final activity in activities) {
+      if (activity.isLikedByMe) _likedFeedIds.add(activity.id);
+    }
+  }
 
   bool _isLoadingFirstPage = true;
   bool _isLoadingMore = false;
@@ -53,11 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _seedLikedFromLocalCache();
     final cached = ApiService.cachedActivities;
     if (cached != null) {
       // Tampilkan data lama dulu supaya tidak loading dari nol tiap kali
       // tab ini dibuka lagi, lalu diam-diam refresh di belakang layar.
       _activities.addAll(cached);
+      _seedLikedFromServer(cached);
       _isLoadingFirstPage = false;
       _nextPage = 2;
       ApiService.fetchActivities().then((fresh) {
@@ -66,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _activities
             ..clear()
             ..addAll(fresh);
+          _seedLikedFromServer(fresh);
           _nextPage = 2;
           _hasMore = fresh.length >= ApiService.feedsPerPage;
         });
@@ -103,6 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _activities
           ..clear()
           ..addAll(page);
+        _seedLikedFromServer(page);
         _nextPage = 2;
         _hasMore = page.length >= ApiService.feedsPerPage;
         _isLoadingFirstPage = false;
@@ -124,6 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _activities.addAll(page);
+        _seedLikedFromServer(page);
         _nextPage += 1;
         _hasMore = page.length >= ApiService.feedsPerPage;
         _isLoadingMore = false;

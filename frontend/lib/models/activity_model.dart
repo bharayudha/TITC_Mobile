@@ -16,6 +16,15 @@ class ActivityModel {
   final String? linkPreviewTitle;
   final String? linkPreviewDescription;
 
+  /// Status "sudah di-like oleh user saat ini" menurut SERVER — dipakai untuk
+  /// mengisi status Like yang benar saat feed pertama kali dimuat/di-refresh
+  /// (mis. setelah hot restart), bukan cuma mengandalkan tap lokal yang
+  /// hilang begitu app ditutup. Field aslinya belum terverifikasi lewat
+  /// DevTools, jadi dicoba beberapa nama yang lazim dipakai FCOM (lihat
+  /// `_parseIsLikedByMe`) — kalau tidak ada yang cocok, defaultnya `false`,
+  /// sama seperti sebelum field ini ada (bukan regresi).
+  final bool isLikedByMe;
+
   ActivityModel({
     required this.id,
     required this.authorName,
@@ -30,6 +39,7 @@ class ActivityModel {
     this.linkPreviewUrl,
     this.linkPreviewTitle,
     this.linkPreviewDescription,
+    this.isLikedByMe = false,
   });
 
   /// Factory dari JSON response Fluent Community `/feeds`.
@@ -76,6 +86,38 @@ class ActivityModel {
       linkPreviewUrl: linkUrl,
       linkPreviewTitle: linkTitle,
       linkPreviewDescription: linkDesc,
+      isLikedByMe: _parseIsLikedByMe(json),
     );
+  }
+
+  /// Coba beberapa nama field yang lazim dipakai FCOM untuk menandai reaksi
+  /// user saat ini pada satu item feed. Lihat catatan di [isLikedByMe].
+  static bool _parseIsLikedByMe(Map<String, dynamic> json) {
+    for (final key in [
+      'is_liked',
+      'has_liked',
+      'is_reacted',
+      'has_reacted',
+      'user_has_reacted',
+      'reacted_by_me',
+      'is_liked_by_me',
+      'has_user_reacted',
+    ]) {
+      final value = json[key];
+      if (value == true || value == 1 || value == '1') return true;
+    }
+
+    final userReactions = json['user_reactions'];
+    if (userReactions is List &&
+        userReactions.any((r) => '$r'.toLowerCase() == 'like')) {
+      return true;
+    }
+
+    final myReaction = json['my_reaction'] ?? json['user_reaction'];
+    if (myReaction is String && myReaction.toLowerCase() == 'like') {
+      return true;
+    }
+
+    return false;
   }
 }

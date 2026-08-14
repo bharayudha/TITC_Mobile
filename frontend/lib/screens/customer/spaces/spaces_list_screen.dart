@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:magang_titc/models/space_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/widgets/shared/admin_only.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
+import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 
 /// Konten tab Spaces. App bar, drawer, chat FAB, dan bottom nav dipasang oleh
 /// [MainShell].
@@ -450,11 +452,136 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
     return SectionHeader(
       title: 'Spaces',
       trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           _buildFilterChip('All Spaces', selected: _showAllSpaces),
           const SizedBox(width: 8),
           _buildFilterChip('My Spaces', selected: !_showAllSpaces),
+          // "+ New Space" dan menu "⋮" cuma untuk admin/manager komunitas —
+          // AdminOnly merender SizedBox.shrink untuk user biasa, jadi tidak
+          // ada perubahan tampilan sama sekali buat mereka.
+          AdminOnly(
+            builder: (context) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: _openNewSpace,
+                  icon: const PhosphorIcon(PhosphorIconsRegular.plusCircle, color: Color(0xFF1E5AF5)),
+                  tooltip: 'New Space',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Menu',
+                  icon: const PhosphorIcon(PhosphorIconsRegular.dotsThreeVertical, color: Colors.black54),
+                  padding: EdgeInsets.zero,
+                  onSelected: (value) {
+                    if (value == 'space_groups') _openSpaceGroups();
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'space_groups',
+                      child: Text('View Space Groups'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  /// Buka halaman spaces di portal web, lalu otomatis klik tombol "New
+  /// Space" asli milik web (lewat `autoClickText`) — persis pola yang sama
+  /// dipakai navigasi sidebar admin di `AdminPortalDrawer`, hanya saja
+  /// tombol ini letaknya di toolbar halaman, bukan di sidebar. Modal "Choose
+  /// a Space Type" → form pembuatan yang muncul sesudahnya adalah modal ASLI
+  /// dari web, bukan tebakan/form buatan sendiri, jadi apa pun yang dipilih
+  /// user di sana benar-benar tersimpan di server.
+  ///
+  /// Dipakai [AuthenticatedWebViewScreen], BUKAN [SpaceWebViewScreen] —
+  /// percobaan pertama pakai SpaceWebViewScreen ternyata salah: CSS
+  /// dasarnya didesain untuk halaman DETAIL satu space (menyembunyikan
+  /// `.spaces`/`.space_contents` sebagai "sidebar daftar space"), padahal di
+  /// halaman LISTING seperti ini, `.spaces`/`.space_contents` kemungkinan
+  /// besar justru KONTEN UTAMANYA sendiri — jadi seluruh halaman ikut
+  /// tersembunyi, bukan cuma sidebar. `AuthenticatedWebViewScreen` tidak
+  /// menyentuh class itu sama sekali, jadi jauh lebih aman untuk halaman ini.
+  void _openNewSpace() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AuthenticatedWebViewScreen(
+          title: 'New Space',
+          url: 'https://titc.or.id/portal/discover/spaces',
+          autoClickText: 'New Space',
+          extraCss: _newSpaceExtraCss,
+        ),
+      ),
+    );
+  }
+
+  /// Drawer Element Plus (el-drawer) dari kanan muncul saat "New Space" diklik.
+  /// CSS memaksa drawer memenuhi lebar layar — kalau tidak, di HP hanya
+  /// tampil 30-50% dan elemen form terpotong.
+  static const String _newSpaceExtraCss = '''
+    /* Overlay tidak perlu transparan untuk drawer — biarkan default gelap */
+    .el-overlay {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 2000 !important;
+    }
+    /* Drawer fullscreen: paksa 100% lebar agar pas di layar HP */
+    .el-drawer {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 100vh !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+    .el-drawer__header {
+      flex: none !important;
+      padding: 12px 16px !important;
+      border-bottom: 1px solid #eee !important;
+    }
+    .el-drawer__body {
+      flex: 1 1 auto !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      padding: 16px !important;
+    }
+    .el-drawer__footer {
+      flex: none !important;
+      padding: 12px 16px !important;
+      border-top: 1px solid #eee !important;
+    }
+    /* Kembalikan ukuran button ke normal karena CSS base AuthenticatedWebViewScreen
+       memaksa semua button jadi full-width yang merusak tombol di drawer */
+    button {
+      width: auto !important;
+      display: inline-flex !important;
+      margin-top: 0 !important;
+    }
+  ''';
+
+  /// Buka "Space Groups" di portal admin — item sidebar yang sudah ada &
+  /// terbukti jalan di [AdminPortalDrawer], sekarang juga bisa diakses
+  /// langsung dari layar Spaces lewat menu "⋮".
+  void _openSpaceGroups() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SpaceWebViewScreen(
+          title: 'Space Groups',
+          overrideUrl: 'https://titc.or.id/portal/admin/',
+          useAdminDrawer: true,
+          initialAdminLabel: 'Space Groups',
+        ),
       ),
     );
   }

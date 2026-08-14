@@ -6,6 +6,7 @@ import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/customer/admin_portal_drawer.dart';
 import 'package:magang_titc/widgets/customer/side_drawer.dart';
 import 'package:magang_titc/widgets/shared/top_app_bar.dart';
+import 'package:magang_titc/services/webview_click_helper.dart';
 import 'package:magang_titc/services/webview_cookie_helper.dart';
 
 /// Encode string Dart menjadi literal string JS yang aman (escape kutip,
@@ -49,6 +50,25 @@ class SpaceWebViewScreen extends StatefulWidget {
   /// `/portal/admin/`.
   final bool useAdminDrawer;
 
+  /// Item sidebar admin yang otomatis diklik begitu `/portal/admin/`
+  /// pertama kali termuat (lihat penjelasan lengkap di
+  /// `_autoOpenedAdminGeneral`) — default `'General'` seperti sebelumnya.
+  /// Dipakai pemanggil yang ingin mendarat langsung di sub-halaman admin
+  /// tertentu, mis. `'Manage Courses'` atau `'Space Groups'`, alih-alih
+  /// selalu General lalu user pindah menu sendiri. Nilainya harus persis
+  /// sama dengan label di `AdminPortalDrawer` supaya `clickSidebarLink`
+  /// menemukan link yang tepat.
+  final String initialAdminLabel;
+
+  /// Teks tombol/link yang otomatis diklik SEKALI begitu halaman (bukan
+  /// pre-warm) selesai dimuat — beda dari [initialAdminLabel] yang khusus
+  /// item sidebar admin, ini mencari di SELURUH halaman lewat
+  /// `WebViewClickHelper.clickElementByText`. Dipakai untuk tombol aksi di
+  /// toolbar halaman web, mis. "New Space" di `/portal/spaces`, supaya
+  /// modal aslinya terbuka otomatis tanpa user perlu mencari-cari tombolnya
+  /// sendiri di tampilan yang belum tentu rapi dari CSS umum.
+  final String? autoClickText;
+
   const SpaceWebViewScreen({
     super.key,
     this.spaceSlug,
@@ -58,6 +78,8 @@ class SpaceWebViewScreen extends StatefulWidget {
     this.overrideUrl,
     this.extraCss,
     this.useAdminDrawer = false,
+    this.initialAdminLabel = 'General',
+    this.autoClickText,
   }) : assert(
          spaceSlug != null || overrideUrl != null,
          'Harus isi spaceSlug atau overrideUrl',
@@ -88,14 +110,18 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   /// menyediakan cara yang bisa diandalkan untuk membaca item aktif dari
   /// luar. Jadi dilacak dari tap terakhir di drawer sendiri — kita yang
   /// memicu navigasinya, jadi sudah pasti tahu item mana yang aktif tanpa
-  /// perlu menebak dari DOM. "General" jadi default awal karena itu
-  /// halaman yang dimuat pertama kali saat masuk `/portal/admin/`.
+  /// perlu menebak dari DOM. Diawali dari [SpaceWebViewScreen.initialAdminLabel]
+  /// karena itu item yang otomatis diklik begitu halaman admin termuat.
   String? _activeAdminLabel;
 
   /// Supaya auto-navigasi ke "General" (lihat `onPageFinished` di bawah)
   /// cuma jalan sekali per layar ini — sekali dipicu, tap manual user
   /// setelahnya tidak boleh ditimpa lagi.
   bool _autoOpenedAdminGeneral = false;
+
+  /// Supaya [SpaceWebViewScreen.autoClickText] cuma dipicu sekali — sama
+  /// alasannya dengan `_autoOpenedAdminGeneral`.
+  bool _autoClickedText = false;
 
   String get _targetUrl =>
       widget.overrideUrl ??
@@ -489,7 +515,7 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.useAdminDrawer) _activeAdminLabel = 'General';
+    if (widget.useAdminDrawer) _activeAdminLabel = widget.initialAdminLabel;
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(
@@ -532,19 +558,30 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
             // Vue Router-nya belum dinavigasikan ke sub-menu mana pun kalau
             // dibuka lewat full page load (bukan klik dari dalam SPA) — beda
             // dengan drawer Flutter yang sudah menyalakan highlight
-            // "General" seolah-olah sudah di sana. Tanpa baris ini, halaman
-            // tampak kosong/loading acak sampai user pindah menu lalu balik
-            // lagi (barulah itu klik sungguhan yang menavigasikan Vue
+            // `initialAdminLabel` seolah-olah sudah di sana. Tanpa baris ini,
+            // halaman tampak kosong/loading acak sampai user pindah menu lalu
+            // balik lagi (barulah itu klik sungguhan yang menavigasikan Vue
             // Router). Dicek `url` (bukan `widget.useAdminDrawer` saja)
             // supaya tidak ikut terpicu saat pre-warm memuat portal root di
             // `_initCookiesAndLoad`, dan `_autoOpenedAdminGeneral` memastikan
             // ini cuma sekali — tap manual user sesudahnya tidak boleh
-            // ditimpa balik ke General.
+            // ditimpa balik ke `initialAdminLabel`.
             if (widget.useAdminDrawer &&
                 !_autoOpenedAdminGeneral &&
                 url.contains('/portal/admin')) {
               _autoOpenedAdminGeneral = true;
-              AdminPortalDrawer.clickSidebarLink(_controller, 'General');
+              AdminPortalDrawer.clickSidebarLink(_controller, widget.initialAdminLabel);
+            }
+
+            // Tombol aksi di toolbar halaman (mis. "New Space"), diklik
+            // otomatis begitu halaman TUJUAN selesai dimuat — bukan halaman
+            // pre-warm. Dibandingkan persis dengan `_targetUrl` (bukan cuma
+            // `.contains`) supaya tidak keliru terpicu di halaman lain.
+            if (widget.autoClickText != null &&
+                !_autoClickedText &&
+                url == _targetUrl) {
+              _autoClickedText = true;
+              WebViewClickHelper.clickElementByText(_controller, widget.autoClickText!);
             }
 
             // Halaman pre-warm tidak boleh mematikan spinner — lihat

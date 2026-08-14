@@ -50,6 +50,7 @@ class ApiService {
     cachedSpaces = null;
     cachedCourses = null;
     _joinedSpacesCache = {};
+    _likedFeedIdsCache = {};
   }
 
   // Menyimpan slug space yang sudah di-join secara lokal sebagai fallback
@@ -67,6 +68,49 @@ class ApiService {
     _joinedSpacesCache.add(slug);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('joined_spaces', _joinedSpacesCache.toList());
+  }
+
+  // Menyimpan id feed yang sudah di-like secara lokal — pola yang sama
+  // persis dengan `_joinedSpacesCache` di atas, karena masalahnya sama:
+  // server tidak (atau belum diketahui bagaimana) melaporkan balik status
+  // "sudah di-like" dengan andal lewat `/feeds`, jadi status like hilang
+  // tiap kali app di-restart kalau hanya mengandalkan field dari server.
+  // Menyimpannya sendiri di perangkat membuat tombol Like tetap benar
+  // setelah restart TANPA bergantung pada nama field server yang belum
+  // pasti.
+  static Set<int> _likedFeedIdsCache = {};
+  static bool _likedFeedIdsCacheLoaded = false;
+
+  static Future<void> _initLikedFeedIdsCache() async {
+    if (_likedFeedIdsCacheLoaded) return;
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getStringList('liked_feed_ids');
+    if (cached != null) {
+      _likedFeedIdsCache =
+          cached.map((e) => int.tryParse(e)).whereType<int>().toSet();
+    }
+    _likedFeedIdsCacheLoaded = true;
+  }
+
+  /// Dipakai Home untuk mengisi status Like seketika saat feed dimuat,
+  /// tanpa menunggu (atau bergantung pada) field dari server.
+  static Future<Set<int>> getLikedFeedIdsCache() async {
+    await _initLikedFeedIdsCache();
+    return Set<int>.from(_likedFeedIdsCache);
+  }
+
+  static Future<void> _setFeedLikedLocally(int feedId, bool liked) async {
+    await _initLikedFeedIdsCache();
+    if (liked) {
+      _likedFeedIdsCache.add(feedId);
+    } else {
+      _likedFeedIdsCache.remove(feedId);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'liked_feed_ids',
+      _likedFeedIdsCache.map((e) => e.toString()).toList(),
+    );
   }
 
   /// Headers standar yang menyertakan cookie autentikasi.
@@ -269,6 +313,16 @@ class ApiService {
         final data = json.decode(response.body);
 
         final feeds = _extractFeedItems(data);
+
+        // Debug: cetak JSON mentah item pertama supaya nama field asli
+        // untuk status "sudah di-like" (dipakai ActivityModel.isLikedByMe)
+        // bisa dipastikan, bukan cuma tebakan beberapa nama umum.
+        if (page == 1 && feeds.isNotEmpty) {
+          const encoder = JsonEncoder.withIndent('  ');
+          for (final line in encoder.convert(feeds.first).split('\n')) {
+            print('FEED_JSON: $line');
+          }
+        }
 
         final activities = feeds
             .map((json) => ActivityModel.fromFluentCommunity(json))
@@ -669,9 +723,17 @@ class ApiService {
   /// Member di TITC jumlahnya ribuan (web menampilkan "All Members (2,256)"),
   /// jadi datanya diambil per halaman lalu di-scroll tak terbatas di UI —
   /// bukan sekali tarik semua.
+  ///
+  /// [status] dipakai filter Active/Pending/Blocked khusus admin (lihat
+  /// `MembersListScreen`) — nilai `active`/`pending`/`blocked` sesuai field
+  /// `status` yang sama persis dikembalikan API pada tiap member (bukan
+  /// tebakan; sudah terlihat di log `MEMBER_JSON` sebelumnya, mis.
+  /// `"status": "active"`). Kosong berarti tanpa filter, sama seperti
+  /// sebelum parameter ini ada.
   static Future<MembersPage> fetchMembers({
     String search = '',
     int page = 1,
+    String status = '',
   }) async {
     if (!AuthService.isLoggedIn) {
       throw Exception('Anda harus login terlebih dahulu.');
@@ -681,6 +743,7 @@ class ApiService {
       final uri = Uri.parse('$_baseUrl/members').replace(
         queryParameters: {
           if (search.isNotEmpty) 'search': search,
+          if (status.isNotEmpty) 'status': status,
           'page': page.toString(),
         },
       );
@@ -800,30 +863,37 @@ class ApiService {
   /// tersimpan dan sinkron dengan portal web secara realtime.
   ///
   /// Endpoint `POST .../feeds/{id}/react` dengan body `{"reaction": "like"}`
-  /// dikonfirmasi dari inspeksi request asli portal web. Untuk batal-like
-  /// dipakai `DELETE` ke endpoint yang sama, mengikuti konvensi toggle REST
-  /// yang lazim di FCOM — belum ada capture DevTools terpisah untuk arah
-  /// ini, tapi kegagalannya aman: pemanggil ([HomeScreen]) sudah membalikkan
-  /// (revert) status like optimistic-nya kalau method ini mengembalikan
-  /// `false`, jadi tidak ada risiko UI ketinggalan status server meski
-  /// dugaan method HTTP-nya ternyata salah.
+  /// dikonfirmasi dari inspeksi request asli portal web — dan terbukti
+  /// benar-benar tersimpan permanen di server (dikonfirmasi user).
+  ///
+  /// Untuk batal-like, sebelumnya dipakai `DELETE` ke endpoint yang sama
+  /// (dugaan konvensi REST) — **terbukti salah**, gagal konsisten 2x
+  /// (dikonfirmasi user: respons ditolak server). Diganti jadi POST yang
+  /// SAMA untuk kedua arah: like/unlike jadi murni TOGGLE di sisi server,
+  /// bukan dua method HTTP berbeda. Ini pola yang lazim dipakai endpoint
+  /// reaksi semacam ini, dan konsisten dengan bukti yang ada (POST selalu
+  /// berhasil, DELETE selalu gagal).
+  ///
+  /// Status like disimpan lokal via [_setFeedLikedLocally] setelah berhasil
+  /// — lihat catatan di sana kenapa ini perlu (server tidak melaporkan
+  /// balik status "sudah di-like" dengan andal lewat `/feeds`).
   static Future<bool> toggleFeedLike(int feedId, {required bool like}) async {
     if (!AuthService.isLoggedIn) return false;
     try {
       final uri = Uri.parse('$_baseUrl/feeds/$feedId/react');
       final body = json.encode({'reaction': 'like'});
-      final response = like
-          ? await client
-              .post(uri, headers: authHeaders, body: body)
-              .timeout(const Duration(seconds: 15))
-          : await client
-              .delete(uri, headers: authHeaders, body: body)
-              .timeout(const Duration(seconds: 15));
-      return response.statusCode == 200 ||
+      final response = await client
+          .post(uri, headers: authHeaders, body: body)
+          .timeout(const Duration(seconds: 15));
+      final ok = response.statusCode == 200 ||
           response.statusCode == 201 ||
           response.statusCode == 204;
+      print('TOGGLE_LIKE: feedId=$feedId like=$like method=POST '
+          'status=${response.statusCode} ok=$ok body=${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      if (ok) await _setFeedLikedLocally(feedId, like);
+      return ok;
     } catch (e) {
-      print('Exception in toggleFeedLike: $e');
+      print('TOGGLE_LIKE: exception feedId=$feedId like=$like -> $e');
       return false;
     }
   }

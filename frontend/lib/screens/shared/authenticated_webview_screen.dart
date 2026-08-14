@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:magang_titc/services/webview_click_helper.dart';
 import 'package:magang_titc/services/webview_cookie_helper.dart';
 import 'package:magang_titc/constants/app_colors.dart';
 
@@ -8,11 +9,18 @@ class AuthenticatedWebViewScreen extends StatefulWidget {
   final String title;
   final String? extraCss;
 
+  /// Teks tombol/link yang otomatis diklik SEKALI begitu halaman selesai
+  /// dimuat — lihat penjelasan lengkap di
+  /// `SpaceWebViewScreen.autoClickText`, mekanismenya sama persis
+  /// (`WebViewClickHelper.clickElementByText`).
+  final String? autoClickText;
+
   const AuthenticatedWebViewScreen({
     super.key,
     required this.url,
     required this.title,
     this.extraCss,
+    this.autoClickText,
   });
 
   @override
@@ -23,6 +31,9 @@ class AuthenticatedWebViewScreen extends StatefulWidget {
 class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
+
+  /// Supaya [AuthenticatedWebViewScreen.autoClickText] cuma dipicu sekali.
+  bool _autoClickedText = false;
 
   @override
   void initState() {
@@ -135,7 +146,12 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
               document.head.appendChild(style);
               })();
             ''');
-            
+
+            if (widget.autoClickText != null && !_autoClickedText) {
+              _autoClickedText = true;
+              WebViewClickHelper.clickElementByText(_controller, widget.autoClickText!);
+            }
+
             // Beri waktu sejenak agar CSS selesai dirender sebelum menampilkan WebView
             Future.delayed(const Duration(milliseconds: 200), () {
               if (mounted) {

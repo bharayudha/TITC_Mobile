@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:magang_titc/models/course_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/widgets/shared/admin_only.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
+import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 
 /// Konten tab Courses. App bar, drawer, chat FAB, dan bottom nav dipasang
 /// oleh [MainShell].
@@ -433,14 +435,76 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
     return SectionHeader(
       title: 'Courses',
       trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           _buildFilterChip('All Courses', selected: _showAllCourses),
           const SizedBox(width: 8),
           _buildFilterChip('My Courses', selected: !_showAllCourses),
+          // Hanya admin/manager komunitas FCOM yang bisa membuat course baru
+          // — tombolnya ditempelkan lewat AdminOnly, tidak mengubah apa pun
+          // untuk user biasa (SizedBox.shrink kalau bukan admin).
+          AdminOnly(
+            builder: (context) => Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: IconButton(
+                onPressed: _openManageCourses,
+                icon: const PhosphorIcon(PhosphorIconsRegular.plusCircle, color: Color(0xFF1E5AF5)),
+                tooltip: 'New Course',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+
+  /// Buka halaman "New Course" di portal web secara langsung, lalu
+  /// otomatis klik tombol "New Course" milik web (melalui autoClickText)
+  /// sehingga drawer pembuatan course terbuka native.
+  void _openManageCourses() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AuthenticatedWebViewScreen(
+          title: 'New Course',
+          url: 'https://titc.or.id/portal/courses',
+          autoClickText: 'New Course',
+          extraCss: _courseSpaceDrawerCss,
+        ),
+      ),
+    );
+  }
+
+  /// CSS agar drawer Element Plus (el-drawer) dari web tampil fullscreen
+  /// di layar HP, bukan kotak kecil melayang.
+  static const String _courseSpaceDrawerCss = '''
+    .el-overlay {
+      background: rgba(0,0,0,0.5) !important;
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 2000 !important;
+    }
+    .el-drawer {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    .el-drawer__header {
+      padding: 16px !important;
+    }
+    .el-drawer__body {
+      padding: 16px !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+    button {
+      width: auto !important;
+      display: inline-flex !important;
+      margin-top: 0 !important;
+    }
+  ''';
 
   Widget _buildFilterChip(String label, {required bool selected}) {
     return GestureDetector(
