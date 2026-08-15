@@ -6,6 +6,7 @@ import 'package:magang_titc/screens/customer/members/members_list_screen.dart';
 import 'package:magang_titc/screens/customer/messages/messages_list_screen.dart';
 import 'package:magang_titc/screens/customer/preparation_test/preparation_test_webview_screen.dart';
 import 'package:magang_titc/screens/customer/spaces/spaces_list_screen.dart';
+import 'package:magang_titc/services/messages_service.dart';
 import 'package:magang_titc/widgets/customer/customer_bottom_nav_bar.dart';
 import 'package:magang_titc/widgets/shared/chat_fab_button.dart';
 import 'package:magang_titc/widgets/customer/side_drawer.dart';
@@ -139,10 +140,15 @@ class _MainShellState extends State<MainShell> {
           // bawahnya tetap bisa ditekan.
           Positioned.fill(
             child: DraggableChatFab(
-              onTap: () {
-                Navigator.of(context).push(
+              onTap: () async {
+                await Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const MessagesListScreen()),
                 );
+                // Badge disegarkan begitu user keluar dari Messages. Tanpa
+                // ini angkanya bertahan sampai putaran polling berikutnya
+                // (60 detik), sehingga terlihat masih ada pesan belum dibaca
+                // padahal barusan dibuka.
+                await MessagesService.refreshUnreadCount();
               },
             ),
           ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import 'package:magang_titc/services/messages_service.dart';
+
 const double kChatFabSize = 56;
 const double _kFabMargin = 16;
 
@@ -22,13 +24,34 @@ class ChatFabButton extends StatelessWidget {
       onTap: onTap,
       // Ikon "ChatCircleDots" dari Phosphor, sesuai layer di Figma.
       // Kotak 56x56 dipertahankan supaya area sentuhnya tetap nyaman.
-      child: const SizedBox(
+      child: SizedBox(
         width: kChatFabSize,
         height: kChatFabSize,
-        child: PhosphorIcon(
-          PhosphorIconsRegular.chatCircleDots,
-          color: Colors.black87,
-          size: 34,
+        child: ValueListenableBuilder<int>(
+          valueListenable: MessagesService.unreadCountNotifier,
+          builder: (context, unreadCount, child) {
+            return Badge(
+              isLabelVisible: unreadCount > 0,
+              // Angka besar dipendekkan jadi "99+" supaya badge tidak
+              // melebar sampai menutupi ikonnya sendiri.
+              label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
+              backgroundColor: Colors.red,
+              // Digeser sedikit ke dalam: tanpa ini badge menempel di sudut
+              // kotak 56x56, sementara ikonnya cuma 34 — jadi angkanya
+              // tampak melayang jauh dari ikon.
+              offset: const Offset(-6, 6),
+              alignment: Alignment.topRight,
+              child: child,
+            );
+          },
+          // Ikon dibuat di luar builder karena isinya tidak bergantung pada
+          // angka unread — jadi tidak perlu dibangun ulang tiap badge
+          // berubah.
+          child: const PhosphorIcon(
+            PhosphorIconsRegular.chatCircleDots,
+            color: Colors.black87,
+            size: 34,
+          ),
         ),
       ),
     );
@@ -51,6 +74,20 @@ class DraggableChatFab extends StatefulWidget {
 }
 
 class _DraggableChatFabState extends State<DraggableChatFab> {
+  @override
+  void initState() {
+    super.initState();
+    // Pemilik badge yang menyalakan sumber datanya sendiri — pola yang sama
+    // dipakai `TitcAppBar` untuk badge lonceng. Aman dipanggil berulang:
+    // pemanggilan kedua diabaikan selama timer sebelumnya masih hidup.
+    //
+    // Timer-nya sengaja TIDAK dimatikan di dispose: FAB ini ikut hidup-mati
+    // bersama shell saat berpindah tab, sementara badge harus tetap terbaru
+    // sepanjang sesi. Yang mematikannya adalah logout, lewat
+    // `stopUnreadPolling()`.
+    MessagesService.startUnreadPolling();
+  }
+
   /// Kunci area induk, dipakai mengubah koordinat jari (global) menjadi
   /// koordinat lokal di dalam area geser.
   final GlobalKey _areaKey = GlobalKey();

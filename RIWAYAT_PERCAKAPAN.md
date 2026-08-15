@@ -423,3 +423,83 @@ ketemu, bukan ditinggal "siapa tahu berguna".
 `flutter analyze` → **0 error**. Sisa 104 issue semuanya `avoid_print` (debug
 log yang disengaja) plus 3 `unused_import` bawaan tim di `profile_screen.dart`,
 `test_fetch.dart`, `test_js.dart`.
+
+---
+
+## Sesi 15 Agustus 2026 — Fitur Chat: empat tebakan yang meleset
+
+Aturan yang masih berlaku ada di CLAUDE.md. Di sini kronologinya — terutama
+dugaan yang gugur, karena polanya berulang dan layak diingat.
+
+### Titik awal
+
+Fitur Messages sudah punya UI kirim lengkap, tapi penulisnya sendiri menandai
+di komentar bahwa nama field body (`message`) **disimpulkan dari bundle JS**
+dan belum pernah dicoba dengan payload nyata. Saat diuji: **422**.
+
+### Empat dugaan yang gugur
+
+**1. Field teks bernama `message`.**
+❌ Ditolak 422. cURL DevTools menunjukkan `{"text":"cek","mediaItems":[]}`.
+Nama endpoint-nya `chat/messages`, jadi menyimpulkan `message` sangat wajar —
+dan tetap salah.
+
+**2. Unggah gambar chat memakai `/feeds/media-upload`.**
+❌ Salah. Chat punya endpoint sendiri yang terikat thread:
+`POST /chat/messages/{threadId}/media_upload`. Dugaan ini masuk akal karena
+endpoint itu memang terbukti jalan untuk upload avatar.
+
+**3. `mediaItems` berisi objek media dari server, diteruskan apa adanya.**
+❌ Salah. Isinya **string URL polos**. `uploadMedia()` sempat sengaja dibuat
+mengembalikan Map utuh justru karena dugaan ini.
+
+**4. Gambar masuk punya field media sendiri.**
+❌ Salah, dan ini yang paling tersembunyi. FCOM menanam gambar sebagai HTML
+`<img>` **di dalam `text`**, dan `meta` bernilai `null`. Model membuang semua
+tag HTML dari `text` sebelum dipakai, jadi URL-nya ikut terbuang — hasilnya
+gelembung biru kosong di layar.
+
+### Reaksi: probe yang punya titik buta
+
+Setelah tiga kali meleset, untuk reaksi sengaja tidak menebak. Dipasang probe
+yang mencetak JSON mentah pesan dengan field di luar yang sudah dikenal.
+
+Hasilnya `berfield_baru=0` walau sudah react — sempat terlihat seperti
+"reaksi tidak disimpan di objek pesan".
+
+**Penyebabnya cacat di probe itu sendiri:** `meta` masuk daftar "kunci yang
+sudah dikenal", jadi kunci baru DI DALAMNYA tidak pernah dilaporkan. Setelah
+probe diperbaiki untuk ikut memeriksa isi `meta`, langsung ketemu:
+
+```json
+"meta": { "reactions": { "👍": [727] } }
+```
+
+Probe juga diberi baris ringkas `CHAT_PROBE` yang selalu dicetak, karena
+"endpoint tidak pernah dipanggil" dan "dipanggil tapi tidak ada field baru"
+sama-sama terlihat sebagai log kosong.
+
+### Satu-satunya kali penanganan longgar terbayar
+
+Parser reaksi ditulis sebelum bentuknya diketahui, sengaja menerima dua
+kemungkinan: peta `{emoji: jumlah}` atau daftar yang dihitung sendiri. Bentuk
+asli (`{emoji: [userId]}`) kebetulan tercakup cabang kedua, jadi reaksi
+langsung tampil tanpa perubahan lagi.
+
+Empat kali sebelumnya kelonggaran serupa tidak menolong karena yang salah
+bukan bentuk datanya, melainkan **tempat** datanya.
+
+### Pelajaran
+
+1. **Bentuk KIRIM dan BACA di API ini tidak simetris.** Terbukti dua kali
+   (gambar dan reaksi). Jangan pernah menyimpulkan satu dari yang lain.
+2. **Untuk operasi tulis, minta cURL dulu.** Empat tebakan meleset, dan satu
+   di antaranya (hapus) tidak bisa dibatalkan kalau salah sasaran.
+3. **Probe yang menyaring berdasarkan "kunci yang dikenal" harus ikut
+   memeriksa isi kunci yang dikenal itu** — kalau tidak, ia punya titik buta
+   persis di tempat data baru paling mungkin disembunyikan.
+
+### Kondisi akhir
+
+`flutter analyze` → **0 error**. Semua probe (`CHAT_PROBE`, `CHAT_EXTRA_*`,
+`CHAT_ENVELOPE`, `CHAT_MEDIA_JSON`) sudah dicabut — tidak menambah utang debug.

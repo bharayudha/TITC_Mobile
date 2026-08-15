@@ -665,10 +665,99 @@ sisi server.
 
 ---
 
+## Sesi 15 Agustus 2026 — Fitur Chat lengkap
+
+### API Chat FCOM — bentuk terverifikasi (JANGAN diubah tanpa capture baru)
+
+Semua di bawah ini **diverifikasi dari cURL DevTools portal web**, bukan
+ditebak. Empat tebakan yang terdengar sangat masuk akal sudah lebih dulu
+meleset di fitur ini, jadi perlakukan tabel ini sebagai patokan.
+
+| Aksi | Endpoint | Body |
+|---|---|---|
+| Kirim pesan | `POST /chat/messages/{threadId}` | `{"text":"…","mediaItems":[]}` |
+| Balas | endpoint yang **sama** | tambah `"reply_to":<msgId>,"reply_text":"…"` |
+| Unggah gambar | `POST /chat/messages/{threadId}/media_upload` | multipart, field `file` |
+| Reaksi | `POST /chat/messages/{msgId}/react` | `{"emoji":"👍"}` |
+| Hapus | `POST /chat/messages/delete/{msgId}` | `{}` |
+| Polling pesan baru | `GET /chat/messages/{threadId}/new?last_id={id}` | — |
+
+> [!IMPORTANT]
+> **Aturan terpenting: bentuk KIRIM dan BACA tidak simetris.** Ini terbukti
+> dua kali, jadi jangan pernah menyimpulkan yang satu dari yang lain:
+>
+> | | Kirim | Baca |
+> |---|---|---|
+> | Gambar | `mediaItems: ["url"]`, di luar teks | HTML `<img>` **di dalam** `text` |
+> | Reaksi | `{"emoji":"👍"}` ke endpoint terpisah | `meta.reactions` |
+
+Empat jebakan spesifik:
+
+1. **Field teks bernama `text`, bukan `message`.** Tebakan `message` diambil
+   dari bundle JS dan ditolak server dengan **422**.
+2. **`mediaItems` berisi string URL polos**, bukan objek media. URL-nya
+   membawa query `?media_key=…` yang **wajib ikut** — itu bagian identitas
+   berkasnya, bukan hiasan.
+3. **Endpoint unggah chat terikat thread** (`/chat/messages/{threadId}/media_upload`),
+   BUKAN `/feeds/media-upload` yang dipakai upload avatar. Keduanya endpoint
+   media FCOM tapi tidak bisa saling menggantikan.
+4. **URL hapus menaruh kata `delete` SEBELUM id**, dan metodenya POST —
+   bukan `DELETE /chat/messages/{id}` seperti lazimnya REST. Jangan
+   "dirapikan".
+
+Bentuk reaksi saat dibaca:
+
+```json
+"meta": { "reactions": { "👍": [727] } }
+```
+
+Peta emoji → **daftar user id**, bukan jumlah. Jumlahnya = panjang daftar.
+Pesan tanpa reaksi punya `meta: null`.
+
+### Catatan implementasi yang mudah terlewat
+
+- **Pesan disimpan di state, bukan di `Future` milik `FutureBuilder`.**
+  Polling yang membuat Future baru tiap putaran membuat layar balik ke
+  keadaan loading — spinner berkedip tiap 6 detik dan gulir melompat ke atas.
+- **Gulir otomatis hanya kalau user sedang di bawah.** Kalau dia sedang
+  membaca riwayat, menyeretnya ke bawah tiap ada pesan baru membuat riwayat
+  mustahil dibaca. Sesudah MENGIRIM beda: selalu digulir, tanpa syarat.
+- **Sesudah hapus/react wajib penarikan PENUH.** Endpoint inkremental hanya
+  mengirim pesan baru, jadi ia tidak akan pernah tahu ada yang hilang atau
+  berubah. Tarik-ke-bawah juga sengaja memakai penarikan penuh.
+- **Unggah gambar dilakukan saat tekan kirim, bukan saat gambar dipilih** —
+  supaya membatalkan pilihan tidak meninggalkan berkas yatim di server.
+- **Polling chat berhenti saat app di latar belakang** (`WidgetsBindingObserver`).
+- Badge angka di ikon chat memakai `/chat/unread_threads` yang sudah ada,
+  dijumlahkan; pola `ValueNotifier` + `Timer` 60 detik menyamai badge lonceng.
+
+### Diserahkan ke tim backend — dugaan penyebab 401 `/admin/managers`
+
+`AuthService.isCurrentUserAdmin` saat ini **meng-hardcode email**
+`fahrurrizqi544@gmail.com` karena `/admin/managers` membalas 401.
+
+Kemungkinan besar penyebabnya bukan hak akses, melainkan **header**:
+`auth_service.dart` masih memakai `User-Agent: 'TITC Mobile App/1.0 (Android; Dart)'`
+di 9 tempat (plus 1 di `api_service.dart`) — persis pola yang diperingatkan
+**PRD §10** akan diblokir WordFence dengan 401/403. Semua request yang memang
+berhasil di app ini memakai `Mozilla/5.0`.
+
+Belum diuji. Kalau benar, mengganti User-Agent-nya membuat deteksi admin
+jalan sungguhan dan hardcode email bisa dibuang.
+
+---
+
 ## Status semua fitur
 
 | Fitur | Status |
 |---|---|
+| Chat kirim teks | ✅ 15 Agt (dulu 422, field `text`) |
+| Chat kirim & terima gambar | ✅ 15 Agt |
+| Chat real-time (polling 6 detik) | ✅ 15 Agt, inkremental + cadangan penuh |
+| Chat balas / reaksi / hapus | ✅ 15 Agt |
+| Badge angka pesan belum dibaca | ✅ 15 Agt |
+| Mulai percakapan baru dari app | ⬜ Belum ada — sementara lewat WebView profil member |
+| Gembok course di drawer | ✅ Commit `53bc481` |
 | Daftar Courses | ✅ Bekerja |
 | Gambar course/space | ✅ Dengan fallback |
 | "Continue Learning" → /lessons | ✅ URL benar |
