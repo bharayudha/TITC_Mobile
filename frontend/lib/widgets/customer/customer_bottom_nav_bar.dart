@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -32,20 +33,43 @@ class BottomNavBar extends StatelessWidget {
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.isSpacesTab = false,
   });
 
   /// Index tab aktif. Beri nilai -1 bila tidak ada tab yang aktif.
   final int currentIndex;
   final ValueChanged<int> onTap;
 
+  /// Saat true, bottom nav merender gaya glassmorphism cerah agar selaras
+  /// dengan background pastel tab Spaces. Tab lain tidak terpengaruh.
+  final bool isSpacesTab;
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    final navContent = SafeArea(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: kShadowUp,
+        decoration: BoxDecoration(
+          gradient: isSpacesTab
+              ? LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.35),
+                    Colors.white.withValues(alpha: 0.10),
+                  ],
+                )
+              : null,
+          color: isSpacesTab ? null : Colors.white,
+          border: isSpacesTab
+              ? Border(
+                  top: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.2), // Sangat halus
+                    width: 1.0,
+                  ),
+                )
+              : null,
+          boxShadow: isSpacesTab ? null : kShadowUp,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -59,7 +83,7 @@ class BottomNavBar extends StatelessWidget {
               height: _pillHeight,
               child: Stack(
                 children: [
-                  // Pill biru yang meluncur antar tab (Smart animate).
+                  // Pill yang meluncur antar tab (Smart animate).
                   AnimatedPositioned(
                     duration: navAnimDuration,
                     curve: navAnimCurve,
@@ -73,9 +97,20 @@ class BottomNavBar extends StatelessWidget {
                       opacity: currentIndex < 0 ? 0 : 1,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.primaryDark],
-                          ),
+                          border: isSpacesTab ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.0) : null,
+                          gradient: isSpacesTab
+                              ? LinearGradient(
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.4),
+                                    Colors.white.withValues(alpha: 0.1),
+                                  ],
+                                )
+                              : const LinearGradient(
+                                  colors: [
+                                    AppColors.primary,
+                                    AppColors.primaryDark,
+                                  ],
+                                ),
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
@@ -88,6 +123,7 @@ class BottomNavBar extends StatelessWidget {
                           item: bottomNavItems[index],
                           selected: index == currentIndex,
                           onTap: () => onTap(index),
+                          isSpacesTab: isSpacesTab,
                         ),
                       );
                     }),
@@ -99,6 +135,16 @@ class BottomNavBar extends StatelessWidget {
         ),
       ),
     );
+
+    if (isSpacesTab) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+          child: navContent,
+        ),
+      );
+    }
+    return navContent;
   }
 }
 
@@ -107,11 +153,13 @@ class _NavBarItem extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.onTap,
+    this.isSpacesTab = false,
   });
 
   final BottomNavItem item;
   final bool selected;
   final VoidCallback onTap;
+  final bool isSpacesTab;
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +175,13 @@ class _NavBarItem extends StatelessWidget {
             TweenAnimationBuilder<Color?>(
               duration: navAnimDuration,
               curve: navAnimCurve,
-              tween: ColorTween(end: selected ? Colors.white : Colors.grey),
+              tween: ColorTween(
+                end: selected
+                    ? Colors.white
+                    : (isSpacesTab
+                        ? Colors.white.withValues(alpha: 0.7)
+                        : Colors.grey),
+              ),
               builder: (context, color, _) {
                 return PhosphorIcon(item.icon, color: color, size: 22);
               },

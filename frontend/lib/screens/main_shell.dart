@@ -112,7 +112,9 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _currentIndex == MainShell.tabSpaces
+          ? Colors.transparent
+          : Colors.white,
       appBar: const TitcAppBar(),
       drawer: const SideDrawer(),
       body: Stack(
@@ -157,6 +159,7 @@ class _MainShellState extends State<MainShell> {
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: _onNavTap,
+        isSpacesTab: _currentIndex == MainShell.tabSpaces,
       ),
     );
   }
