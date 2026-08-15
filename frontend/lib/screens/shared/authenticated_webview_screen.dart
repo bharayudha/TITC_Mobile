@@ -45,6 +45,15 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
   /// Supaya [AuthenticatedWebViewScreen.autoClickText] cuma dipicu sekali.
   bool _autoClickedText = false;
 
+  /// URL pertama yang dimuat — dipakai untuk mendeteksi navigasi setelah
+  /// form disubmit (mis. "Create Course" → redirect ke halaman course baru).
+  String? _initialUrl;
+
+  /// Tandai bahwa halaman pertama sudah selesai dimuat. Navigasi baru
+  /// SETELAH flag ini aktif, ke URL yang BERBEDA dari [_initialUrl], berarti
+  /// form telah disubmit → pop screen kembali ke Flutter.
+  bool _firstPageFinished = false;
+
   @override
   void initState() {
     super.initState();
@@ -66,12 +75,36 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) {
+            // Setelah autoClick dipicu dan halaman pertama sudah selesai
+            // dimuat, kalau ada navigasi ke URL yang berbeda dari URL awal
+            // itu berarti form sudah disubmit (mis. Create Course redirect ke
+            // halaman course baru). Pop screen supaya user tidak terlontar
+            // ke tampilan website penuh.
+            if (_firstPageFinished && _autoClickedText && _initialUrl != null) {
+              final reqUrl = request.url;
+              final base = _initialUrl!.split('?').first.split('#').first;
+              final req = reqUrl.split('?').first.split('#').first;
+              if (req != base) {
+                // Jangan navigate — pop Flutter screen saja.
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && Navigator.canPop(context)) {
+                    Navigator.pop(context, true);
+                  }
+                });
+                return NavigationDecision.prevent;
+              }
+            }
             // Cegah webview melempar user ke browser eksternal (Chrome)
             // Biarkan semua navigasi tetap di dalam aplikasi
             return NavigationDecision.navigate;
           },
-          onPageStarted: (_) => setState(() => _isLoading = true),
+          onPageStarted: (String url) {
+            // Simpan URL pertama saat mulai loading
+            _initialUrl ??= url;
+            if (mounted) setState(() => _isLoading = true);
+          },
           onPageFinished: (String url) async {
+            _firstPageFinished = true;
             // Inject CSS inside an IIFE to avoid "Identifier 'style' has already been declared" error
             await _controller.runJavaScript('''
               (function() {

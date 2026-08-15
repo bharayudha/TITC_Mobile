@@ -1010,3 +1010,58 @@ Follow/Message menjadi penuh lebar layar (tidak normal).
   dibuat sebagai generik WebView admin, namun akhirnya tidak dipakai untuk New Course
   dan New Space (diganti `AuthenticatedWebViewScreen` + `extraCss` yang lebih fleksibel).
   File tetap ada untuk keperluan di masa depan.
+
+---
+
+## Sesi 15 Agustus 2026 (lanjutan) — Perbaikan Navigasi WebView Setelah Submit Form
+
+### Masalah 7 — Tampilan website muncul setelah admin klik "Create" di form New Course
+
+**Masalah:** Setelah admin klik tombol "Create" (publish) di form New Course,
+tampilan layar tidak kembali ke Flutter — malah webview mengikuti redirect dari
+website dan menampilkan tampilan website penuh. Data course berhasil tersimpan
+di server, hanya tampilannya yang salah.
+
+**Akar masalah:**
+- Setelah form disubmit, website melakukan redirect ke URL halaman course baru
+  yang baru dibuat.
+- `onNavigationRequest` di `AuthenticatedWebViewScreen` mengizinkan **semua**
+  navigasi tanpa filter (`return NavigationDecision.navigate`), sehingga webview
+  mengikuti redirect tersebut dan menampilkan halaman website lengkap.
+
+**Solusi:**
+Tambahkan guard di `onNavigationRequest` dengan tiga kondisi sekaligus:
+
+```dart
+if (_firstPageFinished && _autoClickedText && _initialUrl != null) {
+  final base = _initialUrl!.split('?').first.split('#').first;
+  final req = request.url.split('?').first.split('#').first;
+  if (req != base) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && Navigator.canPop(context)) Navigator.pop(context, true);
+    });
+    return NavigationDecision.prevent;
+  }
+}
+```
+
+- `_firstPageFinished` → halaman pertama sudah selesai dimuat (bukan pre-warm)
+- `_autoClickedText` → autoClick sudah dipicu (artinya ini layar yang punya form)
+- URL request **berbeda** dari URL awal → bukan reload halaman yang sama, melainkan redirect post-submit
+
+Kalau ketiga kondisi terpenuhi: prevent navigasi + pop screen kembali ke Flutter
+dengan nilai `true` (tanda form berhasil disubmit).
+
+Bonus: `_openManageCourses` di `courses_list_screen.dart` diubah jadi `async` dan
+`await` hasilnya. Kalau hasilnya `true`, list courses langsung di-refresh supaya
+course baru langsung muncul tanpa perlu pull-to-refresh.
+
+**File diubah:**
+- `lib/screens/shared/authenticated_webview_screen.dart` — guard navigasi + field `_initialUrl`, `_firstPageFinished`
+- `lib/screens/customer/courses/courses_list_screen.dart` — `_openManageCourses` → async + auto-refresh
+
+> [!NOTE]
+> Pola ini berlaku umum untuk SEMUA form admin yang dibuka lewat `AuthenticatedWebViewScreen`
+> dengan `autoClickText`. Setiap kali form disubmit dan website redirect ke URL lain,
+> screen otomatis akan pop kembali ke Flutter. Tidak perlu kode tambahan per-form.
+

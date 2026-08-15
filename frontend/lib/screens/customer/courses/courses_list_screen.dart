@@ -464,8 +464,8 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
   /// Buka halaman "New Course" di portal web secara langsung, lalu
   /// otomatis klik tombol "New Course" milik web (melalui autoClickText)
   /// sehingga drawer pembuatan course terbuka native.
-  void _openManageCourses() {
-    Navigator.push(
+  Future<void> _openManageCourses() async {
+    final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => const AuthenticatedWebViewScreen(
@@ -476,6 +476,11 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         ),
       ),
     );
+    // Kalau course berhasil dibuat (webview detect redirect setelah submit),
+    // refresh daftar courses supaya course baru langsung muncul.
+    if (created == true && mounted) {
+      _loadCourses();
+    }
   }
 
   /// CSS agar drawer Element Plus (el-drawer) dari web tampil fullscreen
