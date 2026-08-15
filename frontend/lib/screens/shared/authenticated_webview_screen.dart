@@ -15,12 +15,22 @@ class AuthenticatedWebViewScreen extends StatefulWidget {
   /// (`WebViewClickHelper.clickElementByText`).
   final String? autoClickText;
 
+  /// Alternatif dari [autoClickText] untuk trigger dua langkah: klik
+  /// tombol "⋮" (`.fcom_dot_menu`) dulu untuk membuka dropdown-nya, baru
+  /// klik teks ini di dalam dropdown yang muncul. Dipakai untuk menu yang
+  /// pemicunya ikon polos tanpa teks (mis. "Welcome Banner"/"Manage
+  /// Links" di header Feed) — lihat
+  /// `WebViewClickHelper.clickDotMenuThenText`. Hanya salah satu dari
+  /// [autoClickText]/[autoClickDotMenuThenText] yang perlu diisi.
+  final String? autoClickDotMenuThenText;
+
   const AuthenticatedWebViewScreen({
     super.key,
     required this.url,
     required this.title,
     this.extraCss,
     this.autoClickText,
+    this.autoClickDotMenuThenText,
   });
 
   @override
@@ -41,6 +51,18 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
+      // Debug sementara — dipakai WebViewClickHelper untuk melaporkan hasil
+      // AUTO_CLICK/MODAL_PROBE lewat `adb logcat`. Sebelumnya layar ini
+      // tidak punya channel ini sama sekali (laporannya dibuang diam2 lewat
+      // guard `if (window.TitcDebug)`), aman ditambahkan karena murni
+      // tambahan (tidak mengubah perilaku call site manapun yang sudah ada).
+      ..addJavaScriptChannel(
+        'TitcDebug',
+        onMessageReceived: (message) {
+          // ignore: avoid_print
+          print('WEBVIEW_DOM: ${message.message}');
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) {
@@ -150,6 +172,13 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
             if (widget.autoClickText != null && !_autoClickedText) {
               _autoClickedText = true;
               WebViewClickHelper.clickElementByText(_controller, widget.autoClickText!);
+            }
+            if (widget.autoClickDotMenuThenText != null && !_autoClickedText) {
+              _autoClickedText = true;
+              WebViewClickHelper.clickDotMenuThenText(
+                _controller,
+                widget.autoClickDotMenuThenText!,
+              );
             }
 
             // Beri waktu sejenak agar CSS selesai dirender sebelum menampilkan WebView

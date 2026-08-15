@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/json_utils.dart';
 import '../models/message_model.dart';
 import 'auth_service.dart';
@@ -110,9 +111,19 @@ class MessagesService {
   /// dari layar chat yang terbuka (6 detik) di mana user memang menunggu
   /// balasan. Aman dipanggil berkali-kali — pemanggilan kedua diabaikan
   /// selama timer sebelumnya masih hidup.
+  static const _unreadCountCacheKey = 'chat_unread_count_cache';
+
   static void startUnreadPolling() {
     if (_pollingTimer?.isActive ?? false) return;
 
+    // Badge dulu selalu mulai dari 0 dan baru terisi setelah fetch jaringan
+    // pertama selesai — kelihatan "tidak langsung muncul" saat app dibuka,
+    // terutama kalau koneksinya lambat. Angka terakhir yang diketahui
+    // disimpan lokal (SharedPreferences) dan dimuat di sini SEBELUM fetch
+    // jaringan, supaya badge langsung tampil dengan angka terakhir yang
+    // benar sejak app dibuka — lalu dikoreksi begitu fetch selesai kalau
+    // ternyata sudah berubah (mis. dibaca dari perangkat lain).
+    _loadCachedUnreadCount();
     _refreshUnreadCount();
     _pollingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (AuthService.isLoggedIn) {
@@ -123,10 +134,36 @@ class MessagesService {
     });
   }
 
+  /// Sama seperti [_loadCachedUnreadCount], tapi PUBLIC dan dipanggil dari
+  /// `main()` SEBELUM `runApp()` — bukan dari `initState` tombol chat.
+  ///
+  /// Memuatnya dari `initState` (seperti awalnya) ternyata TIDAK cukup
+  /// cepat: `SharedPreferences.getInstance()` sendiri butuh inisialisasi
+  /// platform channel, jadi kecepatannya sebanding dengan fetch jaringan
+  /// begitu app baru saja dingin (cold start) — badge tetap sempat kosong
+  /// sesaat sebelum terisi, sama seperti sebelum diperbaiki. Dipanggil di
+  /// `main()` (yang sudah `await AuthService.init()` duluan) berarti
+  /// nilainya SUDAH siap di `unreadCountNotifier` SEBELUM widget pertama
+  /// digambar sama sekali — tidak ada lagi jendela waktu badge kosong.
+  static Future<void> preloadCachedUnreadCount() => _loadCachedUnreadCount();
+
+  static Future<void> _loadCachedUnreadCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getInt(_unreadCountCacheKey);
+    if (cached != null && cached > 0) {
+      unreadCountNotifier.value = cached;
+    }
+  }
+
   static void stopUnreadPolling() {
     _pollingTimer?.cancel();
     _pollingTimer = null;
     unreadCountNotifier.value = 0;
+    // Dibersihkan supaya kalau akun lain login di perangkat yang sama,
+    // badge-nya tidak sempat menampilkan angka sisa milik akun sebelumnya.
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.remove(_unreadCountCacheKey),
+    );
   }
 
   /// Segarkan angka badge sekarang juga.
@@ -143,7 +180,13 @@ class MessagesService {
     // kosong). Nilai lama dipertahankan supaya gangguan jaringan sesaat tidak
     // membuat badge berkedip hilang lalu muncul lagi.
     if (counts.isEmpty) return;
-    unreadCountNotifier.value = counts.values.fold<int>(0, (sum, n) => sum + n);
+    final total = counts.values.fold<int>(0, (sum, n) => sum + n);
+    unreadCountNotifier.value = total;
+    // Disimpan supaya kali berikutnya app dibuka, badge langsung tampil
+    // dari angka ini (lihat `_loadCachedUnreadCount`) alih-alih mulai dari
+    // 0 sambil menunggu fetch jaringan pertama selesai.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_unreadCountCacheKey, total);
   }
 
   /// `GET /chat/unread_threads` -> `{ "threadId": count }`.

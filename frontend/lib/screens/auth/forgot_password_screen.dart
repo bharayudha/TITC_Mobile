@@ -1,62 +1,57 @@
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-import 'package:magang_titc/screens/main_shell.dart';
-import 'package:magang_titc/screens/auth/forgot_password_screen.dart';
-import 'package:magang_titc/screens/auth/signup_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
-import 'package:magang_titc/widgets/shared/whatsapp_help_button.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+/// Layar lupa password, sengaja meniru struktur visual [LoginScreen] persis
+/// (header navy + logo TITC, kartu putih, tombol biru) alih-alih memakai
+/// WebView — form aslinya di web (`/login/?action=lostpassword`) tidak
+/// terpakai nonce sama sekali, jadi submit langsung dari app lebih
+/// konsisten dan lebih gampang dipastikan tampilannya sama dengan Login.
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _usernameController = TextEditingController();
 
-  bool _rememberMe = false;
-  bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMessage;
+  String? _successMessage;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
-  Future<void> _login() async {
+  Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _successMessage = null;
     });
 
     try {
-      final result = await AuthService.login(
-        _emailController.text.trim(),
-        _passwordController.text,
+      final result = await AuthService.requestPasswordReset(
+        _usernameController.text.trim(),
       );
 
       if (!mounted) return;
 
-      if (result['success'] == true) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainShell()),
-        );
-      } else {
-        setState(() {
-          _errorMessage = result['message'] ?? 'Login gagal.';
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _isLoading = false;
+        if (result['success'] == true) {
+          _successMessage = result['message'] ?? 'Cek email Anda.';
+        } else {
+          _errorMessage = result['message'] ?? 'Gagal mengirim permintaan.';
+        }
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -84,10 +79,13 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
-          const Positioned(
-            right: 16,
-            bottom: 16,
-            child: WhatsAppHelpButton(),
+          Positioned(
+            left: 4,
+            top: MediaQuery.of(context).padding.top + 8,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ),
         ],
       ),
@@ -124,25 +122,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 children: [
                   TextSpan(text: 'TITC\n'),
-                  TextSpan(
-                    text: 'IND',
-                    style: TextStyle(fontSize: 20),
-                  ),
+                  TextSpan(text: 'IND', style: TextStyle(fontSize: 20)),
                   TextSpan(
                     text: 'ONE',
                     style: TextStyle(fontSize: 20, color: Colors.red),
                   ),
-                  TextSpan(
-                    text: 'SIA',
-                    style: TextStyle(fontSize: 20),
-                  ),
+                  TextSpan(text: 'SIA', style: TextStyle(fontSize: 20)),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 24),
           const Text(
-            'Dear Test Taker,',
+            'Forgot Your Password?',
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -151,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Join with in our spaces. Sign up now!',
+            'No worries, we\'ll send you reset instructions.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white70, fontSize: 15),
           ),
@@ -167,80 +159,34 @@ class _LoginScreenState extends State<LoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Login to dashboard',
+            'Forgot Password',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           const Text(
-            'Gunakan email yang terdaftar dan password default: 123456',
+            'Masukkan username atau email terdaftar, kami akan kirim '
+            'instruksi reset password ke email Anda.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.black54, fontSize: 14),
           ),
           const SizedBox(height: 32),
           const Text(
-            'Email Address',
+            'Username or Email Address',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
           ),
           const SizedBox(height: 8),
           TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: _inputDecoration('Your account email address'),
+            controller: _usernameController,
+            decoration: _inputDecoration('Your username or email address'),
             validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Email address is required';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Password',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            decoration: _inputDecoration('Your account password').copyWith(
-              suffixIcon: IconButton(
-                icon: PhosphorIcon(
-                  _obscurePassword
-                      ? PhosphorIconsRegular.eyeSlash
-                      : PhosphorIconsRegular.eye,
-                  color: Colors.grey,
-                ),
-                onPressed: () {
-                  setState(() => _obscurePassword = !_obscurePassword);
-                },
-              ),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Password is required';
+              if (value == null || value.trim().isEmpty) {
+                return 'Username or email is required';
               }
               return null;
             },
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Checkbox(
-                value: _rememberMe,
-                activeColor: const Color(0xFF1E5AF5),
-                onChanged: (value) {
-                  setState(() => _rememberMe = value ?? false);
-                },
-              ),
-              const Text(
-                'Remember Me',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Error message
           if (_errorMessage != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -257,10 +203,26 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 12),
           ],
+          if (_successMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Text(
+                _successMessage!,
+                style: TextStyle(color: Colors.green.shade700, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             height: 52,
             child: ElevatedButton(
-              onPressed: _isLoading ? null : _login,
+              onPressed: _isLoading ? null : _submit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E5AF5),
                 foregroundColor: Colors.white,
@@ -277,42 +239,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         strokeWidth: 2.5,
                       ),
                     )
-                  : const Text('Login', style: TextStyle(fontSize: 16)),
+                  : const Text(
+                      'Get New Password',
+                      style: TextStyle(fontSize: 16),
+                    ),
             ),
           ),
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text("Don't have an account? "),
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SignupScreen()),
-                  );
-                },
-                child: const Text(
-                  'Signup',
-                  style: TextStyle(
-                    color: Color(0xFF1E5AF5),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
           Center(
             child: GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const ForgotPasswordScreen(),
-                ),
-              ),
+              onTap: () => Navigator.of(context).pop(),
               child: const Text(
-                'Forgot password?',
+                '← Back to Login',
                 style: TextStyle(
                   color: Color(0xFF1E5AF5),
                   fontWeight: FontWeight.w600,
@@ -344,5 +284,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
 }

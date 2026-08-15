@@ -1,4 +1,5 @@
 import 'package:magang_titc/models/json_utils.dart';
+import 'package:magang_titc/services/auth_service.dart';
 
 /// Model untuk satu thread chat (community/direct/group) dari Fluent Community.
 class ChatThreadModel {
@@ -47,10 +48,60 @@ class ChatThreadModel {
         ? asJsonMap(messages.first)
         : const {};
     final latestText = asJsonString(latestMessage['text']) ?? '';
+    final latestMeta = asJsonMap(latestMessage['meta']);
+    final latestSender = asJsonMap(latestMessage['xprofile']);
+
+    // Web menampilkan keterangan pengirim di bawah judul tiap thread —
+    // "You: kelas" / "Alfin: Halo kak, ..." / "magang created the group"
+    // (event sistem, tanpa awalan nama). Dikonfirmasi lewat log JSON
+    // mentah: `xprofile.username` pesan terakhir dibandingkan ke
+    // `AuthService.userSlug` (pola yang sama dipakai `ChatDetailScreen`
+    // untuk bubble "isMine"), dan `meta.system_event`+`meta.system_text`
+    // khusus untuk event sistem seperti pembuatan grup.
+    String buildPreview() {
+      final systemText = asJsonString(latestMeta['system_text']);
+      if (latestMeta['system_event'] == true && systemText != null) {
+        return _decodeHtmlEntities(systemText);
+      }
+      final cleanText = _decodeHtmlEntities(
+        latestText,
+      ).replaceAll(RegExp(r'<[^>]*>'), '').trim();
+      if (cleanText.isEmpty && messages.isEmpty) return '';
+
+      final senderUsername = latestSender['username'] as String?;
+      final isMine =
+          senderUsername != null &&
+          senderUsername.isNotEmpty &&
+          senderUsername == AuthService.userSlug;
+      final senderLabel = isMine
+          ? 'You'
+          : ((latestSender['display_name'] as String?) ?? '').split(' ').first;
+      // Pesan yang isinya cuma gambar tidak menyisakan teks apa pun
+      // sesudah tag dibuang — web menampilkan "Image" sebagai gantinya.
+      final body = cleanText.isNotEmpty ? cleanText : 'Image';
+      return senderLabel.isNotEmpty ? '$senderLabel: $body' : body;
+    }
+
+    // Untuk thread DIRECT (1-on-1), API mengembalikan judul generik
+    // "Chat between X & Y" di `title` level atas — bukan nama lawan
+    // bicara. Web aslinya menampilkan nama orangnya langsung (seperti
+    // WhatsApp/Telegram). Sempat ditebak field-nya `otherUser.display_
+    // name` (`recipient`/`other_user`/`xprofile`) — SALAH, semuanya
+    // kosong. Dikonfirmasi lewat log JSON mentah: nama aslinya ada di
+    // `info.title` (contoh: `"info":{"title":"bhara",...}`), field yang
+    // SAMA yang dipakai thread community untuk nama Space — cuma untuk
+    // thread direct isinya kebetulan nama orangnya. Thread community/
+    // group TIDAK diubah — judul aslinya (nama Space/nama grup) sudah
+    // benar dan sengaja tetap pakai `json['title']` dulu seperti semula.
+    final directDisplayName = type == 'direct'
+        ? info['title'] as String?
+        : null;
 
     return ChatThreadModel(
       id: json['id'] ?? 0,
-      title: (json['title'] as String?)?.isNotEmpty == true
+      title: (directDisplayName?.isNotEmpty == true)
+          ? directDisplayName!
+          : (json['title'] as String?)?.isNotEmpty == true
           ? json['title']
           : (info['title'] as String?) ??
                 (otherUser['display_name'] as String?) ??
@@ -59,12 +110,27 @@ class ChatThreadModel {
           ? info['photo']
           : (otherUser['avatar'] as String?) ?? '',
       iconHtml: info['icon_html'] ?? '',
-      lastMessagePreview: latestText.replaceAll(RegExp(r'<[^>]*>'), ''),
+      lastMessagePreview: buildPreview(),
       updatedAt: json['updated_at'] ?? '',
       messageCount: int.tryParse('${json['message_count'] ?? 0}') ?? 0,
       canSendMessage: info['can_send_message'] ?? true,
       type: type,
     );
+  }
+
+  /// API mengembalikan `text` dengan entitas HTML sudah di-escape (mis.
+  /// `&lt;div&gt;kelas&lt;/div&gt;`, bukan `<div>kelas</div>` apa adanya).
+  /// Harus di-decode DULU sebelum tag-nya dibuang lewat regex — regex
+  /// `<[^>]*>` tidak akan cocok kalau tanda kurungnya masih dalam bentuk
+  /// `&lt;`/`&gt;`. Cuma menangani entitas paling umum, bukan daftar penuh.
+  static String _decodeHtmlEntities(String input) {
+    return input
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#039;', "'")
+        .replaceAll('&nbsp;', ' ');
   }
 
   ChatThreadModel copyWithUnread(int unread) {

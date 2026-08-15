@@ -602,6 +602,59 @@ class AuthService {
     }
   }
 
+  /// Minta reset password lewat form WordPress default (`/login/?action=
+  /// lostpassword`). Diverifikasi lewat cURL: form ini TIDAK pakai nonce
+  /// sama sekali, cuma field `user_login` + `redirect_to` kosong + tombol
+  /// `wp-submit` — beda dari form login/register FCOM yang lain.
+  /// Sukses → WordPress redirect ke `?checkemail=confirm` (diikuti otomatis
+  /// oleh `http.Client`, jadi tidak ada `login_error` di body akhir).
+  /// Gagal (user tidak ada) → tetap 200, ada `<div id="login_error">`
+  /// berisi pesan errornya — sudah dicek langsung, bukan tebakan.
+  static Future<Map<String, dynamic>> requestPasswordReset(
+    String usernameOrEmail,
+  ) async {
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('$_baseUrl/login/?action=lostpassword'),
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': '$_baseUrl/login/?action=lostpassword',
+            },
+            body: {
+              'user_login': usernameOrEmail,
+              'redirect_to': '',
+              'wp-submit': 'Get New Password',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.body.contains('id="login_error"')) {
+        final match = RegExp(
+          r'id="login_error"[^>]*>\s*<p>(?:<strong>Error:</strong>\s*)?([^<]+)',
+        ).firstMatch(response.body);
+        return {
+          'success': false,
+          'message':
+              match?.group(1)?.trim() ??
+              'Gagal mengirim permintaan reset password.',
+        };
+      }
+
+      return {
+        'success': true,
+        'message': 'Cek email Anda untuk instruksi reset password.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Tidak bisa terhubung ke server: $e',
+      };
+    }
+  }
+
   /// Cek apakah user yang sedang login adalah admin/manager komunitas
   /// Fluent Community (BUKAN admin WordPress — role WP semua akun tetap
   /// `subscriber`, dikonfirmasi dari respons `/wp/v2/users/me?context=edit`).

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
@@ -34,6 +35,9 @@ class _TitcAppBarState extends State<TitcAppBar> {
       scrolledUnderElevation: 3,
       shadowColor: kShadowColor,
       surfaceTintColor: Colors.transparent,
+      // Default Flutter (16dp) membuat "TITC Indonesia" terlalu jauh dari
+      // ikon ☰ dibanding web, di mana keduanya lebih rapat.
+      titleSpacing: 0,
       leading: IconButton(
         icon: const PhosphorIcon(
           PhosphorIconsRegular.list,
@@ -100,7 +104,7 @@ class _TitcAppBarState extends State<TitcAppBar> {
   Widget _buildTitle(BuildContext context) {
     final label = RichText(
       text: TextSpan(
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        style: GoogleFonts.fredoka(fontSize: 22, fontWeight: FontWeight.bold),
         children: [
           TextSpan(text: 'TITC ', style: TextStyle(color: AppColors.primary)),
           TextSpan(text: 'Indonesia', style: TextStyle(color: Colors.black54)),
@@ -116,10 +120,14 @@ class _TitcAppBarState extends State<TitcAppBar> {
       // login. Jadi menutup semua halaman sampai yang pertama = pulang ke Home.
       onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
       borderRadius: BorderRadius.circular(6),
+      // Padding HORIZONTAL sengaja dihapus (dulu ada, `horizontal: 6`) —
+      // itu membuat teksnya geser sedikit ke kanan dibanding versi di Home
+      // (yang tidak bisa pop, jadi tidak lewat Padding ini sama sekali),
+      // padahal keduanya harus di posisi PERSIS sama. Padding vertikal
+      // dipertahankan (tidak mempengaruhi posisi horizontal) supaya area
+      // sentuhnya tetap sedikit lebih tinggi dari tinggi teks aslinya.
       child: Padding(
-        // Area sentuh diperlebar sedikit supaya tidak perlu mengetuk
-        // tepat di hurufnya.
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: label,
       ),
     );

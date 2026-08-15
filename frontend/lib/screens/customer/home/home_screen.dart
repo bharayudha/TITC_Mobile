@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/constants/app_text_styles.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/portal_navigator.dart';
+import 'package:magang_titc/widgets/shared/admin_only.dart';
 import 'package:magang_titc/widgets/shared/section_header.dart';
 import '../../../models/activity_model.dart';
 import '../../../services/api_service.dart';
@@ -167,6 +168,72 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Menu "⋮" di header Feed (admin-only, lihat [AdminOnly] di atas) —
+  /// dulu tombol mati (`onPressed: () {}`). Web-nya sendiri dua langkah:
+  /// klik "⋮" dulu untuk buka dropdown, baru klik "Welcome Banner"/
+  /// "Manage Links" di dalamnya. Karena pemicunya ikon polos tanpa teks,
+  /// dipakai [WebViewClickHelper.clickDotMenuThenText] (lewat
+  /// `autoClickDotMenuThenText`) — bukan `autoClickText` biasa yang cuma
+  /// bisa cari 1 elemen berteks.
+  void _openFeedManageMenu(String menuItemText) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AuthenticatedWebViewScreen(
+          title: menuItemText,
+          url: 'https://titc.or.id/portal/',
+          autoClickDotMenuThenText: menuItemText,
+          extraCss: _feedManageDialogCss,
+        ),
+      ),
+    );
+  }
+
+  /// "Welcome Banner" & "Manage Links" ternyata bukan modal/dialog sama
+  /// sekali — Vue router pindah ke HALAMAN baru di dalam SPA yang sama
+  /// (dikonfirmasi: MODAL_PROBE selalu 0x0 untuk semua kandidat
+  /// `.el-dialog`/`.el-drawer`/dst, karena memang tidak ada modal yang
+  /// perlu dicari). CSS dasar `AuthenticatedWebViewScreen` sudah cukup
+  /// untuk merapikan halaman itu; hanya baris "Manage Links" (badge
+  /// "enabled" + tombol Edit/Delete) yang berantakan, dikonfirmasi lewat
+  /// ROW_PROBE: badge `.el-tag` ternyata menyatu di dalam paragraf judul
+  /// (`.fcom_heading_item`, lebar cuma 174px), jadi judul panjang + badge
+  /// berebut ruang sempit. Baris utamanya (`.fcom_section_item`) dipaksa
+  /// jadi flex row rapi, judul dikasih ruang fleksibel, badge & tombol
+  /// Edit/Delete dikumpulkan tetap ringkas di ujung.
+  static const String _feedManageDialogCss = '''
+    button {
+      width: auto !important;
+      display: inline-flex !important;
+      margin-top: 0 !important;
+    }
+    .fcom_section_item {
+      display: flex !important;
+      align-items: center !important;
+      flex-wrap: nowrap !important;
+      gap: 8px !important;
+      padding: 10px 8px !important;
+    }
+    .fcom_section_item_title {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+    }
+    .fcom_heading_item {
+      display: flex !important;
+      align-items: center !important;
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+      margin: 0 !important;
+    }
+    .fcom_section_item .el-button {
+      width: auto !important;
+      flex-shrink: 0 !important;
+      padding: 6px 10px !important;
+      font-size: 12px !important;
+      margin: 0 !important;
+    }
+  ''';
+
   /// Like/unlike optimistic: tampilan berubah seketika, lalu dikirim ke
   /// server. Kalau server menolak, tampilan dikembalikan seperti semula
   /// (revert) supaya app tidak pernah berbohong soal status like sesungguhnya
@@ -234,10 +301,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // 3. Header Feed
           SectionHeader(
-            title: 'Feed',
-            trailing: IconButton(
-              icon: const PhosphorIcon(PhosphorIconsRegular.dotsThreeVertical, color: Colors.black54),
-              onPressed: () {},
+            title: 'Announcement',
+            // Menu "⋮" ini mengelola konten seluruh komunitas (banner &
+            // link cepat Home), bukan sesuatu punya masing2 user — sama
+            // seperti "New Course"/"New Space", digating admin-only lewat
+            // AdminOnly. Untuk user biasa tombolnya hilang total
+            // (sebelumnya selalu tampil tapi tidak berbuat apa2 untuk
+            // siapa pun — bukan mundur, cuma jadi jujur soal siapa yang
+            // sebenarnya bisa memakainya).
+            trailing: AdminOnly(
+              builder: (context) => PopupMenuButton<String>(
+                icon: const PhosphorIcon(PhosphorIconsRegular.dotsThreeVertical, color: Colors.black54),
+                onSelected: _openFeedManageMenu,
+                offset: const Offset(0, 36),
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'Welcome Banner',
+                    height: 44,
+                    child: Row(
+                      children: [
+                        PhosphorIcon(PhosphorIconsRegular.image, size: 18, color: Colors.black54),
+                        SizedBox(width: 10),
+                        Text('Welcome Banner'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'Manage Links',
+                    height: 44,
+                    child: Row(
+                      children: [
+                        PhosphorIcon(PhosphorIconsRegular.link, size: 18, color: Colors.black54),
+                        SizedBox(width: 10),
+                        Text('Manage Links'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 4),

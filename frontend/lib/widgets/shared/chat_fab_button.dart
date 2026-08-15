@@ -27,30 +27,58 @@ class ChatFabButton extends StatelessWidget {
       child: SizedBox(
         width: kChatFabSize,
         height: kChatFabSize,
-        child: ValueListenableBuilder<int>(
-          valueListenable: MessagesService.unreadCountNotifier,
-          builder: (context, unreadCount, child) {
-            return Badge(
-              isLabelVisible: unreadCount > 0,
-              // Angka besar dipendekkan jadi "99+" supaya badge tidak
-              // melebar sampai menutupi ikonnya sendiri.
-              label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
-              backgroundColor: Colors.red,
-              // Digeser sedikit ke dalam: tanpa ini badge menempel di sudut
-              // kotak 56x56, sementara ikonnya cuma 34 — jadi angkanya
-              // tampak melayang jauh dari ikon.
-              offset: const Offset(-6, 6),
-              alignment: Alignment.topRight,
-              child: child,
-            );
-          },
-          // Ikon dibuat di luar builder karena isinya tidak bergantung pada
-          // angka unread — jadi tidak perlu dibangun ulang tiap badge
-          // berubah.
-          child: const PhosphorIcon(
-            PhosphorIconsRegular.chatCircleDots,
-            color: Colors.black87,
-            size: 34,
+        child: Center(
+          // Widget `Badge` bawaan Material dilepas — posisinya (kombinasi
+          // `alignment` + `offset`) terbukti tidak bisa didekatkan ke ikon
+          // sekencang apa pun offset-nya diubah (sudah dicoba beberapa
+          // nilai, tetap ada jarak). Diganti `Stack` + `Positioned` manual
+          // supaya badge-nya benar2 nempel di pojok kanan-atas GLYPH ikon
+          // (bukan pojok kotak sentuh 56px), sesuai gaya badge notifikasi
+          // umum (mis. WhatsApp).
+          child: ValueListenableBuilder<int>(
+            valueListenable: MessagesService.unreadCountNotifier,
+            builder: (context, unreadCount, child) {
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  child!,
+                  if (unreadCount > 0)
+                    Positioned(
+                      top: -4,
+                      right: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        // Angka besar dipendekkan jadi "99+" supaya badge
+                        // tidak melebar sampai menutupi ikonnya sendiri.
+                        child: Text(
+                          unreadCount > 99 ? '99+' : '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+            // Ikon dibuat di luar builder karena isinya tidak bergantung
+            // pada angka unread — jadi tidak perlu dibangun ulang tiap
+            // badge berubah.
+            child: const PhosphorIcon(
+              PhosphorIconsRegular.chatCircleDots,
+              color: Colors.black87,
+              size: 34,
+            ),
           ),
         ),
       ),

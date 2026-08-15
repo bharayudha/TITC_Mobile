@@ -497,6 +497,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  /// Format jam pesan seperti web ("11:53 AM") — bukan waktu relatif
+  /// ("x minutes ago") seperti `_humanizeTime` di layar Members, karena web
+  /// menampilkan jam-menit apa adanya, bukan selisih waktu. Ditulis manual
+  /// (bukan lewat package `intl`) karena `intl` belum jadi dependency di
+  /// proyek ini dan formatnya sederhana.
+  String _formatMessageTime(String raw) {
+    final parsed = DateTime.tryParse(raw.trim().replaceFirst(' ', 'T'));
+    if (parsed == null) return '';
+    final hour24 = parsed.hour;
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final minute = parsed.minute.toString().padLeft(2, '0');
+    final period = hour24 < 12 ? 'AM' : 'PM';
+    return '$hour12:$minute $period';
+  }
+
   Widget _buildMessageBubble(ChatMessageModel message, bool isMine) {
     return GestureDetector(
       // Tekan lama, bukan ketuk: ketuk sudah dipakai membuka gambar, dan
@@ -581,6 +596,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     const SizedBox(height: 6),
                     _buildReactions(message, isMine),
                   ],
+                  // Jam diletakkan DI DALAM gelembung. `Align` sempat
+                  // dipakai untuk rata-kanan, TAPI itu memaksa Align (dan
+                  // ikut menyeret Column + Container gelembung) melebar
+                  // penuh mengikuti constraint terluas dari `Flexible`,
+                  // bukan menyesuaikan isi teks — gelembung pendek seperti
+                  // "tes"/"p" jadi selebar layar. Diganti `Text` polos
+                  // (rata kiri, sejajar isi pesan) supaya gelembung kembali
+                  // menyusut sesuai panjang teksnya sendiri.
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatMessageTime(message.createdAt),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isMine ? Colors.white70 : Colors.black38,
+                    ),
+                  ),
                 ],
               ),
             ),

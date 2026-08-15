@@ -1,8 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:magang_titc/screens/main_shell.dart';
+import 'package:magang_titc/services/webview_click_helper.dart';
+import 'package:magang_titc/services/webview_cookie_helper.dart';
 import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/models/message_model.dart';
 import 'package:magang_titc/services/auth_service.dart';
@@ -23,6 +26,13 @@ class MessagesListScreen extends StatefulWidget {
 class _MessagesListScreenState extends State<MessagesListScreen> {
   final _searchController = TextEditingController();
   late Future<ChatThreadsResult> _threadsFuture;
+
+  // Web-nya bisa buka/tutup tiap section (COMMUNITIES/GROUPS/DIRECT
+  // MESSAGES) lewat panah di sebelah judulnya — defaultnya semua terbuka,
+  // sama seperti tampilan app sebelum fitur ini ditambahkan.
+  bool _communitiesExpanded = true;
+  bool _groupsExpanded = true;
+  bool _directExpanded = true;
 
   @override
   void initState() {
@@ -55,6 +65,20 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
       _threadsFuture = MessagesService.fetchThreads();
     });
     await _threadsFuture;
+  }
+
+  /// Tampilkan compose "New message" sebagai dialog MENGAMBANG di atas
+  /// layar Messages (persis seperti web), bukan halaman baru. Isinya WebView
+  /// ke `/portal/chat` dengan tombol "New message" diklik otomatis — belum
+  /// ada endpoint "buat thread baru" yang terverifikasi lewat cURL, jadi
+  /// alurnya diserahkan ke JS/UI asli web, hanya wadahnya (dialog kecil,
+  /// bukan Scaffold penuh) yang native.
+  void _openNewMessage() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => const _NewMessageDialog(),
+    );
   }
 
   void _openThread(ChatThreadModel thread) {
@@ -118,18 +142,47 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                   final result = snapshot.data!;
                   final query = _searchController.text.trim().toLowerCase();
                   final communities = _filterThreads(result.communityThreads, query);
-                  final directs = _filterThreads([...result.directThreads, ...result.groupThreads], query);
+                  // Dulu digabung jadi satu section "DIRECT MESSAGES" —
+                  // padahal `result.groupThreads` sudah terpisah sendiri
+                  // dari `result.directThreads` di model. Web-nya punya 3
+                  // section (COMMUNITIES/GROUPS/DIRECT MESSAGES), bukan 2.
+                  final groups = _filterThreads(result.groupThreads, query);
+                  final directs = _filterThreads(result.directThreads, query);
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildSectionLabel('COMMUNITIES'),
-                      const SizedBox(height: 12),
-                      _buildThreadSection(communities, 'Belum ada percakapan komunitas.'),
+                      _buildSectionLabel(
+                        'COMMUNITIES',
+                        expanded: _communitiesExpanded,
+                        onToggle: () => setState(
+                          () => _communitiesExpanded = !_communitiesExpanded,
+                        ),
+                      ),
+                      if (_communitiesExpanded) ...[
+                        const SizedBox(height: 12),
+                        _buildThreadSection(communities, 'Belum ada percakapan komunitas.'),
+                      ],
                       const SizedBox(height: 24),
-                      _buildSectionLabel('DIRECT MESSAGES'),
-                      const SizedBox(height: 12),
-                      _buildThreadSection(directs, 'Belum ada pesan langsung.'),
+                      _buildSectionLabel(
+                        'GROUPS',
+                        expanded: _groupsExpanded,
+                        onToggle: () => setState(() => _groupsExpanded = !_groupsExpanded),
+                      ),
+                      if (_groupsExpanded) ...[
+                        const SizedBox(height: 12),
+                        _buildThreadSection(groups, 'Belum ada grup.'),
+                      ],
+                      const SizedBox(height: 24),
+                      _buildSectionLabel(
+                        'DIRECT MESSAGES',
+                        expanded: _directExpanded,
+                        onToggle: () => setState(() => _directExpanded = !_directExpanded),
+                      ),
+                      if (_directExpanded) ...[
+                        const SizedBox(height: 12),
+                        _buildThreadSection(directs, 'Belum ada pesan langsung.'),
+                      ],
                       const SizedBox(height: 24),
                     ],
                   );
@@ -168,7 +221,8 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                   PhosphorIconsRegular.paperPlaneTilt,
                   color: Colors.black87,
                 ),
-                onPressed: _refresh,
+                tooltip: 'New message',
+                onPressed: _openNewMessage,
               ),
             ],
           ),
@@ -208,15 +262,38 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
     );
   }
 
-  Widget _buildSectionLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.black54,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
+  Widget _buildSectionLabel(
+    String label, {
+    required bool expanded,
+    required VoidCallback onToggle,
+  }) {
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.black54,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            // Panah menghadap bawah saat terbuka, ke kanan saat tertutup
+            // — meniru gaya chevron accordion di web.
+            AnimatedRotation(
+              turns: expanded ? 0.25 : 0,
+              duration: const Duration(milliseconds: 150),
+              child: const PhosphorIcon(
+                PhosphorIconsRegular.caretRight,
+                size: 16,
+                color: Colors.black54,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -291,6 +368,446 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog mengambang berisi WebView compose "New message" — dibuat berdiri
+/// sendiri (bukan lewat `AuthenticatedWebViewScreen`) karena widget itu
+/// selalu membungkus dengan `Scaffold` + `AppBar` sendiri untuk kebutuhan
+/// halaman penuh; di sini yang dibutuhkan justru sebaliknya, WebView polos
+/// di dalam kartu kecil mengambang seperti modal aslinya di web.
+///
+/// Fitur messaging FCOM ternyata komponen Svelte custom (BEM naming:
+/// `new-message-modal__header`, dst), BUKAN Element Plus (`.el-dialog`/
+/// `.el-drawer`) seperti bagian portal lain — jadi seluruh CSS/JS di sini
+/// ditarget khusus untuk struktur itu, bukan pola admin drawer biasa.
+class _NewMessageDialog extends StatefulWidget {
+  const _NewMessageDialog();
+
+  @override
+  State<_NewMessageDialog> createState() => _NewMessageDialogState();
+}
+
+class _NewMessageDialogState extends State<_NewMessageDialog> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+
+  // Kartu modal aslinya jauh lebih pendek daripada tebakan awal — diukur
+  // dinamis dari tinggi kartu sungguhan (lihat channel `MODAL_HEIGHT`).
+  // 420 cuma nilai awal sebelum pengukuran pertama tiba. TIDAK dikunci ke
+  // satu nilai (tidak seperti versi sebelumnya) — diukur ulang tiap kali
+  // DOM berubah (lihat `cleanup()`), supaya kotaknya ikut menyesuaikan
+  // saat user pindah tab "Direct Messages" ↔ "New Group" (tingginya beda).
+  double _webViewHeight = 900;
+
+  // Penjaga supaya `Navigator.pop()` di 'MODAL_CLOSED' cuma jalan SEKALI.
+  // Tanpa ini, kalau sinyal itu sampai lebih dari sekali (mis. observer
+  // MutationObserver di web sempat terpicu dua kali untuk satu peristiwa
+  // tutup), pop kedua bisa menutup halaman Messages itu sendiri (bukan
+  // cuma dialog-nya) — user jadi terlempar balik ke Home, bukan tetap di
+  // Messages.
+  bool _hasClosed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(
+        'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      )
+      // CSS `background: transparent` di HTML/body cuma mengatur apa yang
+      // digambar HALAMANNYA — widget WebView Android sendiri (native View
+      // di baliknya) tetap punya latar putih bawaan terpisah, yang
+      // mengintip lewat celah manapun yang tidak sempat dilukis halaman
+      // (mis. selisih kecil antara `_webViewHeight` yang dikunci dan
+      // tinggi kartu sungguhan). Transparansi harus diset di LEVEL
+      // WEBVIEW-NYA SENDIRI lewat API ini, bukan cuma lewat CSS.
+      ..setBackgroundColor(Colors.transparent)
+      ..addJavaScriptChannel(
+        'TitcDebug',
+        onMessageReceived: (message) {
+          // Tombol × di modal cuma menutup modal MILIK WEB — WebView kita
+          // tidak otomatis tahu itu terjadi, jadi kotak dialog Flutter
+          // tetap terbuka kalau tidak disinkronkan manual. MutationObserver
+          // di bawah mendeteksi saat modal hilang dari DOM lalu melapor
+          // lewat prefix ini, supaya dialog Flutter ikut ditutup bersamaan.
+          if (message.message == 'MODAL_CLOSED') {
+            if (!_hasClosed && mounted && Navigator.of(context).canPop()) {
+              _hasClosed = true;
+              Navigator.of(context).pop();
+            }
+            return;
+          }
+          if (message.message.startsWith('MODAL_HEIGHT:')) {
+            // Tidak dikunci lagi sesudah pengukuran pertama — dulu dikunci
+            // karena formula pengukuran lama (`top*2 + height`) muter balik
+            // ke diri sendiri kalau diukur berulang. Formula sekarang cuma
+            // pakai `mr.height` langsung (tidak bergantung posisi/centering
+            // backdrop), jadi aman diukur ulang tiap tab berganti (mis.
+            // "Direct Messages" ↔ "New Group" tingginya beda) — kotaknya
+            // ikut menyesuaikan alih-alih menyisakan ruang kosong di bawah.
+            final raw = message.message.substring('MODAL_HEIGHT:'.length).trim();
+            final measured = double.tryParse(raw);
+            if (measured != null && mounted) {
+              final clamped = measured.clamp(280.0, 600.0);
+              if ((clamped - _webViewHeight).abs() > 2) {
+                setState(() => _webViewHeight = clamped);
+              }
+            }
+            return;
+          }
+          // ignore: avoid_print
+          print('WEBVIEW_DOM: ${message.message}');
+        },
+      )
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (_) => NavigationDecision.navigate,
+          onPageFinished: (_) async {
+            await _controller.runJavaScript('''
+              (function() {
+                var s = document.createElement('style');
+                s.id = 'titc-new-message-styles';
+                s.textContent = `$_dialogCss`;
+                document.head.appendChild(s);
+              })();
+            ''');
+            // Bersihkan elemen yang ikut "bocor" ke dalam wadah modal —
+            // dikonfirmasi lewat probe DOM langsung, bukan tebakan:
+            // 1. `.show_on_light` (logo "TITC Indonesia") — CSS
+            //    `display:none` TERBUKTI kalah (specificity war lawan
+            //    selector scoped Vue), jadi dihapus lewat JS langsung.
+            // 2. `.fcom-modal-portal` dikecualikan total dari aturan
+            //    "sembunyikan semua anak <body>" supaya modal tetap
+            //    tampil — tapi portal itu ternyata cuma berisi SATU anak:
+            //    `.modal-backdrop`, dan modal aslinya BERSARANG DI DALAM
+            //    backdrop itu (bukan di sebelahnya). Backdrop sendiri
+            //    punya warna gelap/abu2 bawaan (fungsinya di web memang
+            //    menggelapkan halaman di belakang modal) — barrier gelap
+            //    Dialog Flutter kita sudah menggantikan peran itu, jadi
+            //    dipaksa transparan langsung lewat style API (inline
+            //    style + 'important' selalu menang lawan rule stylesheet
+            //    manapun, tidak ada lagi perang spesifisitas).
+            await _controller.runJavaScript(r'''
+              (function() {
+                function cleanup() {
+                  // TOP_PROBE membuktikan `<body class="fcom-is-mobile">`
+                  // punya warna latar sungguhan (rgb(240,242,245)) yang
+                  // tetap muncul di celah kecil sebelum kartu modal
+                  // menutupinya — CSS `<style>` kita (`body{background:
+                  // transparent}`) TERBUKTI kalah lagi, pola yang sama
+                  // persis dengan `.show_on_light`/`.modal-backdrop`
+                  // sebelumnya. Dipaksa langsung lewat style API di sini.
+                  document.body.style.setProperty('background', 'transparent', 'important');
+                  document.body.style.setProperty('background-color', 'transparent', 'important');
+                  document.documentElement.style.setProperty('background', 'transparent', 'important');
+                  document.documentElement.style.setProperty('background-color', 'transparent', 'important');
+                  // Strip putih TERNYATA masih ada sesudah body/html
+                  // dipaksa transparan — sumber aslinya baru ketahuan lewat
+                  // TOP_PROBE lanjutan: `.fcom-modal-portal` (wadah Teleport
+                  // Vue yang menaungi backdrop+modal) PUNYA warna latar
+                  // sendiri (rgb(246,249,250), hampir putih) yang belum
+                  // pernah disentuh perbaikan manapun sebelumnya.
+                  document.querySelectorAll('.fcom-modal-portal').forEach(function(portal) {
+                    portal.style.setProperty('background', 'transparent', 'important');
+                    portal.style.setProperty('background-color', 'transparent', 'important');
+                  });
+                  // TOP_PROBE roundNearTop akhirnya membongkar sumber
+                  // aslinya: bentuk bundar itu adalah IKON TOP MENU ASLI
+                  // website (toggle dark mode, search, notifikasi, avatar
+                  // user — class `.top_menu_item`/`.fcom_top_menu`).
+                  // Elemen ini SUDAH ada di daftar selector CSS
+                  // `display:none` sejak awal, tapi TERBUKTI tetap
+                  // dirender — pola kekalahan CSS yang sama berulang kali
+                  // di sesi ini. Dihapus langsung dari DOM di sini.
+                  document.querySelectorAll('.fcom_top_menu, .top_menu_item').forEach(function(el) {
+                    el.remove();
+                  });
+                  // AKHIRNYA ketemu sumber sungguhan strip putih itu —
+                  // dibuktikan user sendiri lewat screenshot cepat pas
+                  // modal ditutup: yang mengintip adalah HALAMAN MESSAGES
+                  // ASLI (header, search, daftar chat), bukan warna dasar
+                  // WebView. `.fcom_wrap` (pembungkus SELURUH halaman,
+                  // anak langsung <body>) TERBUKTI tetap `display: block`
+                  // walau sudah masuk daftar CSS `body > *:not(.fcom-modal-
+                  // portal) { display:none }` — CSS kalah lagi, pola yang
+                  // sama berulang kali di sesi ini. Dipaksa lewat JS.
+                  // PENTING: JANGAN `el.remove()` di sini — sempat dicoba,
+                  // hasilnya seluruh aplikasi Vue ikut mati (tombol "New
+                  // message" sendiri jadi tidak ketemu lagi) karena
+                  // `.fcom_wrap` ternyata bukan cuma pembungkus tampilan,
+                  // tapi rumah bagi SELURUH app termasuk logikanya.
+                  // `display:none` saja sudah cukup untuk menyembunyikan
+                  // visualnya tanpa mematikan Vue-nya.
+                  //
+                  // CATATAN: sempat dicoba generalisasi ke SEMUA anak
+                  // <body> (bukan cuma `.fcom_wrap`) untuk menutup sisa
+                  // bocoran di bawah kartu — TERBUKTI merusak app-nya lagi
+                  // (tombol "New message" jadi tidak ketemu, sama seperti
+                  // kasus `el.remove()` sebelumnya). Dikembalikan ke target
+                  // spesifik `.fcom_wrap` saja, yang sudah terbukti aman.
+                  document.querySelectorAll('.fcom_wrap').forEach(function(el) {
+                    el.style.setProperty('display', 'none', 'important');
+                  });
+                  document.querySelectorAll('.show_on_light').forEach(function(el) {
+                    el.remove();
+                  });
+                  document.querySelectorAll('.fcom-modal-portal').forEach(function(portal) {
+                    Array.from(portal.children).forEach(function(child) {
+                      var isBackdrop = child.classList.contains('modal-backdrop');
+                      var isTargetModal = child.classList.contains('modal') &&
+                        child.classList.contains('new-message-modal');
+                      if (!isBackdrop && !isTargetModal) child.remove();
+                    });
+                  });
+                  document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
+                    backdrop.style.setProperty('background', 'transparent', 'important');
+                    backdrop.style.setProperty('background-color', 'transparent', 'important');
+                    Array.from(backdrop.children).forEach(function(child) {
+                      var isTargetModal = child.classList.contains('modal') &&
+                        child.classList.contains('new-message-modal');
+                      if (!isTargetModal) child.remove();
+                    });
+                  });
+                  // Sempat dipaksa tema gelap manual (background #1c1e2b,
+                  // teks putih) meniru referensi web user — sekarang
+                  // diminta balik ke tema TERANG alami (rendering asli
+                  // WebView kita, dikonfirmasi lewat probe sebelumnya:
+                  // modal ini bg=rgb(255,255,255) tanpa override apa pun).
+                  // Jadi blok pemaksa warna gelap di atas DIHAPUS, bukan
+                  // diganti — biarkan modal tampil apa adanya.
+                  //
+                  // Scrollbar bawaan browser di dalam kartu modal juga
+                  // diminta disembunyikan — beda dari CSS lain di file ini
+                  // yang berulang kali kalah lawan Svelte, scrollbar bisa
+                  // disembunyikan lewat pseudo-class `::-webkit-scrollbar`
+                  // (khusus WebKit/Blink, yang dipakai Android WebView)
+                  // tanpa risiko specificity war karena bukan meng-override
+                  // properti visual milik komponen.
+                  var scrollbarHideStyle = document.getElementById('titc-hide-scrollbar');
+                  if (!scrollbarHideStyle) {
+                    scrollbarHideStyle = document.createElement('style');
+                    scrollbarHideStyle.id = 'titc-hide-scrollbar';
+                    scrollbarHideStyle.textContent =
+                      '.modal.new-message-modal ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }' +
+                      '.modal.new-message-modal * { scrollbar-width: none !important; }';
+                    document.head.appendChild(scrollbarHideStyle);
+                  }
+                  // Hasil pencarian kontak ("To: as...") bisa memuat banyak
+                  // nama sekaligus — daftarnya dulu terpotong diam-diam
+                  // (kepotong sama `overflow:hidden` punya <body>, bukan
+                  // discroll). Kartu modal dipaksa punya batas tinggi
+                  // maksimum + scroll VERTIKAL SENDIRI supaya kelebihannya
+                  // bisa digulir, bukan hilang. Dipaksa lewat JS (bukan CSS
+                  // biasa) mengikuti pola yang sudah terbukti menang lawan
+                  // scoped style Svelte-nya.
+                  var modalForScroll = document.querySelector('.modal.new-message-modal');
+                  if (modalForScroll) {
+                    // Pakai piksel TETAP (bukan `vh`) dengan sengaja —
+                    // `vh` itu relatif ke tinggi viewport WebView kita
+                    // SENDIRI (`_webViewHeight`), yang justru DITURUNKAN
+                    // dari tinggi modal ini tiap `cleanup()` jalan ulang.
+                    // Kalau dipakai `vh`, keduanya saling mempengaruhi dan
+                    // bisa muter balik menciut terus — persis bug spiral
+                    // yang sudah pernah terjadi sebelumnya di sesi ini.
+                    modalForScroll.style.setProperty('max-height', '420px', 'important');
+                    modalForScroll.style.setProperty('overflow-y', 'auto', 'important');
+                  }
+                  // Diukur DI SINI (bukan cuma sekali di luar) supaya ikut
+                  // jalan tiap `cleanup()` dipanggil ulang oleh
+                  // MutationObserver — termasuk saat user pindah tab
+                  // "Direct Messages" ↔ "New Group" (mengubah DOM, memicu
+                  // observer, memicu pengukuran ulang).
+                  var modalForHeight = document.querySelector('.modal.new-message-modal');
+                  if (modalForHeight && window.TitcDebug) {
+                    var mrHeight = modalForHeight.getBoundingClientRect();
+                    // +80 (bukan +24) — scrollbar di dalam kartu ternyata
+                    // indikator BAWAAN Android WebView (bukan elemen CSS,
+                    // tidak bisa disembunyikan lewat `::-webkit-scrollbar`),
+                    // jadi didekati dari arah lain: kotaknya dibuat cukup
+                    // lapang supaya seluruh isi kartu muat tanpa perlu
+                    // discroll sama sekali.
+                    window.TitcDebug.postMessage('MODAL_HEIGHT: ' + Math.ceil(mrHeight.height + 80));
+                  }
+                }
+                cleanup();
+                var cleanupObserver = new MutationObserver(cleanup);
+                cleanupObserver.observe(document.body, { childList: true, subtree: true });
+              })();
+            ''');
+            WebViewClickHelper.clickElementByText(_controller, 'New message');
+            Future.delayed(const Duration(milliseconds: 900), () {
+              // Debug sementara: strip putih dengan bentuk bundar samar
+              // masih terlihat di ATAS kartu modal meski body/html + WebView
+              // native sudah transparan — berarti ada elemen SUNGGUHAN yang
+              // masih dirender di situ, bukan sekadar warna latar kosong.
+              // Dicek langsung apa yang ada di titik y=5px (dekat puncak
+              // viewport) dan daftar SEMUA anak langsung <body>.
+              _controller.runJavaScript(r'''
+                (function() {
+                  if (!window.TitcDebug) return;
+                  function describe(el) {
+                    if (!el) return 'null';
+                    var r = el.getBoundingClientRect();
+                    var cs = window.getComputedStyle(el);
+                    return el.tagName + '.' + String(el.className || '').replace(/\s+/g, '.') +
+                      ' [' + Math.round(r.width) + 'x' + Math.round(r.height) + ' top=' + Math.round(r.top) +
+                      '] display=' + cs.display + ' bg=' + cs.backgroundColor;
+                  }
+                  var topEl = document.elementFromPoint(180, 5);
+                  var chain = [];
+                  var walk = topEl;
+                  for (var i = 0; i < 4 && walk; i++) { chain.push(describe(walk)); walk = walk.parentElement; }
+                  var bodyChildren = [];
+                  Array.from(document.body.children).forEach(function(c) { bodyChildren.push(describe(c)); });
+                  window.TitcDebug.postMessage('TOP_PROBE elementAtY5: ' + JSON.stringify(chain));
+                  window.TitcDebug.postMessage('TOP_PROBE bodyChildren: ' + JSON.stringify(bodyChildren));
+
+                  // elementFromPoint di SATU titik ternyata tidak cukup —
+                  // seluruh rantainya sudah transparan tapi strip putih
+                  // dengan bentuk bundar masih terlihat. Dicari langsung
+                  // SEMUA elemen di manapun di halaman yang punya bentuk
+                  // bundar (border-radius besar) DAN posisinya dekat
+                  // puncak viewport (top < 40px) — kandidat kuat untuk
+                  // avatar/ikon yang terlihat di strip itu, apa pun jalur
+                  // hit-test-nya.
+                  var round = [];
+                  document.querySelectorAll('*').forEach(function(el) {
+                    var r = el.getBoundingClientRect();
+                    if (r.top > 40 || r.top < -40 || r.width === 0) return;
+                    var cs = window.getComputedStyle(el);
+                    var radius = parseFloat(cs.borderRadius) || 0;
+                    if (radius >= r.width / 2 - 2 && r.width > 4) {
+                      round.push(describe(el) + ' radius=' + cs.borderRadius);
+                    }
+                  });
+                  window.TitcDebug.postMessage('TOP_PROBE roundNearTop: ' + JSON.stringify(round));
+                })();
+              ''');
+            });
+            Future.delayed(const Duration(milliseconds: 900), () {
+              _controller.runJavaScript(r'''
+                (function() {
+                  var seenOpen = !!document.querySelector('.modal.new-message-modal');
+                  var observer = new MutationObserver(function() {
+                    var stillOpen = !!document.querySelector('.modal.new-message-modal');
+                    if (seenOpen && !stillOpen) {
+                      if (window.TitcDebug) window.TitcDebug.postMessage('MODAL_CLOSED');
+                      observer.disconnect();
+                    }
+                    seenOpen = stillOpen;
+                  });
+                  observer.observe(document.body, { childList: true, subtree: true });
+                })();
+              ''');
+            });
+            // Ditahan lebih lama dari sekadar "halaman selesai dimuat" —
+            // klik "New message" (dengan retry) + transisi Svelte-nya
+            // sendiri butuh waktu sebelum kartunya benar2 bersih. Sebelum
+            // ini dicoba nilai lebih pendek, hasilnya halaman `/portal/chat`
+            // MENTAH (header, search bar, daftar thread sendiri lengkap
+            // dengan chrome-nya) sempat sekilas kelihatan sebelum CSS
+            // penyembunyi & cleanup() sempat jalan — terlihat seperti "2
+            // Messages" bertumpuk. `_isLoading` di bawah menutup TOTAL
+            // (bukan cuma spinner mengambang) selama jeda ini.
+            Future.delayed(const Duration(milliseconds: 1000), () {
+              if (mounted) setState(() => _isLoading = false);
+            });
+          },
+        ),
+      );
+    _initCookiesAndLoad();
+  }
+
+  Future<void> _initCookiesAndLoad() async {
+    await WebViewCookieHelper.setupCookies();
+    _controller.loadRequest(Uri.parse('https://titc.or.id/portal/chat'));
+  }
+
+  /// Halaman `/portal/chat` dimuat UTUH (bukan cuma modalnya), tapi
+  /// ditampilkan di kartu kecil mengambang — jadi seluruh chrome halaman
+  /// (header, daftar thread, sidebar) disembunyikan paksa, hanya modal
+  /// "New message" yang dibiarkan tampil apa adanya di posisi normalnya.
+  ///
+  /// SENGAJA transparan (bukan putih) — kotak putih persegi sempat dipasang
+  /// di sini, tapi itu justru jadi "kotak kedua" yang terlihat sebagai
+  /// bingkai terpisah di sekeliling kartu modal asli. Modal "New message"
+  /// sendiri sudah punya latar putih + sudut membulat dari CSS webnya —
+  /// cukup itu saja yang perlu terlihat; sisa area di sekitarnya biar
+  /// tembus pandang, menyatu langsung dengan `barrierColor` gelap milik
+  /// Dialog Flutter.
+  static const String _dialogCss = r'''
+    html { background: transparent !important; height: 100% !important; }
+    body {
+      background: transparent !important;
+      overflow: hidden !important;
+      min-height: 100vh !important;
+    }
+    header, nav, .fcom_top_menu, .spaces, .space_contents,
+    #fluent_community_sidebar_menu, .fcom_sidebar_wrap, .fcom_side_footer,
+    .space_opener, .site-header, .site-footer, footer,
+    .fcom_mobile_menu, .fcom_space_opener_btn {
+      display: none !important;
+    }
+    /* Lapisan terakhir: daftar selector di atas gampang ketinggalan satu
+       (sudah terbukti berkali-kali nama class berbeda per halaman) — jadi
+       daripada menambah daftar terus, semua anak langsung <body> yang
+       BUKAN wadah modal langsung disembunyikan total, apa pun namanya.
+       Dikecualikan pakai `.fcom-modal-portal` — wadah Vue Teleport untuk
+       modal ini. */
+    body > *:not(.fcom-modal-portal) {
+      display: none !important;
+    }
+  ''';
+
+  @override
+  Widget build(BuildContext context) {
+    // Jarak atas dihitung eksplisit (bukan angka tetap) supaya dialog
+    // selalu mulai di bawah status bar + AppBar native, apa pun ukuran
+    // perangkatnya.
+    final topClearance =
+        MediaQuery.of(context).padding.top + kToolbarHeight + 12;
+    return Dialog(
+      // Transparan total, tanpa shape/elevation — bingkai putih & sudut
+      // membulat yang tadinya digambar Flutter di sini justru muncul
+      // sebagai "kotak kedua" terpisah dari kartu modal aslinya (yang
+      // sudah punya latar putih + sudut membulat sendiri dari CSS web).
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: EdgeInsets.fromLTRB(20, topClearance, 20, 100),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: double.infinity,
+          height: _webViewHeight,
+          child: Stack(
+            children: [
+              WebViewWidget(controller: _controller),
+              // Menutup TOTAL (bukan cuma spinner mengambang) selama
+              // proses klik+cleanup berlangsung — lihat catatan di
+              // `Future.delayed(1000ms)` pada `onPageFinished`.
+              if (_isLoading)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      // Kembali putih — tema dikembalikan ke terang alami,
+                      // jadi penutup loading-nya ikut disamakan supaya
+                      // tidak ada kilasan warna yang beda dari kartu asli.
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
