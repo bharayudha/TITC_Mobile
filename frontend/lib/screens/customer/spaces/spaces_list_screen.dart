@@ -97,7 +97,15 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
           const Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Color(0xFFCDE6F7), // Soft blue match with Stitch
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFDFEFFF), // Biru cerah agak keputihan
+                    Color(0xFFECF0FD), // Transisi lembut
+                    Color(0xFFF3EBFC), // Gradasi ungu tipis di ujung
+                  ],
+                ),
               ),
             ),
           ),
