@@ -7,7 +7,6 @@ import 'package:magang_titc/models/space_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/admin_only.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 
@@ -94,90 +93,11 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
     return SizedBox.expand(
       child: Stack(
         children: [
-          // Background - Vibrant Colorful Mesh
+          // Background - Soft Blue Solid
           const Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF4FACFE), // Cerah Biru
-                    Color(0xFF00F2FE), // Cerah Cyan
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Orb 1: Vibrant Pink (Kiri Atas)
-          Positioned(
-            top: -100,
-            left: -100,
-            child: Container(
-              width: 500,
-              height: 500,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFFA709A).withValues(alpha: 0.85),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Orb 2: Vibrant Yellow (Kanan Bawah)
-          Positioned(
-            bottom: -100,
-            right: -150,
-            child: Container(
-              width: 600,
-              height: 600,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFFEE140).withValues(alpha: 0.8),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Orb 3: Vibrant Violet (Tengah Kiri)
-          Positioned(
-            top: 250,
-            left: -150,
-            child: Container(
-              width: 450,
-              height: 450,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFE2B0FF).withValues(alpha: 0.85),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Orb 4: Bright Mint (Kanan Atas)
-          Positioned(
-            top: 50,
-            right: -100,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF84FAB0).withValues(alpha: 0.85),
-                    Colors.transparent,
-                  ],
-                ),
+                color: Color(0xFFCDE6F7), // Soft blue match with Stitch
               ),
             ),
           ),
@@ -272,89 +192,42 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
 
   Widget _buildSearchAndSortBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Column(
-        children: [
-          // Search Field — full glass
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: TextField(
-                onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Search Space...',
-                  hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 14),
-                  prefixIcon: Icon(Icons.search_rounded,
-                      color: Colors.white.withValues(alpha: 0.9), size: 20),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.25),
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.3), width: 1.0),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.3), width: 1.0),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(
-                        color: Colors.white, width: 1.2),
-                  ),
-                ),
-              ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF64A0DC).withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: TextField(
+          onChanged: _onSearchChanged,
+          style: const TextStyle(color: Color(0xFF1E293B), fontSize: 15),
+          decoration: InputDecoration(
+            hintText: 'Search Space...',
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
+            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 22),
+            filled: true,
+            fillColor: Colors.transparent,
+            contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(25),
+              borderSide: BorderSide.none,
             ),
           ),
-          const SizedBox(height: 10),
-          // Sort By
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Text('Sort by: ',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontSize: 13)),
-              Theme(
-                data: Theme.of(context).copyWith(
-                  canvasColor: const Color(0xFF4FACFE),
-                ),
-                child: DropdownButton<String>(
-                  value: _sortBy,
-                  icon: const Icon(Icons.keyboard_arrow_down,
-                      size: 18, color: Colors.white),
-                  elevation: 8,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600),
-                  dropdownColor: const Color(0xFF00F2FE),
-                  underline: const SizedBox(),
-                  onChanged: (String? value) {
-                    if (value != null) setState(() => _sortBy = value);
-                  },
-                  items: <String>['Alphabetical', 'Members']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                        value: value, child: Text(value));
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  /// Isian saat space tidak punya cover (atau covernya gagal dimuat).
+
   Widget _buildCoverFallback(SpaceModel space) {
     if (space.emoji.isNotEmpty) {
       return Container(
@@ -386,341 +259,374 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
   }
 
   Widget _buildSpaceCard(SpaceModel space) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            // Efek kaca asli dengan gradien sangat transparan
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.45),
-                Colors.white.withValues(alpha: 0.10),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3), // Edge highlight tipis
-              width: 1.0,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15), // Separasi bayangan
-                blurRadius: 30,
-                spreadRadius: 2,
-                offset: const Offset(0, 10),
-              ),
-            ],
+    // Gradient border wrapper — teknik terbaik untuk border "mengkilap kayak kaca"
+    // Container luar: background = gradient (dari putih cerah atas ke setengah transparan bawah)
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24.0),
+        boxShadow: [
+          // Soft drop shadow
+          BoxShadow(
+            color: const Color(0xFF64A0DC).withValues(alpha: 0.15),
+            blurRadius: 24,
+            spreadRadius: -2,
+            offset: const Offset(0, 12),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24.0),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.45), // Milky glass
+              borderRadius: BorderRadius.circular(24.0),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 1.5), // Glossy white border
+              // Inner highlight gradient (mengkilap di bagian atas)
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withValues(alpha: 0.60),
+                  Colors.white.withValues(alpha: 0.10),
+                  Colors.white.withValues(alpha: 0.0),
+                ],
+                stops: const [0.0, 0.25, 1.0],
+              ),
+            ),
+            child: Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+          Stack(
             children: [
-              // Cover image & Tag
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+                child: SizedBox(
+                  height: 140,
+                  width: double.infinity,
+                  child: space.coverPhotoUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: space.coverPhotoUrl,
+                          httpHeaders: AuthService.imageAuthHeaders,
+                          height: 140,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorWidget: (context, url, error) => _buildCoverFallback(space),
+                        )
+                      : _buildCoverFallback(space),
+                ),
+              ),
+              if (space.isJoined)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF34D399),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: SizedBox(
-                      height: 130,
-                      width: double.infinity,
-                      child: space.coverPhotoUrl.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: space.coverPhotoUrl,
-                              httpHeaders: AuthService.imageAuthHeaders,
-                              height: 130,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorWidget: (context, url, error) =>
-                                  _buildCoverFallback(space),
-                            )
-                          : _buildCoverFallback(space),
+                    child: const Text(
+                      'Member',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5),
                     ),
                   ),
-                  if (space.isJoined)
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
+                ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0E7FF), // Lavender/indigo
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.0), // Glossy border
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF64A0DC).withValues(alpha: 0.20),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ClipOval(
+                            child: space.logoUrl.isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: space.logoUrl,
+                                    httpHeaders: AuthService.imageAuthHeaders,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (context, url, error) => _buildLogoFallback(space),
+                                  )
+                                : _buildLogoFallback(space),
+                          ),
+                          // Overlay kaca mengkilap (glossy app icon effect)
+                          Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFF22C55E).withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.5)),
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.9), // Sangat terang di pojok atas kiri
+                                  Colors.white.withValues(alpha: 0.2),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.4, 1.0],
+                              ),
                             ),
-                            child: const Text(
-                              'Member',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            space.title,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.black87),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.public, size: 14, color: Colors.grey.shade600),
+                              const SizedBox(width: 4),
+                              Text(space.privacy,
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                              const SizedBox(width: 12),
+                              Icon(Icons.group_rounded, size: 14, color: Colors.grey.shade600),
+                              const SizedBox(width: 4),
+                              Text(' Members',
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  space.description.replaceAll(RegExp(r'<[^>]*>'), ''),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                // Tombol View/Join
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF64A0DC).withValues(alpha: 0.15), // Soft drop shadow
+                        blurRadius: 12,
+                        spreadRadius: -1,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 1.5), // Glossy border
+                          // Highlight putih mengkilap di atas tombol
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withValues(alpha: 0.85), // Sangat terang di atas
+                              Colors.white.withValues(alpha: 0.20),
+                              Colors.white.withValues(alpha: 0.0),
+                            ],
+                            stops: const [0.0, 0.35, 1.0],
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(24),
+                            onTap: () async {
+                              if (space.isJoined) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => SpaceWebViewScreen(
+                                      spaceSlug: space.slug,
+                                      title: space.title,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                bool success = await ApiService.joinSpace(space.slug);
+                                if (success) {
+                                  _loadSpaces();
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Berhasil bergabung ke Space!')));
+                                  }
+                                } else {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Gagal bergabung ke Space.')));
+                                  }
+                                }
+                              }
+                            },
+                            child: Container(
+                              height: 46,
+                              alignment: Alignment.center,
+                              child: Text(
+                                space.isJoined ? 'View Space' : 'Join Space',
+                                style: const TextStyle(
+                                  color: Color(0xFF0F172A),
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Logo
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.4), width: 1.0),
-                              ),
-                              child: space.logoUrl.isNotEmpty
-                                  ? CachedNetworkImage(
-                                      imageUrl: space.logoUrl,
-                                      httpHeaders: AuthService.imageAuthHeaders,
-                                      width: 48,
-                                      height: 48,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (context, url, error) =>
-                                          _buildLogoFallback(space),
-                                    )
-                                  : _buildLogoFallback(space),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                space.title,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.white,
-                                    letterSpacing: 0.1),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(Icons.public,
-                                      size: 12, color: Colors.white.withValues(alpha: 0.85)),
-                                  const SizedBox(width: 4),
-                                  Text(space.privacy,
-                                      style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.85),
-                                          fontSize: 11)),
-                                  const SizedBox(width: 12),
-                                  Icon(Icons.group_rounded,
-                                      size: 12, color: Colors.white.withValues(alpha: 0.85)),
-                                  const SizedBox(width: 4),
-                                  Text('${space.membersCount} Members',
-                                      style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.85),
-                                          fontSize: 11)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // Description
-                    Text(
-                      space.description.replaceAll(RegExp(r'<[^>]*>'), ''),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 13,
-                          height: 1.4),
-                    ),
-                    const SizedBox(height: 14),
-                    // Action Button — Glassmorphic Buttons
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: space.isJoined
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                                child: OutlinedButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => SpaceWebViewScreen(
-                                          spaceSlug: space.slug,
-                                          title: space.title,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                    side: BorderSide(
-                                        color: Colors.white.withValues(alpha: 0.3), width: 1.0),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12)),
-                                    backgroundColor:
-                                        Colors.white.withValues(alpha: 0.2), // Transparan glass
-                                  ),
-                                  child: const Text(
-                                    'View Space',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                            )
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    bool success =
-                                        await ApiService.joinSpace(space.slug);
-                                    if (success) {
-                                      _loadSpaces();
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                                content: Text(
-                                                    'Berhasil bergabung ke Space!')));
-                                      }
-                                    } else {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                                content: Text(
-                                                    'Gagal bergabung ke Space.')));
-                                      }
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white.withValues(alpha: 0.35),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1.0),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Join',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                            ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+        ],
+      ),
+      // Shine overlay — simulasi pantulan cahaya di permukaan kaca
+      Positioned(
+        top: 0, left: 0, right: 0,
+                  child: Container(
+                    height: 80, // Lebih tinggi sedikit
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.35), // Jauh lebih mengkilat
+                          Colors.white.withValues(alpha: 0.05),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.6, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  /// Header Spaces — custom glass, tidak memakai SectionHeader yang shared
-  /// agar tab lain (Home/Courses/Members) tidak terpengaruh.
   Widget _buildSpacesHeader() {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          width: double.infinity,
-          height: 66,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.white.withValues(alpha: 0.4),
-                Colors.white.withValues(alpha: 0.1),
-              ],
+    return Container(
+      width: double.infinity,
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 12), // Kurangi padding agar muat
+      color: Colors.transparent,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Text(
+            'Spaces',
+            style: TextStyle(
+              fontSize: 22, // Kurangi ukuran font judul
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.5,
             ),
-            border: Border(
-              bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1.0),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Spaces',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white, // Teks putih menonjol
-                ),
-              ),
-              Row(
+          const SizedBox(width: 6),
+          // Semua elemen kanan dalam satu Expanded
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  _buildFilterChip('All Spaces', selected: _showAllSpaces),
-                  const SizedBox(width: 6),
-                  _buildFilterChip('My Spaces', selected: !_showAllSpaces),
+                  // Pill filter group
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.30),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.50), width: 1.2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildFilterChip('All Spaces', selected: _showAllSpaces),
+                        const SizedBox(width: 1),
+                        _buildFilterChip('My Spaces', selected: !_showAllSpaces),
+                      ],
+                    ),
+                  ),
+                  // Tombol admin
                   AdminOnly(
                     builder: (context) => Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          onPressed: _openNewSpace,
-                          icon: const Icon(Icons.add_circle_outline_rounded,
-                              color: Color(0xFF6366F1)),
-                          tooltip: 'New Space',
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: _openNewSpace,
+                          child: Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.40),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.60), width: 1.2),
+                            ),
+                            child: Icon(Icons.add_rounded, color: Colors.grey.shade700, size: 16),
+                          ),
                         ),
                         PopupMenuButton<String>(
                           tooltip: 'Menu',
-                          icon: const Icon(Icons.more_vert_rounded,
-                              color: Color(0xFF6366F1), size: 20),
+                          icon: Icon(Icons.more_vert_rounded, color: Colors.grey.shade700, size: 20),
                           padding: EdgeInsets.zero,
                           onSelected: (value) {
                             if (value == 'space_groups') _openSpaceGroups();
@@ -737,9 +643,9 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -842,25 +748,32 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), // Diperkecil agar muat
         decoration: BoxDecoration(
           color: selected
-              ? Colors.white.withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? Colors.white.withValues(alpha: 0.8)
-                : Colors.white.withValues(alpha: 0.2),
-            width: 1.0,
-          ),
+              ? const Color(0xFFD6EDFD)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          border: selected
+              ? Border.all(color: Colors.white, width: 1.5)
+              : null,
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF64A0DC).withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [],
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: Colors.white,
-            fontWeight: selected ? FontWeight.bold : FontWeight.w600,
-            fontSize: 12,
+            color: selected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+            fontWeight: FontWeight.w600,
+            fontSize: 12, // Font lebih kecil supaya hemat tempat
+            letterSpacing: -0.2,
           ),
         ),
       ),

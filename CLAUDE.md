@@ -1065,3 +1065,11 @@ course baru langsung muncul tanpa perlu pull-to-refresh.
 > dengan `autoClickText`. Setiap kali form disubmit dan website redirect ke URL lain,
 > screen otomatis akan pop kembali ke Flutter. Tidak perlu kode tambahan per-form.
 
+
+
+## August 16, 2026
+- **UI/UX Enhancement di SpacesListScreen:**
+  - Mengimplementasikan desain efek **Glossy Neumorphism/Glassmorphism** tinggi pada *Space Cards*, tombol *View Space*, dan logo untuk mencocokkan referensi desain secara sempurna (gradient highlight putih di tepi atas, shadow lembut, border solid tipis).
+  - Memperbaiki tata letak header (Spaces title, filter pills, dan icon admin) dengan SingleChildScrollView dan optimasi padding agar tidak terjadi error *Right Overflow* di layar kecil tanpa terpotong.
+- **Perbaikan CustomerBottomNavBar:**
+  - Memperbaiki visibilitas ikon dan teks navigasi dengan menerapkan warna dinamis gelap spesifik saat tab Spaces aktif agar tidak menyatu dengan background cerah.

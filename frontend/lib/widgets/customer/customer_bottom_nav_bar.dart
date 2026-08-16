@@ -55,8 +55,8 @@ class BottomNavBar extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.white.withValues(alpha: 0.35),
-                    Colors.white.withValues(alpha: 0.10),
+                    Colors.white.withValues(alpha: 0.60),
+                    Colors.white.withValues(alpha: 0.45),
                   ],
                 )
               : null,
@@ -64,12 +64,20 @@ class BottomNavBar extends StatelessWidget {
           border: isSpacesTab
               ? Border(
                   top: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.2), // Sangat halus
-                    width: 1.0,
+                    color: Colors.white.withValues(alpha: 0.90),
+                    width: 1.5,
                   ),
                 )
               : null,
-          boxShadow: isSpacesTab ? null : kShadowUp,
+          boxShadow: isSpacesTab
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF64A0DC).withValues(alpha: 0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  )
+                ]
+              : kShadowUp,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -97,14 +105,11 @@ class BottomNavBar extends StatelessWidget {
                       opacity: currentIndex < 0 ? 0 : 1,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          border: isSpacesTab ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.0) : null,
+                          // Pill aktif di Spaces tab: biru muda solid
+                          border: isSpacesTab ? Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2) : null,
+                          color: isSpacesTab ? const Color(0xFFD6EDFD).withValues(alpha: 0.9) : null,
                           gradient: isSpacesTab
-                              ? LinearGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.4),
-                                    Colors.white.withValues(alpha: 0.1),
-                                  ],
-                                )
+                              ? null
                               : const LinearGradient(
                                   colors: [
                                     AppColors.primary,
@@ -139,7 +144,7 @@ class BottomNavBar extends StatelessWidget {
     if (isSpacesTab) {
       return ClipRect(
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+          filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
           child: navContent,
         ),
       );
@@ -177,10 +182,10 @@ class _NavBarItem extends StatelessWidget {
               curve: navAnimCurve,
               tween: ColorTween(
                 end: selected
-                    ? Colors.white
-                    : (isSpacesTab
-                        ? Colors.white.withValues(alpha: 0.7)
-                        : Colors.grey),
+                    // Ikon aktif di Spaces tab: gelap (karena pill-nya biru muda)
+                    ? (isSpacesTab ? const Color(0xFF0F172A) : Colors.white)
+                    // Ikon non-aktif di Spaces tab: abu-abu (bukan putih—background sudah putih!)
+                    : (isSpacesTab ? const Color(0xFF64748B) : Colors.grey),
               ),
               builder: (context, color, _) {
                 return PhosphorIcon(item.icon, color: color, size: 22);
@@ -198,8 +203,9 @@ class _NavBarItem extends StatelessWidget {
                         item.label,
                         maxLines: 1,
                         overflow: TextOverflow.visible,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          // Label aktif: gelap di Spaces tab, putih di tab lain
+                          color: isSpacesTab ? const Color(0xFF0F172A) : Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),

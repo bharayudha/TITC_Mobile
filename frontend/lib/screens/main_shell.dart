@@ -112,8 +112,9 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: _currentIndex == MainShell.tabSpaces,
       backgroundColor: _currentIndex == MainShell.tabSpaces
-          ? Colors.transparent
+          ? const Color(0xFFCDE6F7)
           : Colors.white,
       appBar: const TitcAppBar(),
       drawer: const SideDrawer(),
