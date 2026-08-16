@@ -34,6 +34,7 @@ class BottomNavBar extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
     this.isSpacesTab = false,
+    this.isCoursesTab = false,
   });
 
   /// Index tab aktif. Beri nilai -1 bila tidak ada tab yang aktif.
@@ -43,38 +44,52 @@ class BottomNavBar extends StatelessWidget {
   /// Saat true, bottom nav merender gaya glassmorphism cerah agar selaras
   /// dengan background pastel tab Spaces. Tab lain tidak terpengaruh.
   final bool isSpacesTab;
+  
+  /// Saat true, bottom nav merender gaya glassmorphism ungu cerah agar selaras
+  /// dengan background tema violet pada tab Courses.
+  final bool isCoursesTab;
 
   @override
   Widget build(BuildContext context) {
+    final bool useGlass = isSpacesTab || isCoursesTab;
     final navContent = SafeArea(
       child: Container(
+        margin: isCoursesTab ? const EdgeInsets.only(left: 16, right: 16, bottom: 16) : null,
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: BoxDecoration(
-          gradient: isSpacesTab
+          borderRadius: isCoursesTab ? BorderRadius.circular(30) : null,
+          gradient: useGlass
               ? LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.60),
-                    Colors.white.withValues(alpha: 0.45),
-                  ],
+                  colors: isCoursesTab 
+                      ? [
+                          Colors.white.withValues(alpha: 0.2),
+                          Colors.white.withValues(alpha: 0.1),
+                        ]
+                      : [
+                          Colors.white.withValues(alpha: 0.60),
+                          Colors.white.withValues(alpha: 0.45),
+                        ],
                 )
               : null,
-          color: isSpacesTab ? null : Colors.white,
-          border: isSpacesTab
-              ? Border(
-                  top: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.90),
-                    width: 1.5,
-                  ),
+          color: useGlass ? null : Colors.white,
+          border: useGlass
+              ? Border.all(
+                  color: isCoursesTab 
+                      ? Colors.white.withValues(alpha: 0.3)
+                      : Colors.white.withValues(alpha: 0.90),
+                  width: 1.5,
                 )
               : null,
-          boxShadow: isSpacesTab
+          boxShadow: useGlass
               ? [
                   BoxShadow(
-                    color: const Color(0xFF64A0DC).withValues(alpha: 0.08),
+                    color: isCoursesTab 
+                        ? const Color(0xFF4A44F2).withValues(alpha: 0.3)
+                        : const Color(0xFF64A0DC).withValues(alpha: 0.08),
                     blurRadius: 20,
-                    offset: const Offset(0, -4),
+                    offset: isCoursesTab ? const Offset(0, 10) : const Offset(0, -4),
                   )
                 ]
               : kShadowUp,
@@ -105,10 +120,14 @@ class BottomNavBar extends StatelessWidget {
                       opacity: currentIndex < 0 ? 0 : 1,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          // Pill aktif di Spaces tab: biru muda solid
-                          border: isSpacesTab ? Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2) : null,
-                          color: isSpacesTab ? const Color(0xFFD6EDFD).withValues(alpha: 0.9) : null,
-                          gradient: isSpacesTab
+                          // Pill aktif: 
+                          border: useGlass 
+                              ? Border.all(color: Colors.white.withValues(alpha: isCoursesTab ? 0.4 : 0.6), width: 1.2) 
+                              : null,
+                          color: isCoursesTab 
+                              ? Colors.white.withValues(alpha: 0.85) // White pill for violet theme
+                              : (isSpacesTab ? const Color(0xFFD6EDFD).withValues(alpha: 0.9) : null),
+                          gradient: useGlass
                               ? null
                               : const LinearGradient(
                                   colors: [
@@ -129,6 +148,7 @@ class BottomNavBar extends StatelessWidget {
                           selected: index == currentIndex,
                           onTap: () => onTap(index),
                           isSpacesTab: isSpacesTab,
+                          isCoursesTab: isCoursesTab,
                         ),
                       );
                     }),
@@ -141,13 +161,12 @@ class BottomNavBar extends StatelessWidget {
       ),
     );
 
-    if (isSpacesTab) {
-      return ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-          child: navContent,
-        ),
+    if (useGlass) {
+      Widget filtered = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+        child: navContent,
       );
+      return isCoursesTab ? ClipRRect(borderRadius: BorderRadius.circular(30), child: filtered) : ClipRect(child: filtered);
     }
     return navContent;
   }
@@ -159,12 +178,14 @@ class _NavBarItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.isSpacesTab = false,
+    this.isCoursesTab = false,
   });
 
   final BottomNavItem item;
   final bool selected;
   final VoidCallback onTap;
   final bool isSpacesTab;
+  final bool isCoursesTab;
 
   @override
   Widget build(BuildContext context) {
@@ -182,10 +203,10 @@ class _NavBarItem extends StatelessWidget {
               curve: navAnimCurve,
               tween: ColorTween(
                 end: selected
-                    // Ikon aktif di Spaces tab: gelap (karena pill-nya biru muda)
-                    ? (isSpacesTab ? const Color(0xFF0F172A) : Colors.white)
-                    // Ikon non-aktif di Spaces tab: abu-abu (bukan putih—background sudah putih!)
-                    : (isSpacesTab ? const Color(0xFF64748B) : Colors.grey),
+                    // Ikon aktif
+                    ? (isCoursesTab ? const Color(0xFF4A44F2) : (isSpacesTab ? const Color(0xFF0F172A) : Colors.white))
+                    // Ikon non-aktif
+                    : (isCoursesTab ? Colors.white.withValues(alpha: 0.8) : (isSpacesTab ? const Color(0xFF64748B) : Colors.grey)),
               ),
               builder: (context, color, _) {
                 return PhosphorIcon(item.icon, color: color, size: 22);
@@ -204,8 +225,8 @@ class _NavBarItem extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.visible,
                         style: TextStyle(
-                          // Label aktif: gelap di Spaces tab, putih di tab lain
-                          color: isSpacesTab ? const Color(0xFF0F172A) : Colors.white,
+                          // Label aktif: Violet di Courses, Gelap di Spaces, putih di tab lain
+                          color: isCoursesTab ? const Color(0xFF4A44F2) : (isSpacesTab ? const Color(0xFF0F172A) : Colors.white),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),

@@ -1,12 +1,12 @@
 import 'dart:async';
-
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:magang_titc/models/course_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/admin_only.dart';
-import 'package:magang_titc/widgets/shared/section_header.dart';
+
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
@@ -90,7 +90,22 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
     return SizedBox.expand(
       child: Stack(
         children: [
-          const Positioned.fill(child: ColoredBox(color: Color(0xFFF5F6F8))),
+          // Background - Dark Gradient for Glassmorphism
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF6B58F5), // Light purple
+                    Color(0xFF4A44F2), // Violet
+                    Color(0xFF3B28CC), // Dark indigo
+                  ],
+                ),
+              ),
+            ),
+          ),
 
           // Data List
           Positioned.fill(
@@ -108,11 +123,11 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                       future: _coursesFuture,
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(child: CircularProgressIndicator(color: Colors.white));
                         } else if (snapshot.hasError) {
-                          return Center(child: Text('Error: ${snapshot.error}'));
+                          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
                         } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return const Center(child: Text('Belum ada course.'));
+                          return const Center(child: Text('Belum ada course.', style: TextStyle(color: Colors.white)));
                         }
 
                         final query = _searchQuery.toLowerCase();
@@ -146,6 +161,7 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                                   ? 'Tidak ada course di kategori ini.'
                                   : 'Tidak ada course yang cocok dengan "$_searchQuery".',
                               textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70),
                             ),
                           );
                         }
@@ -183,24 +199,25 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         children: [
           TextField(
             onChanged: _onSearchChanged,
+            style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Search Course...',
-              hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-              prefixIcon: Icon(PhosphorIconsRegular.magnifyingGlass, color: Colors.grey.shade500),
+              hintStyle: const TextStyle(color: Colors.white70, fontSize: 14),
+              prefixIcon: const Icon(PhosphorIconsRegular.magnifyingGlass, color: Colors.white70),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: Colors.white.withValues(alpha: 0.15),
               contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF1E5AF5)),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
               ),
             ),
           ),
@@ -208,27 +225,32 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Text('Sort by: ', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-              DropdownButton<String>(
-                value: _sortBy,
-                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-                elevation: 16,
-                style: const TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600),
-                underline: const SizedBox(),
-                onChanged: (String? value) {
-                  if (value != null) {
-                    setState(() {
-                      _sortBy = value;
-                    });
-                  }
-                },
-                items: <String>['Alphabetical', 'Students']
-                    .map<DropdownMenuItem<String>>((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
+              const Text('Sort by: ', style: TextStyle(color: Colors.white70, fontSize: 13)),
+              Theme(
+                data: Theme.of(context).copyWith(
+                  canvasColor: const Color(0xFF4A44F2), // Violet background for dropdown menu
+                ),
+                child: DropdownButton<String>(
+                  value: _sortBy,
+                  icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.white),
+                  elevation: 16,
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                  underline: const SizedBox(),
+                  onChanged: (String? value) {
+                    if (value != null) {
+                      setState(() {
+                        _sortBy = value;
+                      });
+                    }
+                  },
+                  items: <String>['Alphabetical', 'Students']
+                      .map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                ),
               ),
             ],
           ),
@@ -240,163 +262,181 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
   Widget _buildCourseCard(CourseModel course) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Cover image & Tag
-          Stack(
-            children: [
-              Container(
-                height: 130,
-                color: Colors.grey.shade200,
-                child: course.coverPhotoUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: course.coverPhotoUrl,
-                        httpHeaders: AuthService.imageAuthHeaders,
-                        height: 130,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorWidget: (context, url, error) => Center(
-                          child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
-                        ),
-                      )
-                    : Center(
-                        child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
-                      ),
-              ),
-              if (course.isEnrolled)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade700,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'Enrolled',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15), // Milky white translucent base
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.2), // Glowing white border
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                // Cover image & Tag
+                Stack(
                   children: [
                     Container(
-                      width: 48,
-                      height: 48,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: course.logoUrl.isNotEmpty
+                      height: 130,
+                      color: Colors.white.withValues(alpha: 0.05), // Dark placeholder
+                      child: course.coverPhotoUrl.isNotEmpty
                           ? CachedNetworkImage(
-                              imageUrl: course.logoUrl,
+                              imageUrl: course.coverPhotoUrl,
                               httpHeaders: AuthService.imageAuthHeaders,
-                              width: 48,
-                              height: 48,
+                              height: 130,
+                              width: double.infinity,
                               fit: BoxFit.cover,
-                              errorWidget: (context, url, error) => const Center(
-                                child: PhosphorIcon(PhosphorIconsRegular.graduationCap, color: Colors.grey),
+                              errorWidget: (context, url, error) => Center(
+                                child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.white24),
                               ),
                             )
-                          : const Center(child: PhosphorIcon(PhosphorIconsRegular.graduationCap, color: Colors.grey)),
+                          : Center(
+                              child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.white24),
+                            ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            course.title,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    if (course.isEnrolled)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.3), // Neon green translucent
+                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.5)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Enrolled',
+                                style: TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              PhosphorIcon(PhosphorIconsRegular.bookOpen, size: 12, color: Colors.grey.shade500),
-                              const SizedBox(width: 4),
-                              Text('${course.lessonsCount} Lessons', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                              const SizedBox(width: 12),
-                              PhosphorIcon(PhosphorIconsRegular.users, size: 12, color: Colors.grey.shade500),
-                              const SizedBox(width: 4),
-                              Text('${course.studentsCount} Students', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                            ],
+                        ),
+                      ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                            ),
+                            child: course.logoUrl.isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: course.logoUrl,
+                                    httpHeaders: AuthService.imageAuthHeaders,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (context, url, error) => const Center(
+                                      child: PhosphorIcon(PhosphorIconsRegular.graduationCap, color: Colors.white54),
+                                    ),
+                                  )
+                                : const Center(child: PhosphorIcon(PhosphorIconsRegular.graduationCap, color: Colors.white54)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  course.title,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const PhosphorIcon(PhosphorIconsRegular.bookOpen, size: 12, color: Colors.white60),
+                                    const SizedBox(width: 4),
+                                    Text('${course.lessonsCount} Lessons', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                                    const SizedBox(width: 12),
+                                    const PhosphorIcon(PhosphorIconsRegular.users, size: 12, color: Colors.white60),
+                                    const SizedBox(width: 4),
+                                    Text('${course.studentsCount} Students', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  course.description.replaceAll(RegExp(r'<[^>]*>'), ''),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4),
-                ),
-                if (course.isEnrolled) ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: (course.progress.clamp(0, 100)) / 100,
-                      minHeight: 6,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF1E5AF5)),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('${course.progress}% selesai', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 38,
-                  child: ElevatedButton(
-                    onPressed: () => _onCourseAction(course),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: course.isEnrolled ? Colors.white : const Color(0xFF1E5AF5),
-                      foregroundColor: course.isEnrolled ? const Color(0xFF1E5AF5) : Colors.white,
-                      elevation: 0,
-                      side: course.isEnrolled ? const BorderSide(color: Color(0xFF1E5AF5)) : null,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
+                      const SizedBox(height: 12),
+                      Text(
+                        course.description.replaceAll(RegExp(r'<[^>]*>'), ''),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
                       ),
-                    ),
-                    child: Text(
-                      course.isEnrolled ? 'Continue Learning' : 'Enroll',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
+                      if (course.isEnrolled) ...[
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: (course.progress.clamp(0, 100)) / 100,
+                            minHeight: 6,
+                            backgroundColor: Colors.white.withValues(alpha: 0.1),
+                            valueColor: const AlwaysStoppedAnimation(Color(0xFF60A5FA)), // Neon Blue
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('${course.progress}% selesai', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                      ],
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 40,
+                        child: ElevatedButton(
+                          onPressed: () => _onCourseAction(course),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withValues(alpha: 0.9), // White solid/glass button
+                            foregroundColor: const Color(0xFF4A44F2), // Violet text
+                            elevation: 8,
+                            shadowColor: const Color(0xFF4A44F2).withValues(alpha: 0.3),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20), // Pill shape
+                            ),
+                          ),
+                          child: Text(
+                            course.isEnrolled ? 'Continue Learning' : 'Enroll',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -432,31 +472,49 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
   }
 
   Widget _buildCoursesHeader() {
-    return SectionHeader(
-      title: 'Courses',
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildFilterChip('All Courses', selected: _showAllCourses),
-          const SizedBox(width: 8),
-          _buildFilterChip('My Courses', selected: !_showAllCourses),
-          // Hanya admin/manager komunitas FCOM yang bisa membuat course baru
-          // — tombolnya ditempelkan lewat AdminOnly, tidak mengubah apa pun
-          // untuk user biasa (SizedBox.shrink kalau bukan admin).
-          AdminOnly(
-            builder: (context) => Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: IconButton(
-                onPressed: _openManageCourses,
-                icon: const PhosphorIcon(PhosphorIconsRegular.plusCircle, color: Color(0xFF1E5AF5)),
-                tooltip: 'New Course',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+    return Container(
+      width: double.infinity,
+      height: 66,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15), // Milky white translucent background
+        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.3))), // Glowing bottom border
+      ),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Courses',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
               ),
-            ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildFilterChip('All Courses', selected: _showAllCourses),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('My Courses', selected: !_showAllCourses),
+                  // Hanya admin/manager komunitas FCOM yang bisa membuat course baru
+                  AdminOnly(
+                    builder: (context) => Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: IconButton(
+                        onPressed: _openManageCourses,
+                        icon: const PhosphorIcon(PhosphorIconsRegular.plusCircle, color: Colors.white), // Ubah ke putih
+                        tooltip: 'New Course',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -519,13 +577,17 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF1FF) : Colors.transparent,
+          color: selected ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? Colors.white.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? const Color(0xFF1E5AF5) : Colors.black54,
+            color: selected ? Colors.white : Colors.white54,
             fontWeight: FontWeight.w600,
             fontSize: 13,
           ),

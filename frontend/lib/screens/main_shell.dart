@@ -161,6 +161,7 @@ class _MainShellState extends State<MainShell> {
         currentIndex: _currentIndex,
         onTap: _onNavTap,
         isSpacesTab: _currentIndex == MainShell.tabSpaces,
+        isCoursesTab: _currentIndex == MainShell.tabCourses,
       ),
     );
   }
