@@ -28,8 +28,9 @@ class _TitcAppBarState extends State<TitcAppBar> {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       elevation: 0,
       scrolledUnderElevation: 0,
       shadowColor: kShadowColor,
@@ -38,18 +39,15 @@ class _TitcAppBarState extends State<TitcAppBar> {
       // ikon ☰ dibanding web, di mana keduanya lebih rapat.
       titleSpacing: 0,
       leading: IconButton(
-        icon: const PhosphorIcon(
-          PhosphorIconsRegular.list,
-          color: Colors.black87,
-        ),
+        icon: PhosphorIcon(PhosphorIconsRegular.list, color: onSurface),
         onPressed: () => Scaffold.of(context).openDrawer(),
       ),
       title: _buildTitle(context),
       actions: [
         IconButton(
-          icon: const PhosphorIcon(
+          icon: PhosphorIcon(
             PhosphorIconsRegular.magnifyingGlass,
-            color: Colors.black87,
+            color: onSurface,
           ),
           // Hasil overlay WAJIB ditunggu. Sebelumnya dipanggil sebagai
           // `() => showSearchOverlay(context)`, dan karena onPressed bertipe
@@ -73,9 +71,9 @@ class _TitcAppBarState extends State<TitcAppBar> {
                 isLabelVisible: unreadCount > 0,
                 label: Text('$unreadCount'),
                 backgroundColor: Colors.red,
-                child: const PhosphorIcon(
+                child: PhosphorIcon(
                   PhosphorIconsRegular.bell,
-                  color: Colors.black87,
+                  color: onSurface,
                 ),
               ),
               onPressed: () => showNotificationsPopup(context),
@@ -111,7 +109,11 @@ class _TitcAppBarState extends State<TitcAppBar> {
           ),
           TextSpan(
             text: 'Indonesia',
-            style: TextStyle(color: Colors.black54),
+            style: TextStyle(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
         ],
       ),

@@ -9,6 +9,7 @@ import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
+import 'package:magang_titc/services/theme_service.dart';
 
 const Color _dangerColor = Color(0xFFE53935);
 
@@ -27,7 +28,7 @@ class _ProfileAvatarIcon extends StatelessWidget {
     return ValueListenableBuilder<String?>(
       valueListenable: AuthService.avatarUrlNotifier,
       builder: (context, avatarUrl, _) {
-        if (avatarUrl == null || avatarUrl.isEmpty) return _fallback();
+        if (avatarUrl == null || avatarUrl.isEmpty) return _fallback(context);
 
         return ClipOval(
           child: CachedNetworkImage(
@@ -40,8 +41,8 @@ class _ProfileAvatarIcon extends StatelessWidget {
             fit: BoxFit.cover,
             memCacheWidth: 84,
             memCacheHeight: 84,
-            placeholder: (_, _) => _initialCircle(),
-            errorWidget: (_, _, _) => _fallback(),
+            placeholder: (_, _) => _initialCircle(context),
+            errorWidget: (_, _, _) => _fallback(context),
           ),
         );
       },
@@ -49,9 +50,9 @@ class _ProfileAvatarIcon extends StatelessWidget {
   }
 
   /// Inisial nama di atas lingkaran abu — dipakai saat foto masih dimuat.
-  Widget _initialCircle() {
+  Widget _initialCircle(BuildContext context) {
     final name = AuthService.userName ?? '';
-    if (name.isEmpty) return _fallback();
+    if (name.isEmpty) return _fallback(context);
 
     return Container(
       width: _size,
@@ -72,15 +73,22 @@ class _ProfileAvatarIcon extends StatelessWidget {
     );
   }
 
-  Widget _fallback() => const PhosphorIcon(
+  Widget _fallback(BuildContext context) => PhosphorIcon(
     PhosphorIconsRegular.userCircle,
-    color: Colors.black87,
+    color: Theme.of(context).colorScheme.onSurface,
     size: _size,
   );
 }
 
 /// Pilihan pada popup profil.
-enum ProfileMenuAction { viewProfile, myCourses, mySpaces, certificate, logout }
+enum ProfileMenuAction {
+  viewProfile,
+  myCourses,
+  mySpaces,
+  certificate,
+  darkMode,
+  logout,
+}
 
 /// Tombol profil di app bar. Saat ditekan menampilkan popup berisi identitas
 /// pengguna dan pintasan menu.
@@ -139,7 +147,7 @@ class ProfileMenuButton extends StatelessWidget {
     return PopupMenuButton<ProfileMenuAction>(
       icon: const _ProfileAvatarIcon(),
       tooltip: 'Profil',
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 8,
       // Digeser ke bawah agar popup muncul di bawah app bar, bukan menimpanya.
       offset: const Offset(0, kToolbarHeight - 8),
@@ -150,24 +158,28 @@ class ProfileMenuButton extends StatelessWidget {
           // Mengetuk identitas membuka halaman profil.
           value: ProfileMenuAction.viewProfile,
           height: 64,
-          child: _buildAccountHeader(),
+          child: _buildAccountHeader(context),
         ),
         const PopupMenuDivider(),
         _buildItem(
+          context: context,
           value: ProfileMenuAction.myCourses,
           emoji: '📘',
           label: 'My Courses',
         ),
         _buildItem(
+          context: context,
           value: ProfileMenuAction.mySpaces,
           emoji: '🔔',
           label: 'My Spaces',
         ),
         _buildItem(
+          context: context,
           value: ProfileMenuAction.certificate,
           emoji: '🎖️',
           label: 'Certificate',
         ),
+        _buildDarkModeItem(),
         PopupMenuItem<ProfileMenuAction>(
           value: ProfileMenuAction.logout,
           height: 44,
@@ -184,7 +196,12 @@ class ProfileMenuButton extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'Log Out',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.8),
+                ),
               ),
             ],
           ),
@@ -193,11 +210,12 @@ class ProfileMenuButton extends StatelessWidget {
     );
   }
 
-  Widget _buildAccountHeader() {
+  Widget _buildAccountHeader(BuildContext context) {
     final name = AuthService.userName ?? 'User';
     final email = AuthService.userEmail ?? '';
     final avatarUrl = AuthService.userAvatarUrl;
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
+    final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return Row(
       children: [
@@ -232,17 +250,20 @@ class ProfileMenuButton extends StatelessWidget {
               Text(
                 name,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: onSurface,
                 ),
               ),
               if (email.isNotEmpty)
                 Text(
                   email,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
             ],
           ),
@@ -252,6 +273,7 @@ class ProfileMenuButton extends StatelessWidget {
   }
 
   PopupMenuItem<ProfileMenuAction> _buildItem({
+    required BuildContext context,
     required ProfileMenuAction value,
     required String emoji,
     required String label,
@@ -266,9 +288,60 @@ class ProfileMenuButton extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.8),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Baris toggle Dark Mode. `enabled: false` mematikan gesture "pilih lalu
+  /// tutup popup" bawaan `PopupMenuItem` — tapi [Switch] di dalamnya tetap
+  /// menerima tap sendiri (gesture recognizer-nya independen dari InkWell
+  /// milik item), jadi menu TIDAK tertutup begitu toggle ditekan dan user
+  /// bisa langsung lihat perubahannya sambil popup masih terbuka.
+  PopupMenuItem<ProfileMenuAction> _buildDarkModeItem() {
+    return PopupMenuItem<ProfileMenuAction>(
+      value: ProfileMenuAction.darkMode,
+      enabled: false,
+      height: 44,
+      child: ValueListenableBuilder<ThemeMode>(
+        valueListenable: ThemeService.themeModeNotifier,
+        builder: (context, mode, _) {
+          final isDark = mode == ThemeMode.dark;
+          return Row(
+            children: [
+              SizedBox(
+                width: 28,
+                child: Text(isDark ? '🌙' : '☀️', style: emojiStyle(size: 16)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isDark ? 'Dark Mode' : 'Light Mode',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+              Transform.scale(
+                scale: 0.75,
+                child: Switch(
+                  value: isDark,
+                  onChanged: ThemeService.setDarkMode,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

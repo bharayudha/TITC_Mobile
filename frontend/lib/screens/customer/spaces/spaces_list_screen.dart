@@ -102,7 +102,9 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
       child: Stack(
         children: [
           // Background - latar putih
-          const Positioned.fill(child: ColoredBox(color: Colors.white)),
+          Positioned.fill(
+            child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor),
+          ),
 
           // Header judul/tab/search/sort ikut scroll bersama daftar (BUKAN
           // pinned) — cuma latarnya dibuat menyatu dengan halaman (putih
@@ -232,7 +234,10 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                 filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                 child: TextField(
                   onChanged: _onSearchChanged,
-                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 14,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search Space...',
                     hintStyle: TextStyle(
@@ -245,7 +250,9 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                       size: 20,
                     ),
                     filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.6),
+                    fillColor: Theme.of(
+                      context,
+                    ).colorScheme.surface.withValues(alpha: 0.6),
                     contentPadding: const EdgeInsets.symmetric(
                       vertical: 0,
                       horizontal: 16,
@@ -253,14 +260,18 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.08),
                         width: 1.0,
                       ),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.08),
                         width: 1.0,
                       ),
                     ),
@@ -288,7 +299,9 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 ),
                 Theme(
-                  data: Theme.of(context).copyWith(canvasColor: Colors.white),
+                  data: Theme.of(context).copyWith(
+                    canvasColor: Theme.of(context).colorScheme.surface,
+                  ),
                   child: DropdownButton<String>(
                     value: _sortBy,
                     icon: const Icon(
@@ -302,7 +315,7 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
-                    dropdownColor: Colors.white,
+                    dropdownColor: Theme.of(context).colorScheme.surface,
                     underline: const SizedBox(),
                     onChanged: (String? value) {
                       if (value != null) setState(() => _sortBy = value);
@@ -362,15 +375,19 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.06),
               width: 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.1),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
@@ -467,7 +484,8 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                                 ).withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: Colors.black.withValues(alpha: 0.06),
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.06),
                                   width: 1.0,
                                 ),
                               ),
@@ -494,10 +512,12 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                             children: [
                               Text(
                                 space.title,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
-                                  color: Colors.black87,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                   letterSpacing: 0.1,
                                 ),
                                 maxLines: 1,
@@ -682,16 +702,16 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
       width: double.infinity,
       height: _spacesHeaderHeight,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: Colors.white,
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
+          Text(
             'Spaces',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           Row(
@@ -845,19 +865,25 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
         decoration: BoxDecoration(
           color: selected
               ? const Color(0xFF6366F1).withValues(alpha: 0.12)
-              : Colors.black.withValues(alpha: 0.03),
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
                 ? const Color(0xFF6366F1).withValues(alpha: 0.4)
-                : Colors.black.withValues(alpha: 0.06),
+                : Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.06),
             width: 1.0,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? const Color(0xFF6366F1) : Colors.black54,
+            color: selected
+                ? const Color(0xFF6366F1)
+                : Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
             fontWeight: selected ? FontWeight.bold : FontWeight.w600,
             fontSize: 12,
           ),

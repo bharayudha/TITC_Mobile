@@ -80,7 +80,10 @@ class BottomNavBar extends StatelessWidget {
     // satu pun tab yang tampak aktif secara visual, sesuai perilaku asli.
     final noneSelected = currentIndex < 0;
     final effectiveIndex = noneSelected ? 0 : currentIndex;
-    const unselectedColor = Colors.black54;
+    // `Colors.black54` nyaris tak terlihat di atas kaca gelap dark mode —
+    // butuh warna lebih terang di sana untuk kontras yang cukup.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedColor = isDark ? Colors.white70 : Colors.black54;
 
     return GlassTabBar.bottom(
       tabs: _glassTabs,

@@ -41,15 +41,13 @@ class _SideDrawerState extends State<SideDrawer> {
         // Kegagalan sengaja ditelan: drawer tetap harus bisa dipakai walau
         // status enroll tidak diketahui. Hasilnya daftar kosong → tidak ada
         // gembok, bukan gembok di semua item.
-        : ApiService.fetchCourses().catchError(
-            (_) => const <CourseModel>[],
-          );
+        : ApiService.fetchCourses().catchError((_) => const <CourseModel>[]);
   }
 
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         child: Column(
           children: [
@@ -70,23 +68,67 @@ class _SideDrawerState extends State<SideDrawer> {
                     children: [
                       _buildSectionLabel('MEMBERSHIP AREAS'),
                       _buildSpaceItem(context, '🔥', 'FREE Placement Test'),
-                      _buildSpaceItem(context, '🖥️', 'Institutional Prep Test'),
+                      _buildSpaceItem(
+                        context,
+                        '🖥️',
+                        'Institutional Prep Test',
+                      ),
                       _buildSpaceItem(context, '💻', 'TOEFL - Mockup Test'),
                       _buildSpaceItem(context, '🔖', 'Promo Khusus Member'),
                       _buildSpaceItem(context, '📰', 'Update - Announcement'),
                       _buildSpaceItem(context, '🚀', 'Update - Certification'),
                       const AppDivider(),
                       _buildSectionLabel('TOEFL Preparation'),
-                      _buildCourseItem(context, '🎓', '4 Hours Intensive', courses),
-                      _buildCourseItem(context, '🎓', '3 Meeting Courses', courses),
-                      _buildCourseItem(context, '🎓', '7 Meeting Courses', courses),
-                      _buildCourseItem(context, '🎓', '10 Meeting Courses', courses),
-                      _buildCourseItem(context, '🎓', '15 Meeting Courses', courses),
-                      _buildCourseItem(context, '🎓', '20 Meeting Courses', courses),
+                      _buildCourseItem(
+                        context,
+                        '🎓',
+                        '4 Hours Intensive',
+                        courses,
+                      ),
+                      _buildCourseItem(
+                        context,
+                        '🎓',
+                        '3 Meeting Courses',
+                        courses,
+                      ),
+                      _buildCourseItem(
+                        context,
+                        '🎓',
+                        '7 Meeting Courses',
+                        courses,
+                      ),
+                      _buildCourseItem(
+                        context,
+                        '🎓',
+                        '10 Meeting Courses',
+                        courses,
+                      ),
+                      _buildCourseItem(
+                        context,
+                        '🎓',
+                        '15 Meeting Courses',
+                        courses,
+                      ),
+                      _buildCourseItem(
+                        context,
+                        '🎓',
+                        '20 Meeting Courses',
+                        courses,
+                      ),
                       const AppDivider(),
                       _buildSectionLabel('English for Specific Purposes'),
-                      _buildCourseItem(context, '📚', 'Structure and Grammar', courses),
-                      _buildCourseItem(context, '🎧', 'Listening and Reading', courses),
+                      _buildCourseItem(
+                        context,
+                        '📚',
+                        'Structure and Grammar',
+                        courses,
+                      ),
+                      _buildCourseItem(
+                        context,
+                        '🎧',
+                        'Listening and Reading',
+                        courses,
+                      ),
                       _buildCourseItem(
                         context,
                         '🎙️',
@@ -145,16 +187,20 @@ class _SideDrawerState extends State<SideDrawer> {
                 ),
                 TextSpan(
                   text: 'Indonesia',
-                  style: TextStyle(color: Colors.black54),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
               ],
             ),
           ),
           // Tombol tutup tetap ikon vektor: ini kontrol UI, bukan item menu.
           IconButton(
-            icon: const PhosphorIcon(
+            icon: PhosphorIcon(
               PhosphorIconsRegular.x,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -218,7 +264,9 @@ class _SideDrawerState extends State<SideDrawer> {
           ? PhosphorIcon(
               PhosphorIconsRegular.lockSimple,
               size: 16,
-              color: Colors.black26,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.26),
               // Pembaca layar tidak melihat ikon, jadi statusnya diucapkan.
               semanticLabel: 'Terkunci, belum punya akses',
             )
@@ -242,8 +290,10 @@ class _SideDrawerState extends State<SideDrawer> {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.black38,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.38),
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.5,
@@ -255,18 +305,19 @@ class _SideDrawerState extends State<SideDrawer> {
   Widget _buildItem({
     required String emoji,
     required String label,
-    Color labelColor = Colors.black87,
+    Color? labelColor,
     VoidCallback? onTap,
     Widget? trailing,
   }) {
     return _buildTile(
       // Lebar emoji berbeda-beda antar perangkat, jadi dikunci dalam kotak
       // selebar 24 supaya teks menunya tetap sejajar.
-      leading: Center(
-        child: Text(emoji, style: emojiStyle()),
-      ),
+      leading: Center(child: Text(emoji, style: emojiStyle())),
       label: label,
-      labelColor: labelColor,
+      // null = default `Colors.black87`-equivalent, tapi theme-aware (putih
+      // di dark mode) — default parameter Dart wajib compile-time constant,
+      // jadi tidak bisa langsung `Theme.of(context)` di posisi itu.
+      labelColor: labelColor ?? Theme.of(context).colorScheme.onSurface,
       onTap: onTap,
       trailing: trailing,
     );
@@ -275,13 +326,16 @@ class _SideDrawerState extends State<SideDrawer> {
   Widget _buildIconItem({
     required IconData icon,
     required String label,
-    Color color = Colors.black87,
+    Color? color,
     VoidCallback? onTap,
   }) {
+    final resolvedColor = color ?? Theme.of(context).colorScheme.onSurface;
     return _buildTile(
-      leading: Center(child: PhosphorIcon(icon, color: color, size: 20)),
+      leading: Center(
+        child: PhosphorIcon(icon, color: resolvedColor, size: 20),
+      ),
       label: label,
-      labelColor: color,
+      labelColor: resolvedColor,
       onTap: onTap,
     );
   }

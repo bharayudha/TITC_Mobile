@@ -117,7 +117,11 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
         drawer: const SideDrawer(),
         body: Stack(
           children: [
-            const Positioned.fill(child: ColoredBox(color: Colors.white)),
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor,
+              ),
+            ),
             Positioned.fill(
               child: GlassContentAwareContent(
                 child: NotificationListener<ScrollNotification>(
@@ -137,12 +141,15 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                               filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.7),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surface.withValues(alpha: 0.7),
                                   border: Border(
                                     bottom: BorderSide(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.06,
-                                      ),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.06),
                                       width: 1.0,
                                     ),
                                   ),
@@ -300,12 +307,12 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
+          Text(
             'MESSAGES',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           Row(
@@ -335,7 +342,10 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
           child: TextField(
             controller: _searchController,
             onChanged: (_) => setState(() {}),
-            style: const TextStyle(color: Colors.black87, fontSize: 14),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 14,
+            ),
             decoration: InputDecoration(
               hintText: 'Search conversations',
               hintStyle: TextStyle(color: Colors.grey.shade500),
@@ -344,18 +354,24 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                 color: Colors.grey.shade600,
               ),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.6),
+              fillColor: Theme.of(
+                context,
+              ).colorScheme.surface.withValues(alpha: 0.6),
               contentPadding: const EdgeInsets.symmetric(vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide(
-                  color: Colors.black.withValues(alpha: 0.08),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.08),
                 ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide(
-                  color: Colors.black.withValues(alpha: 0.08),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.08),
                 ),
               ),
               focusedBorder: const OutlineInputBorder(
@@ -416,9 +432,13 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.06),
+            ),
           ),
           child: Text(
             emptyMessage,
@@ -453,12 +473,20 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
             borderRadius: BorderRadius.circular(14),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+                border: Border.all(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.06),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.08),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -494,9 +522,9 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                       children: [
                         Text(
                           thread.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

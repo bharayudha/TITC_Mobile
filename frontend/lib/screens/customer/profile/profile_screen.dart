@@ -16,11 +16,6 @@ import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/api_service.dart';
 
-const Color _chipBorder = Color(0xFFDDDDDD);
-
-/// Latar kotak tulis postingan.
-const Color _composerFill = Color(0xFFEDF1F7);
-
 const int kHomeTabIndex = 0;
 
 /// Membuka halaman Home. Seluruh riwayat halaman dibersihkan agar tidak
@@ -153,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kProfilePageBackground,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: const TitcAppBar(),
       drawer: const SideDrawer(),
       body: RefreshIndicator(
@@ -210,10 +205,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         AppCard(
           padding: const EdgeInsets.symmetric(vertical: 28),
-          child: const Center(
+          child: Center(
             child: Text(
               'No posts found!',
-              style: TextStyle(fontSize: 15, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 15,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
         ),
@@ -264,12 +262,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   vertical: 14,
                 ),
                 decoration: BoxDecoration(
-                  color: _composerFill,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   "What's happening, $_currentName",
-                  style: const TextStyle(fontSize: 14, color: Colors.black54),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
               ),
             ),
@@ -288,27 +293,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Divider(color: AppColors.divider, thickness: 1),
           ),
           const SizedBox(width: 12),
-          const Text(
+          Text(
             'Sort by:',
-            style: TextStyle(fontSize: 13, color: Colors.black54),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
           const SizedBox(width: 8),
           DropdownButton<String>(
             value: _sortBy,
             isDense: true,
             underline: const SizedBox.shrink(),
-            icon: const Padding(
-              padding: EdgeInsets.only(left: 12),
+            icon: Padding(
+              padding: const EdgeInsets.only(left: 12),
               child: PhosphorIcon(
                 PhosphorIconsRegular.caretDown,
                 size: 14,
-                color: Colors.black54,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             items: _sortOptions
                 .map(
@@ -337,16 +349,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'About',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
               GestureDetector(
                 onTap: _openEditProfile,
-                child: const PhosphorIcon(
+                child: PhosphorIcon(
                   PhosphorIconsRegular.pencilSimple,
                   size: 18,
-                  color: Colors.black54,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
@@ -378,12 +396,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            border: Border.all(color: _chipBorder),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.2),
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             '+ $label',
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
         ),
       ),
@@ -393,12 +420,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [
-        PhosphorIcon(icon, size: 16, color: Colors.black54),
+        PhosphorIcon(
+          icon,
+          size: 16,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 14, color: Colors.black87),
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ),
       ],
@@ -412,7 +446,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Center(
           child: Text(
             'Belum ada $label',
-            style: const TextStyle(color: Colors.black45),
+            style: TextStyle(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.45),
+            ),
           ),
         ),
       ),

@@ -7,7 +7,6 @@ import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/app_card.dart';
 
 const Color kProfilePageBackground = Color(0xFFF0F2F5);
-const Color _coverColor = Color(0xFFE4E6EB);
 
 /// Daftar tab pada halaman profil.
 const List<String> kProfileTabs = [
@@ -34,9 +33,10 @@ class ProfileBreadcrumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: kShadowDown,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -50,35 +50,38 @@ class ProfileBreadcrumb extends StatelessWidget {
                 children: [
                   GestureDetector(
                     onTap: onHomeTap,
-                    child: const Text(
+                    child: Text(
                       'Home',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: onSurface,
                       ),
                     ),
                   ),
-                  const Text('  /  ', style: TextStyle(color: Colors.black38)),
-                  const Text(
+                  Text(
+                    '  /  ',
+                    style: TextStyle(color: onSurface.withValues(alpha: 0.38)),
+                  ),
+                  Text(
                     'My Profile',
-                    style: TextStyle(color: Colors.black54),
+                    style: TextStyle(color: onSurface.withValues(alpha: 0.6)),
                   ),
                   const SizedBox(width: 16),
                   GestureDetector(
                     onTap: onNotificationSettingsTap,
-                    child: const Row(
+                    child: Row(
                       children: [
                         PhosphorIcon(
                           PhosphorIconsRegular.arrowSquareOut,
                           size: 16,
-                          color: Colors.black87,
+                          color: onSurface,
                         ),
-                        SizedBox(width: 6),
+                        const SizedBox(width: 6),
                         Text(
                           'Notification Settings',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: onSurface,
                           ),
                         ),
                       ],
@@ -143,8 +146,13 @@ class ProfileIdentityCard extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Container(height: 90, color: _coverColor),
-                Positioned(left: 16, top: 30, child: _buildAvatar()),
+                Container(
+                  height: 90,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.08),
+                ),
+                Positioned(left: 16, top: 30, child: _buildAvatar(context)),
               ],
             ),
           ),
@@ -163,14 +171,19 @@ class ProfileIdentityCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '@$username',
-                  style: const TextStyle(color: Colors.black54, fontSize: 13),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    _buildStat(followingCount, 'Following'),
+                    _buildStat(context, followingCount, 'Following'),
                     const SizedBox(width: 16),
-                    _buildStat(followersCount, 'Followers'),
+                    _buildStat(context, followersCount, 'Followers'),
                   ],
                 ),
               ],
@@ -181,7 +194,7 @@ class ProfileIdentityCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(BuildContext context) {
     return SizedBox(
       width: 120,
       height: 120,
@@ -194,7 +207,10 @@ class ProfileIdentityCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.grey.shade300,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.surface,
+                width: 3,
+              ),
               image: avatarUrl != null && avatarUrl!.isNotEmpty
                   ? DecorationImage(
                       image: CachedNetworkImageProvider(
@@ -247,10 +263,10 @@ class ProfileIdentityCard extends StatelessWidget {
             bottom: 12,
             child: GestureDetector(
               onTap: onAvatarUploadTap,
-              child: const PhosphorIcon(
+              child: PhosphorIcon(
                 PhosphorIconsFill.cloudArrowUp,
                 size: 18,
-                color: Colors.black87,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
@@ -259,21 +275,26 @@ class ProfileIdentityCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStat(int count, String label) {
+  Widget _buildStat(BuildContext context, int count, String label) {
     return Row(
       children: [
         Text(
           '$count',
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 13,
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 13, color: Colors.black54),
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
         ),
       ],
     );
@@ -314,7 +335,7 @@ class ProfileTabBar extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: selected
-                        ? const Color(0xFFEAF1FF)
+                        ? AppColors.primary.withValues(alpha: 0.12)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -323,7 +344,9 @@ class ProfileTabBar extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: selected ? AppColors.primary : Colors.black87,
+                      color: selected
+                          ? AppColors.primary
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),

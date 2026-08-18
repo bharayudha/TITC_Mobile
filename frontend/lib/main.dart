@@ -4,6 +4,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:magang_titc/app.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/messages_service.dart';
+import 'package:magang_titc/services/theme_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,10 @@ void main() async {
   // sekali — lihat catatan lengkap di
   // `MessagesService.preloadCachedUnreadCount`.
   await MessagesService.preloadCachedUnreadCount();
+  // Sama alasannya: muat preferensi light/dark SEBELUM frame pertama supaya
+  // tidak ada kedipan tema (mulai terang lalu tiba-tiba gelap) saat app
+  // dibuka dengan preferensi dark mode sudah tersimpan.
+  await ThemeService.init();
   runApp(
     LiquidGlassWidgets.wrap(
       // `Theme.maybeBrightnessOf` menjembatani `ThemeMode` MaterialApp ke

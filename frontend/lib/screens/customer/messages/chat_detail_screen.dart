@@ -249,7 +249,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   void _showMessageActions(ChatMessageModel message, bool isMine) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -436,14 +436,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 3,
         scrolledUnderElevation: 3,
         shadowColor: kShadowColor,
         surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: Colors.black87),
+        iconTheme: IconThemeData(
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
         titleSpacing: 0,
         title: Row(
           children: [
@@ -454,6 +456,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   ? CachedNetworkImageProvider(
                       widget.avatarUrl,
                       headers: AuthService.imageAuthHeaders,
+                      maxWidth: 72,
+                      maxHeight: 72,
                     )
                   : null,
               child: widget.avatarUrl.isEmpty
@@ -468,7 +472,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             Expanded(
               child: Text(
                 widget.title,
-                style: const TextStyle(color: Colors.black87, fontSize: 16),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 16,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -555,11 +562,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isMine ? const Color(0xFF1E5AF5) : Colors.white,
+                color: isMine
+                    ? const Color(0xFF1E5AF5)
+                    : Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: isMine
                     ? null
-                    : Border.all(color: const Color(0xFFEEEEEE)),
+                    : Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.12),
+                      ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -568,10 +581,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   if (!isMine)
                     Text(
                       message.authorName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black54,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   if (message.replyText != null &&
@@ -589,7 +604,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     Text(
                       message.text,
                       style: TextStyle(
-                        color: isMine ? Colors.white : Colors.black87,
+                        color: isMine
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   if (message.reactions.isNotEmpty) ...[
@@ -609,7 +626,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     _formatMessageTime(message.createdAt),
                     style: TextStyle(
                       fontSize: 10,
-                      color: isMine ? Colors.white70 : Colors.black38,
+                      color: isMine
+                          ? Colors.white70
+                          : Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.38),
                     ),
                   ),
                 ],
@@ -675,8 +696,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         // Di dalam gelembung biru dipakai putih transparan, di gelembung
-        // putih dipakai abu — supaya kutipannya tetap terbaca di keduanya.
-        color: isMine ? Colors.white24 : Colors.black.withValues(alpha: 0.05),
+        // lawan bicara dipakai abu — supaya kutipannya tetap terbaca di
+        // keduanya, di light maupun dark mode.
+        color: isMine
+            ? Colors.white24
+            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(8),
         border: Border(
           left: BorderSide(
@@ -691,7 +715,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 12,
-          color: isMine ? Colors.white70 : Colors.black54,
+          color: isMine
+              ? Colors.white70
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         ),
       ),
     );
@@ -713,14 +739,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               decoration: BoxDecoration(
                 color: isMine
                     ? Colors.white24
-                    : Colors.black.withValues(alpha: 0.06),
+                    : Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 '${entry.key} ${entry.value}',
                 style: TextStyle(
                   fontSize: 11,
-                  color: isMine ? Colors.white : Colors.black87,
+                  color: isMine
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.onSurface,
                 ),
               ),
             ),
@@ -753,7 +783,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             placeholder: (_, _) => Container(
               width: 160,
               height: 120,
-              color: Colors.black12,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.08),
               child: const Center(
                 child: SizedBox(
                   width: 18,
@@ -765,8 +797,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             errorWidget: (_, _, _) => Container(
               width: 160,
               height: 120,
-              color: Colors.black12,
-              child: const Icon(Icons.broken_image, color: Colors.black38),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.08),
+              child: Icon(
+                Icons.broken_image,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.38),
+              ),
             ),
           ),
         ),
@@ -820,7 +859,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F3F8),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(8),
         border: const Border(
           left: BorderSide(color: Color(0xFF1E5AF5), width: 3),
@@ -846,16 +885,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     preview,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
                   ),
               ],
             ),
           ),
           GestureDetector(
             onTap: () => setState(() => _replyTarget = null),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.close, size: 16, color: Colors.black45),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.close,
+                size: 16,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.45),
+              ),
             ),
           ),
         ],
@@ -932,8 +982,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget _buildComposer() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: kShadowDown,
       ),
       child: SafeArea(
@@ -951,7 +1001,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   tooltip: 'Kirim gambar',
                   icon: PhosphorIcon(
                     PhosphorIconsRegular.image,
-                    color: _isSending ? Colors.black26 : Colors.black54,
+                    color: _isSending
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.26)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
                 Expanded(
@@ -969,11 +1025,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
-                        borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
+                        borderSide: BorderSide(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.2),
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
-                        borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
+                        borderSide: BorderSide(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.2),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),

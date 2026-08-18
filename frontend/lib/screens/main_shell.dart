@@ -154,7 +154,7 @@ class _MainShellState extends State<MainShell> {
         // celah sepersekian detik (seam antar frame animasi) yang menampakkan
         // warna dasar Scaffold. Disamakan dengan warna latar tiap tab (bukan
         // hitam bawaan) supaya celah itu tidak terlihat mencolok.
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         // WAJIB true supaya body (gradient warna-warni tiap tab) menembus
         // sampai ke belakang bottomNavigationBar. Tanpa ini, BackdropFilter
         // blur di BottomNavBar tidak punya apa pun yang berwarna untuk

@@ -118,14 +118,20 @@ class _MembersListScreenState extends State<MembersListScreen> {
                     child: Container(
                       width: 160,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surface.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: Colors.black.withValues(alpha: 0.08),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.08),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.1),
                             blurRadius: 24,
                             offset: const Offset(0, 8),
                           ),
@@ -150,7 +156,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                   style: TextStyle(
                                     color: option == _sortBy
                                         ? _kAccent
-                                        : Colors.black87,
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
                                     fontWeight: option == _sortBy
                                         ? FontWeight.bold
                                         : FontWeight.normal,
@@ -358,7 +366,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
     return SizedBox.expand(
       child: Stack(
         children: [
-          const Positioned.fill(child: ColoredBox(color: Colors.white)),
+          Positioned.fill(
+            child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor),
+          ),
           // Header judul/search/sort ikut scroll bersama daftar (BUKAN
           // pinned) — cuma latarnya dibuat menyatu dengan halaman (putih
           // polos, tanpa kartu kaca/blur/shadow terpisah).
@@ -400,7 +410,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
       width: double.infinity,
       height: _headerHeight,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: Colors.white,
+      color: Theme.of(context).scaffoldBackgroundColor,
       // Filter status admin (dropdown Active/Pending/Blocked) SEMENTARA
       // dilepas dari sini — dikonfirmasi lewat debug bahwa kehadirannya
       // di Row ini (Flexible di dalam Flexible/DropdownButton) membuat
@@ -414,10 +424,10 @@ class _MembersListScreenState extends State<MembersListScreen> {
           alignment: Alignment.centerLeft,
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -461,7 +471,11 @@ class _MembersListScreenState extends State<MembersListScreen> {
                   ? 'Belum ada member.'
                   : 'Tidak ada member yang cocok dengan "$_searchQuery".',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54),
+              style: TextStyle(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
             ),
           ),
         ),
@@ -503,16 +517,21 @@ class _MembersListScreenState extends State<MembersListScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 40),
-            const Icon(
+            Icon(
               PhosphorIconsRegular.warningCircle,
               size: 40,
-              color: Colors.black54,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 12),
             Text(
               'Gagal memuat members.\n$_error',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black87, fontSize: 13),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 16),
             Center(
@@ -545,15 +564,21 @@ class _MembersListScreenState extends State<MembersListScreen> {
                 : null,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.black.withValues(alpha: 0.06),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.06),
                   width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.1),
                     blurRadius: 24,
                     offset: const Offset(0, 8),
                   ),
@@ -574,10 +599,10 @@ class _MembersListScreenState extends State<MembersListScreen> {
                           children: [
                             Text(
                               member.displayName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
-                                color: Colors.black87,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -829,7 +854,14 @@ class _MembersListScreenState extends State<MembersListScreen> {
               decoration: BoxDecoration(
                 color: Colors.green,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+                // Cincin ini "memotong" titik hijau dari foto avatar di
+                // baliknya — disamakan dengan warna kartu (bukan putih
+                // tetap) supaya menyatu di dark mode, bukan menyisakan
+                // cincin putih mencolok di atas kartu gelap.
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.surface,
+                  width: 2,
+                ),
               ),
             ),
           ),
@@ -997,7 +1029,10 @@ class _MembersListScreenState extends State<MembersListScreen> {
                   controller: _searchController,
                   onChanged: _onSearchChanged,
                   textInputAction: TextInputAction.search,
-                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 14,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search Members...',
                     hintStyle: TextStyle(
@@ -1028,18 +1063,24 @@ class _MembersListScreenState extends State<MembersListScreen> {
                       horizontal: 16,
                     ),
                     filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.6),
+                    fillColor: Theme.of(
+                      context,
+                    ).colorScheme.surface.withValues(alpha: 0.6),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.08),
                         width: 1.0,
                       ),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.08),
                         width: 1.0,
                       ),
                     ),
@@ -1079,8 +1120,8 @@ class _MembersListScreenState extends State<MembersListScreen> {
                       ),
                       Text(
                         _sortBy,
-                        style: const TextStyle(
-                          color: Colors.black87,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),

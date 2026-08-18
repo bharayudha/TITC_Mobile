@@ -289,7 +289,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return SizedBox.expand(
       child: Stack(
         children: [
-          const Positioned.fill(child: ColoredBox(color: Colors.white)),
+          Positioned.fill(
+            child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor),
+          ),
           Positioned.fill(
             child: RefreshIndicator(
               onRefresh: _loadFirstPage,
@@ -325,19 +327,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Announcement',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       AdminOnly(
                         builder: (context) => PopupMenuButton<String>(
-                          icon: const PhosphorIcon(
+                          icon: PhosphorIcon(
                             PhosphorIconsRegular.dotsThreeVertical,
-                            color: Colors.black54,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                           onSelected: _openFeedManageMenu,
                           offset: const Offset(0, 36),
@@ -345,38 +349,43 @@ class _HomeScreenState extends State<HomeScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          itemBuilder: (context) => const [
-                            PopupMenuItem(
-                              value: 'Welcome Banner',
-                              height: 44,
-                              child: Row(
-                                children: [
-                                  PhosphorIcon(
-                                    PhosphorIconsRegular.image,
-                                    size: 18,
-                                    color: Colors.black54,
-                                  ),
-                                  SizedBox(width: 10),
-                                  Text('Welcome Banner'),
-                                ],
+                          itemBuilder: (context) {
+                            final iconColor = Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6);
+                            return [
+                              PopupMenuItem(
+                                value: 'Welcome Banner',
+                                height: 44,
+                                child: Row(
+                                  children: [
+                                    PhosphorIcon(
+                                      PhosphorIconsRegular.image,
+                                      size: 18,
+                                      color: iconColor,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text('Welcome Banner'),
+                                  ],
+                                ),
                               ),
-                            ),
-                            PopupMenuItem(
-                              value: 'Manage Links',
-                              height: 44,
-                              child: Row(
-                                children: [
-                                  PhosphorIcon(
-                                    PhosphorIconsRegular.link,
-                                    size: 18,
-                                    color: Colors.black54,
-                                  ),
-                                  SizedBox(width: 10),
-                                  Text('Manage Links'),
-                                ],
+                              PopupMenuItem(
+                                value: 'Manage Links',
+                                height: 44,
+                                child: Row(
+                                  children: [
+                                    PhosphorIcon(
+                                      PhosphorIconsRegular.link,
+                                      size: 18,
+                                      color: iconColor,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text('Manage Links'),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ];
+                          },
                         ),
                       ),
                     ],
@@ -401,14 +410,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     Center(
                       child: Text(
                         'Error: $_error',
-                        style: const TextStyle(color: Colors.black87),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
                     )
                   else if (_activities.isEmpty)
-                    const Center(
+                    Center(
                       child: Text(
                         'Belum ada aktivitas.',
-                        style: TextStyle(color: Colors.black54),
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
                       ),
                     )
                   else ...[
@@ -488,11 +503,15 @@ class _HomeScreenState extends State<HomeScreen> {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Material(
-                color: Colors.white.withValues(alpha: 0.55),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.55),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(19),
                   side: BorderSide(
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.08),
                     width: 1.0,
                   ),
                 ),
@@ -511,9 +530,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(width: 6),
                         Text(
                           link.label,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            color: Colors.black87,
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -656,15 +675,21 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () => _openComments(activity),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.black.withValues(alpha: 0.06),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.08),
                   width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.06),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -698,9 +723,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Text(
                                 activity.authorName,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
                               ),
                               if (activity.date.isNotEmpty)
@@ -720,7 +747,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       // Simple strip HTML
                       activity.content.replaceAll(RegExp(r'<[^>]*>'), ''),
-                      style: const TextStyle(color: Colors.black87),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(

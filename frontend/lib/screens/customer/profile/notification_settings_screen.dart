@@ -9,9 +9,6 @@ import 'package:magang_titc/widgets/customer/side_drawer.dart';
 import 'package:magang_titc/widgets/shared/top_app_bar.dart';
 import 'package:magang_titc/screens/customer/profile/profile_screen.dart';
 
-const Color _tableHeaderColor = Color(0xFFF7F8FA);
-const Color _groupRowColor = Color(0xFFEAF1FF);
-
 /// Pilihan notifikasi email per space.
 const List<String> _emailOptions = ['Email Disabled', 'Email Enabled'];
 
@@ -64,15 +61,15 @@ class _NotificationSettingsScreenState
 
   void _saveChanges() {
     // TODO: kirim perubahan ke members_service.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Perubahan disimpan')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Perubahan disimpan')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kProfilePageBackground,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: const TitcAppBar(),
       drawer: const SideDrawer(),
       body: SingleChildScrollView(
@@ -138,7 +135,11 @@ class _NotificationSettingsScreenState
         children: [
           Row(
             children: [
-              PhosphorIcon(icon, size: 24, color: Colors.black87),
+              PhosphorIcon(
+                icon,
+                size: 24,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -154,7 +155,12 @@ class _NotificationSettingsScreenState
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
         ],
       ),
@@ -225,18 +231,20 @@ class _NotificationSettingsScreenState
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF4A5568),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Colors.black54,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                 ],
@@ -263,27 +271,30 @@ class _NotificationSettingsScreenState
   }
 
   Widget _buildTableHeader() {
+    final mutedColor = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.6);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: const BoxDecoration(
-        color: _tableHeaderColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.04),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        border: const Border(bottom: BorderSide(color: AppColors.divider)),
       ),
-      child: const Row(
+      child: Row(
         children: [
           Expanded(
             flex: 3,
             child: Text(
               'Space',
-              style: TextStyle(fontSize: 13, color: Colors.black54),
+              style: TextStyle(fontSize: 13, color: mutedColor),
             ),
           ),
           Expanded(
             flex: 2,
             child: Text(
               'Notifications',
-              style: TextStyle(fontSize: 13, color: Colors.black54),
+              style: TextStyle(fontSize: 13, color: mutedColor),
             ),
           ),
         ],
@@ -294,15 +305,15 @@ class _NotificationSettingsScreenState
   Widget _buildGroupRow(String label) {
     return Container(
       width: double.infinity,
-      color: _groupRowColor,
+      color: AppColors.primary.withValues(alpha: 0.08),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.5,
-          color: Colors.black54,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         ),
       ),
     );
@@ -329,9 +340,9 @@ class _NotificationSettingsScreenState
                 Expanded(
                   child: Text(
                     space.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF4A5568),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -356,12 +367,15 @@ class _NotificationSettingsScreenState
         isExpanded: true,
         isDense: true,
         underline: const SizedBox.shrink(),
-        icon: const PhosphorIcon(
+        icon: PhosphorIcon(
           PhosphorIconsRegular.caretDown,
           size: 14,
-          color: Colors.black54,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         ),
-        style: const TextStyle(fontSize: 13, color: Colors.black54),
+        style: TextStyle(
+          fontSize: 13,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
         items: _emailOptions
             .map(
               (option) => DropdownMenuItem<String>(
