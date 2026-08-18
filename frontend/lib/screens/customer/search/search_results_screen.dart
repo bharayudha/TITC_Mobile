@@ -181,8 +181,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   Widget _buildAvatar(ActivityModel post) {
     const size = 28.0;
-    final initial =
-        post.authorName.isEmpty ? '?' : post.authorName[0].toUpperCase();
+    final initial = post.authorName.isEmpty
+        ? '?'
+        : post.authorName[0].toUpperCase();
 
     Widget fallback() => CircleAvatar(
       radius: size / 2,
@@ -204,6 +205,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         width: size,
         height: size,
         fit: BoxFit.cover,
+        memCacheWidth: (size * 3).round(),
+        memCacheHeight: (size * 3).round(),
         placeholder: (_, _) => fallback(),
         errorWidget: (_, _, _) => fallback(),
       ),

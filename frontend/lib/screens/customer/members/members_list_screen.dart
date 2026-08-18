@@ -800,6 +800,12 @@ class _MembersListScreenState extends State<MembersListScreen> {
               ? CachedNetworkImageProvider(
                   member.avatarUrl,
                   headers: AuthService.imageAuthHeaders,
+                  // Krusial di sini: daftar Members infinite-scroll 2.256
+                  // orang — tanpa batas ini tiap avatar didekode full-res
+                  // saat discroll, bikin scroll patah-patah/berat di device
+                  // low-end.
+                  maxWidth: 96,
+                  maxHeight: 96,
                 )
               : null,
           child: member.avatarUrl.isEmpty

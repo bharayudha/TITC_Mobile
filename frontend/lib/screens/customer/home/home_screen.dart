@@ -307,6 +307,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         image: CachedNetworkImageProvider(
                           'https://titc.or.id/wp-content/uploads/2025/07/cropped-TORC.png', // Placeholder
                           headers: AuthService.imageAuthHeaders,
+                          maxWidth: 1080,
+                          maxHeight: 400,
                         ),
                         fit: BoxFit.cover,
                         colorFilter: const ColorFilter.mode(
@@ -681,6 +683,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ? CachedNetworkImageProvider(
                                   activity.avatarUrl,
                                   headers: AuthService.imageAuthHeaders,
+                                  maxWidth: 100,
+                                  maxHeight: 100,
                                 )
                               : null,
                           child: activity.avatarUrl.isEmpty

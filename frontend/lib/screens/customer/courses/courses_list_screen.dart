@@ -374,6 +374,13 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                               height: 130,
                               width: double.infinity,
                               fit: BoxFit.cover,
+                              // Batasi decode di memori sesuai ukuran tampil
+                              // (bukan resolusi asli file) — kartu ini kecil
+                              // tapi foto sumbernya bisa berukuran beberapa
+                              // MB, jadi tanpa ini tiap kartu memboroskan RAM
+                              // jauh melebihi yang terlihat di layar.
+                              memCacheHeight: 260,
+                              memCacheWidth: 800,
                               errorWidget: (context, url, error) =>
                                   const Center(
                                     child: PhosphorIcon(
@@ -459,6 +466,8 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
                                       width: 48,
                                       height: 48,
                                       fit: BoxFit.cover,
+                                      memCacheWidth: 144,
+                                      memCacheHeight: 144,
                                       errorWidget: (context, url, error) =>
                                           const Center(
                                             child: PhosphorIcon(

@@ -745,6 +745,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             // call site gambar lain di app ini.
             httpHeaders: AuthService.imageAuthHeaders,
             fit: BoxFit.cover,
+            // Thumbnail dibatasi maxHeight/maxWidth 260/240 di atas — decode
+            // di memori tidak perlu lebih dari itu. Gambar penuh (pinch-zoom,
+            // lihat `_openImageViewer`) SENGAJA tidak dibatasi di sini.
+            memCacheWidth: 720,
+            memCacheHeight: 780,
             placeholder: (_, _) => Container(
               width: 160,
               height: 120,

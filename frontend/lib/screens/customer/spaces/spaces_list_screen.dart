@@ -397,6 +397,11 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                               height: 130,
                               width: double.infinity,
                               fit: BoxFit.cover,
+                              // Batasi decode di memori sesuai ukuran tampil,
+                              // bukan resolusi asli file — lihat catatan sama
+                              // di courses_list_screen.dart.
+                              memCacheHeight: 260,
+                              memCacheWidth: 800,
                               errorWidget: (context, url, error) =>
                                   _buildCoverFallback(space),
                             )
@@ -473,6 +478,8 @@ class _SpacesListScreenState extends State<SpacesListScreen> {
                                       width: 48,
                                       height: 48,
                                       fit: BoxFit.cover,
+                                      memCacheWidth: 144,
+                                      memCacheHeight: 144,
                                       errorWidget: (context, url, error) =>
                                           _buildLogoFallback(space),
                                     )

@@ -80,7 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final names = _currentName.split(' ');
     final firstName = names.isNotEmpty ? names.first : '';
     final lastName = names.length > 1 ? names.sublist(1).join(' ') : '';
-    
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProfileEditScreen(
@@ -110,7 +110,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Uploading photo... Please wait.'), duration: Duration(seconds: 2)),
+        const SnackBar(
+          content: Text('Uploading photo... Please wait.'),
+          duration: Duration(seconds: 2),
+        ),
       );
 
       final success = await ApiService.uploadAvatar(File(pickedFile.path));
@@ -121,13 +124,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) {
           setState(() {});
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile photo updated successfully!')),
+            const SnackBar(
+              content: Text('Profile photo updated successfully!'),
+            ),
           );
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to update photo. Please try again.')),
+            const SnackBar(
+              content: Text('Failed to update photo. Please try again.'),
+            ),
           );
         }
       }
@@ -135,7 +142,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('Error picking image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('An error occurred while picking the image.')),
+          const SnackBar(
+            content: Text('An error occurred while picking the image.'),
+          ),
         );
       }
     }
@@ -162,31 +171,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onNotificationSettingsTap: _openNotificationSettings,
                 onEditTap: _openEditProfile,
               ),
-            const SizedBox(height: 12),
-            ProfileIdentityCard(
-              name: _currentName,
-              username: widget.username,
-              avatarUrl: AuthService.userAvatarUrl,
-              followingCount: widget.followingCount,
-              followersCount: widget.followersCount,
-              onAvatarUploadTap: _openAvatarUpload,
-            ),
-            const SizedBox(height: 12),
-            ProfileTabBar(
-              selectedIndex: _selectedTab,
-              onSelected: (index) => setState(() => _selectedTab = index),
-            ),
-            const SizedBox(height: 12),
-            if (_selectedTab == 0)
-              _buildAboutCard()
-            else if (_selectedTab == 1)
-              _buildPostsTab()
-            else
-              _buildEmptyTab(kProfileTabs[_selectedTab]),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 12),
+              ProfileIdentityCard(
+                name: _currentName,
+                username: widget.username,
+                avatarUrl: AuthService.userAvatarUrl,
+                followingCount: widget.followingCount,
+                followersCount: widget.followersCount,
+                onAvatarUploadTap: _openAvatarUpload,
+              ),
+              const SizedBox(height: 12),
+              ProfileTabBar(
+                selectedIndex: _selectedTab,
+                onSelected: (index) => setState(() => _selectedTab = index),
+              ),
+              const SizedBox(height: 12),
+              if (_selectedTab == 0)
+                _buildAboutCard()
+              else if (_selectedTab == 1)
+                _buildPostsTab()
+              else
+                _buildEmptyTab(kProfileTabs[_selectedTab]),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -218,23 +227,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: Colors.grey.shade300,
-          backgroundImage: AuthService.userAvatarUrl != null && AuthService.userAvatarUrl!.isNotEmpty
-              ? CachedNetworkImageProvider(AuthService.userAvatarUrl!, headers: AuthService.imageAuthHeaders)
-              : null,
-          child: AuthService.userAvatarUrl == null || AuthService.userAvatarUrl!.isEmpty
-              ? Text(
-                  _currentName.isEmpty ? '?' : _currentName[0].toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade700,
-                  ),
-                )
-              : null,
-        ),
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.grey.shade300,
+            backgroundImage:
+                AuthService.userAvatarUrl != null &&
+                    AuthService.userAvatarUrl!.isNotEmpty
+                ? CachedNetworkImageProvider(
+                    AuthService.userAvatarUrl!,
+                    headers: AuthService.imageAuthHeaders,
+                    maxWidth: 72,
+                    maxHeight: 72,
+                  )
+                : null,
+            child:
+                AuthService.userAvatarUrl == null ||
+                    AuthService.userAvatarUrl!.isEmpty
+                ? Text(
+                    _currentName.isEmpty ? '?' : _currentName[0].toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade700,
+                    ),
+                  )
+                : null,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: GestureDetector(

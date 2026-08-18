@@ -38,6 +38,8 @@ class _ProfileAvatarIcon extends StatelessWidget {
             width: _size,
             height: _size,
             fit: BoxFit.cover,
+            memCacheWidth: 84,
+            memCacheHeight: 84,
             placeholder: (_, _) => _initialCircle(),
             errorWidget: (_, _, _) => _fallback(),
           ),
@@ -89,7 +91,7 @@ class ProfileMenuButton extends StatelessWidget {
     if (action == ProfileMenuAction.viewProfile) {
       final name = AuthService.userName ?? 'User';
       final username = AuthService.userName ?? 'user';
-      
+
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ProfileScreen(name: name, username: username),
@@ -182,10 +184,7 @@ class ProfileMenuButton extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'Log Out',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade800,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
               ),
             ],
           ),
@@ -206,7 +205,12 @@ class ProfileMenuButton extends StatelessWidget {
           radius: 20,
           backgroundColor: Colors.grey.shade300,
           backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
-              ? CachedNetworkImageProvider(avatarUrl, headers: AuthService.imageAuthHeaders)
+              ? CachedNetworkImageProvider(
+                  avatarUrl,
+                  headers: AuthService.imageAuthHeaders,
+                  maxWidth: 96,
+                  maxHeight: 96,
+                )
               : null,
           child: avatarUrl == null || avatarUrl.isEmpty
               ? Text(
@@ -258,10 +262,7 @@ class ProfileMenuButton extends StatelessWidget {
       child: Row(
         children: [
           // Lebar emoji berbeda antar perangkat, dikunci agar teks sejajar.
-          SizedBox(
-            width: 28,
-            child: Text(emoji, style: emojiStyle(size: 16)),
-          ),
+          SizedBox(width: 28, child: Text(emoji, style: emojiStyle(size: 16))),
           const SizedBox(width: 8),
           Text(
             label,

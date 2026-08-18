@@ -151,9 +151,9 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
                   });
                   _fetchNotifications();
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $error')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Error: $error')));
                 }
               }
             },
@@ -248,7 +248,8 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
       child: ListView.separated(
         shrinkWrap: true,
         itemCount: _notifications.length,
-        separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.divider),
+        separatorBuilder: (context, index) =>
+            const Divider(height: 1, color: AppColors.divider),
         itemBuilder: (context, index) {
           final notif = _notifications[index];
           return _buildNotificationItem(notif);
@@ -262,13 +263,13 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
       onTap: () {
         String? targetUrl = notif.url;
         if (targetUrl == null && notif.route != null) {
-           final routeName = notif.route!['name'];
-           final params = notif.route!['params'] as Map<String, dynamic>? ?? {};
-           if (routeName == 'space_feed' && params.containsKey('space')) {
-             targetUrl = 'https://titc.or.id/portal/spaces/${params['space']}';
-           } else {
-             targetUrl = 'https://titc.or.id/portal/';
-           }
+          final routeName = notif.route!['name'];
+          final params = notif.route!['params'] as Map<String, dynamic>? ?? {};
+          if (routeName == 'space_feed' && params.containsKey('space')) {
+            targetUrl = 'https://titc.or.id/portal/spaces/${params['space']}';
+          } else {
+            targetUrl = 'https://titc.or.id/portal/';
+          }
         }
         targetUrl ??= 'https://titc.or.id/portal/';
 
@@ -294,7 +295,9 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
       },
       child: Container(
         padding: const EdgeInsets.all(12),
-        color: notif.isRead ? Colors.transparent : AppColors.primary.withOpacity(0.05),
+        color: notif.isRead
+            ? Colors.transparent
+            : AppColors.primary.withOpacity(0.05),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -306,11 +309,15 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
                     ? CachedNetworkImageProvider(
                         notif.actor!.avatarUrl,
                         headers: AuthService.imageAuthHeaders,
+                        maxWidth: 72,
+                        maxHeight: 72,
                       )
                     : null,
                 child: notif.actor!.avatarUrl.isEmpty
                     ? Text(
-                        notif.actor!.displayName.isNotEmpty ? notif.actor!.displayName[0].toUpperCase() : '?',
+                        notif.actor!.displayName.isNotEmpty
+                            ? notif.actor!.displayName[0].toUpperCase()
+                            : '?',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -323,7 +330,11 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
               const CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.divider,
-                child: Icon(Icons.notifications, size: 20, color: Colors.black54),
+                child: Icon(
+                  Icons.notifications,
+                  size: 20,
+                  color: Colors.black54,
+                ),
               ),
             const SizedBox(width: 12),
             Expanded(
@@ -331,11 +342,16 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    notif.content.replaceAll(RegExp(r'<[^>]*>'), ''), // Strip HTML
+                    notif.content.replaceAll(
+                      RegExp(r'<[^>]*>'),
+                      '',
+                    ), // Strip HTML
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.black87,
-                      fontWeight: notif.isRead ? FontWeight.normal : FontWeight.w600,
+                      fontWeight: notif.isRead
+                          ? FontWeight.normal
+                          : FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),

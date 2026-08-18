@@ -197,7 +197,12 @@ class ProfileIdentityCard extends StatelessWidget {
               border: Border.all(color: Colors.white, width: 3),
               image: avatarUrl != null && avatarUrl!.isNotEmpty
                   ? DecorationImage(
-                      image: CachedNetworkImageProvider(avatarUrl!, headers: AuthService.imageAuthHeaders),
+                      image: CachedNetworkImageProvider(
+                        avatarUrl!,
+                        headers: AuthService.imageAuthHeaders,
+                        maxWidth: 360,
+                        maxHeight: 360,
+                      ),
                       fit: BoxFit.cover,
                     )
                   : null,
@@ -266,7 +271,10 @@ class ProfileIdentityCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: Colors.black54),
+        ),
       ],
     );
   }
@@ -305,8 +313,9 @@ class ProfileTabBar extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color:
-                        selected ? const Color(0xFFEAF1FF) : Colors.transparent,
+                    color: selected
+                        ? const Color(0xFFEAF1FF)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(

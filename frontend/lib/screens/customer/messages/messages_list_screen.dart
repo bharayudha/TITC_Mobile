@@ -474,6 +474,8 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                         ? CachedNetworkImageProvider(
                             thread.avatarUrl,
                             headers: AuthService.imageAuthHeaders,
+                            maxWidth: 96,
+                            maxHeight: 96,
                           )
                         : null,
                     child: thread.avatarUrl.isEmpty

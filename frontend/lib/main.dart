@@ -24,6 +24,20 @@ void main() async {
       // sistem brightness milik package ini (package ini sengaja tidak
       // import flutter/material.dart sama sekali).
       brightnessResolver: Theme.maybeBrightnessOf,
+      // Tanpa ini, tiap widget kaca (GlassTabBar.bottom di bottom nav,
+      // GlassAppBar di MainShellGlassBar, dst) jatuh ke default masing-
+      // masing — dan defaultnya TIDAK konsisten: `GlassTabBar.bottom`
+      // fallback ke `GlassQuality.premium` (shader refraksi penuh +
+      // chromatic aberration), padahal ia SELALU tampil & ikut animasi
+      // scroll-hide/scroll-list — persis skenario yang di peringatkan
+      // dokumentasi package ini sebagai "jangan pakai premium". Terbukti:
+      // `GlassPerformanceMonitor` bawaan package mencatat 7-9 permukaan
+      // premium aktif bersamaan dengan raster frame >16ms (di bawah 60fps)
+      // sejak sesi awal, dan device fisik tim masih terasa berat. `standard`
+      // = shader ringan, aman untuk widget yang scroll/animasi terus-
+      // menerus, di semua platform — fitur visualnya sama, cuma kualitas
+      // shader-nya diturunkan.
+      theme: GlassThemeData.simple(quality: GlassQuality.standard),
       child: const App(),
     ),
   );
