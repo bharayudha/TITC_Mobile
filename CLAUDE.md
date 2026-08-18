@@ -1073,3 +1073,27 @@ course baru langsung muncul tanpa perlu pull-to-refresh.
   - Memperbaiki tata letak header (Spaces title, filter pills, dan icon admin) dengan SingleChildScrollView dan optimasi padding agar tidak terjadi error *Right Overflow* di layar kecil tanpa terpotong.
 - **Perbaikan CustomerBottomNavBar:**
   - Memperbaiki visibilitas ikon dan teks navigasi dengan menerapkan warna dinamis gelap spesifik saat tab Spaces aktif agar tidak menyatu dengan background cerah.
+
+ # #   S e s i   1 9   A g u s t u s   2 0 2 6      F i t u r   P u s h   N o t i f i c a t i o n   F C M   ( F o l l o w   &   G l o b a l   F e e d ) 
+ 
+ # # #   1 .   P e r b a i k a n   B u g   A n d r o i d   B u i l d   ( D e s u g a r i n g ) 
+ -   M e m p e r b a i k i   k e g a g a l a n   b u i l d   G r a d l e   s a a t   k o m p i l a s i   p l u g i n   \  l u t t e r _ l o c a l _ n o t i f i c a t i o n s \   v 2 2 . 3 . 0 . 
+ -   M e n a m b a h k a n   k o n f i g u r a s i   * * c o r e L i b r a r y D e s u g a r i n g E n a b l e d   t r u e * *   b e s e r t a   d e p e n d e n s i   \ c o m . a n d r o i d . t o o l s : d e s u g a r _ j d k _ l i b s : 2 . 1 . 5 \   d i   \  r o n t e n d / a n d r o i d / a p p / b u i l d . g r a d l e . k t s \ . 
+ 
+ # # #   2 .   S i n k r o n i s a s i   N a m a   P a k e t   F C M 
+ -   N a m a   p a k e t   d i   \  u i l d . g r a d l e . k t s \   d a n   d e k l a r a s i   \ M a i n A c t i v i t y . k t \   d i p e r b a r u i   d a r i   \ c o m . e x a m p l e . m a g a n g _ t i t c \   m e n j a d i   \ 	 i t c . m o b i l e \   a g a r   p r e s i s i   d e n g a n   k o n f i g u r a s i   F i r e b a s e   d i   f i l e   \ g o o g l e - s e r v i c e s . j s o n \ .   
+ -   H a l   i n i   m e n g a t a s i   m a s a l a h   \ C l a s s N o t F o u n d E x c e p t i o n \   s a a t   m e n e k a n   n o t i f i k a s i . 
+ 
+ # # #   3 .   I n t e g r a s i   \  i r e b a s e _ m e s s a g i n g \   &   \  l u t t e r _ l o c a l _ n o t i f i c a t i o n s \ 
+ -   M e n g g a n t i   p e m a n g g i l a n   A P I   N o t i f i k a s i   y a n g   s u d a h   u s a n g   ( * d e p r e c a t e d * )   m e n j a d i   f o r m a t   n a m e d - p a r a m e t e r   ( \ s e t t i n g s : \   d a n   \ i d : \ )   d i   \ l i b / s e r v i c e s / f i r e b a s e _ m e s s a g i n g _ s e r v i c e . d a r t \ . 
+ -   M e n a m b a h k a n   l a n g g a n a n   ( s u b s c r i b e )   o t o m a t i s   k e   t o p i k   F C M   \ g l o b a l _ f e e d s \   s a a t   i n i s i a l i s a s i   a p l i k a s i   u n t u k   b e r s i a p   m e n e r i m a   b r o a d c a s t   * F e e d *   d a r i   s e r v e r . 
+ 
+ # # #   4 .   P l u g i n   W o r d P r e s s   ( P e n d e t e k s i   O t o m a t i s   &   F C M   S e n d e r ) 
+ -   * * L o g i k a   C e r d a s   P e n c e g a t   R E S T   A P I : * *   K a r e n a   _ a c t i o n   h o o k _   i n t e r n a l   F l u e n t   C o m m u n i t y   s a n g a t   t e r t u t u p   d a n   b e r i s i k o   p u t u s   j i k a   p l u g i n   W P   d i - u p d a t e ,   s a y a   t e l a h   m e m p r o g r a m   p l u g i n   P H P   u n t u k   m e n y a d a p   l a l u   l i n t a s   R E S T   A P I   W P   t i n g k a t   i n t i   ( \  e s t _ r e q u e s t _ a f t e r _ c a l l b a c k s \ ) . 
+ -   * * T r i g g e r   N o t i f i k a s i   F o l l o w : * *   M e n y a d a p   r u t e   \ P O S T   / f l u e n t - c o m m u n i t y / v 2 / p r o f i l e / { u s e r n a m e } / f o l l o w \ .   J i k a   b e r s t a t u s   2 0 0   ( S u k s e s ) ,   W P   a k a n   d i a m - d i a m   m e n g i r i m   p a y l o a d   n o t i f i k a s i   F C M   ( \  
+ P e n g i k u t  
+ B a r u \ )   s p e s i f i k   k e   H P   u s e r   y a n g   d i - f o l l o w   s e c a r a   s e k e t i k a   ( * r e a l - t i m e * ) . 
+ -   * * T r i g g e r   N o t i f i k a s i   F e e d   G l o b a l : * *   M e n y a d a p   r u t e   \ P O S T   / f l u e n t - c o m m u n i t y / v 2 / f e e d s \ .   S e t i a p   k a l i   A d m i n   m e m b u a t   p e n g u m u m a n ,   W P   a k a n   m e n g i r i m k a n   s i n y a l   P u s h   N o t i f i c a t i o n   k e   t o p i k   \ g l o b a l _ f e e d s \   a g a r   d i t e r i m a   m e r a t a   o l e h   s e m u a   p o n s e l   y a n g   t e l a h   d i p a s a n g i   a p p   T I T C . 
+ -   M e n g h a p u s   s e m u a   f i l e   t e s   e k s p e r i m e n t a l   ( \ s c r a t c h _ f c o m _ f o l l o w . p y \ ,   e n d p o i n t   t e s t   \ / t e s t - f c m \ ,   f i l e   z i p   s i s a ,   d a n   t o m b o l   B u g   d i   a p p   b a r )   a g a r   k o d e   t e t a p   m u r n i   d a n   b e r s i h   s e b e l u m   d i g u n a k a n   ( * p r o d u c t i o n - r e a d y * ) . 
+  
+ 
