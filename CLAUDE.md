@@ -4,7 +4,7 @@ Catatan progres perbaikan aplikasi Flutter `titc_mobile` yang meniru portal
 Fluent Community di `titc.or.id`. Dipakai sebagai rekam jejak supaya pekerjaan
 bisa dilanjutkan di sesi berikutnya.
 
-Terakhir diperbarui: 6 Agustus 2026.
+Terakhir diperbarui: 19 Agustus 2026.
 
 ---
 
@@ -787,6 +787,9 @@ jalan sungguhan dan hardcode email bisa dibuang.
 | Waktu relatif ("15 days ago") | ✅ |
 | Timeout 15s → 30s + retry | ✅ Diperbaiki 6 Agt |
 | Spaces parser rekursif | ✅ Masih dipakai — tapi penyebab space hilang ternyata di endpoint, bukan parser (13 Agt) |
+| Liquid glass di bottom nav/top bar/chat FAB | ✅ 19 Agt — pakai `liquid_glass_widgets`, tapi baru ada di branch `bhara`, BELUM di `main` (lihat catatan sesi 19 Agt) |
+| Optimasi performa (GlassQuality + cache gambar) | ✅ 19 Agt — lihat catatan sesi 19 Agt |
+| Dark mode | ✅ 19 Agt — toggle di menu profil, retrofit menjangkau semua layar utama |
 
 ---
 
@@ -1073,3 +1076,94 @@ course baru langsung muncul tanpa perlu pull-to-refresh.
   - Memperbaiki tata letak header (Spaces title, filter pills, dan icon admin) dengan SingleChildScrollView dan optimasi padding agar tidak terjadi error *Right Overflow* di layar kecil tanpa terpotong.
 - **Perbaikan CustomerBottomNavBar:**
   - Memperbaiki visibilitas ikon dan teks navigasi dengan menerapkan warna dinamis gelap spesifik saat tab Spaces aktif agar tidak menyatu dengan background cerah.
+
+---
+
+## Sesi 19 Agustus 2026 — Konflik glass dengan teman, optimasi performa, dark mode
+
+### ⚠️ Kerja glass sesi ini ada di branch `bhara`, BUKAN `main`
+
+Selama sesi ini, teman satu tim push versi bottom nav bar + Courses + Spaces
+sendiri langsung ke `main` (BackdropFilter manual racikan sendiri + tema
+violet khusus Courses). Sesi ini pakai pendekatan berbeda untuk widget yang
+SAMA — package `liquid_glass_widgets` (`GlassTabBar.bottom`, `GlassAppBar`).
+Dua arsitektur ini **tidak kompatibel**: sempat dicoba digabung lewat
+`git merge`, hasilnya header dobel/tumpang tindih karena layar Courses/Spaces
+versi teman mengasumsikan `Scaffold.appBar` sungguhan, sementara struktur
+sesi ini pakai overlay kaca kustom yang tidak mengonsumsi ruang.
+
+**Keputusan:** revert ke versi `liquid_glass_widgets` sesi ini, lalu push ke
+branch terpisah `bhara` (bukan `main`) supaya tidak menimpa kerja teman lagi.
+Riwayat commit versi tergabung (kalau suatu saat mau dicoba rekonsiliasi
+manual) tetap ada di `git log` — cari commit "Merge remote-tracking branch
+'origin/bhara'" dan "Revert bottom nav bar & Courses/Spaces ke versi
+liquid_glass_widgets".
+
+> [!IMPORTANT]
+> Sebelum menggabungkan `bhara` ke `main` (atau sebaliknya), JANGAN langsung
+> `git merge`/`git pull` mentah-mentah — konflik yang sama akan muncul lagi
+> di `customer_bottom_nav_bar.dart`, `courses_list_screen.dart`,
+> `spaces_list_screen.dart`, `main_shell.dart`. Perlu keputusan sadar dulu:
+> pertahankan yang mana, atau tulis ulang supaya dua arsitektur itu hidup
+> berdampingan (belum pernah dicoba, kemungkinan besar butuh waktu lama).
+
+### Optimasi performa
+
+- **`GlassQuality.standard` di-set app-wide** lewat `LiquidGlassWidgets.wrap(theme: GlassThemeData.simple(quality: GlassQuality.standard))`
+  di `main.dart`. Sebelumnya beberapa widget kaca (terutama `GlassTabBar.bottom`)
+  fallback ke `GlassQuality.premium` bawaan package — package sendiri
+  memperingatkan `premium` tidak cocok untuk widget yang ikut animasi
+  scroll/scroll-hide terus-menerus. Terbukti lewat `GlassPerformanceMonitor`
+  bawaan package: warning "sustained raster frames >16ms" dengan 7-9
+  permukaan premium aktif bersamaan sejak cold start, sebelum di-cap ke
+  `standard`.
+- **`memCacheWidth`/`memCacheHeight`** (`CachedNetworkImage`) dan
+  **`maxWidth`/`maxHeight`** (`CachedNetworkImageProvider`) ditambahkan di
+  ~16 titik pemuatan gambar di seluruh app (avatar, cover course/space,
+  banner Home, gambar chat) — tanpa ini gambar didekode di memori pada
+  resolusi ASLI file, bukan ukuran tampilnya, paling terasa di daftar
+  Members yang infinite-scroll 2.256 orang.
+  > Perkecualian sengaja: viewer gambar chat full-screen (pinch-zoom,
+  > `_openImageViewer` di `chat_detail_screen.dart`) TIDAK dibatasi, supaya
+  > kualitas zoom tetap penuh.
+
+### Dark mode
+
+- **Infrastruktur baru:** `lib/services/theme_service.dart` —
+  `ValueNotifier<ThemeMode>` + persist ke `SharedPreferences` (pola sama
+  dengan `MessagesService.unreadCountNotifier`). Dipreload di `main.dart`
+  sebelum `runApp` (tidak ada kedipan tema saat cold start), dipakai di
+  `app.dart` lewat `MaterialApp.themeMode`.
+- **Switch Light/Dark Mode** ada di popup menu profil (avatar kanan atas app
+  bar), persis di bawah Certificate dan di atas Log Out. Toggle-nya
+  `PopupMenuItem(enabled: false, ...)` berisi `Switch` — trik supaya
+  menekan toggle TIDAK menutup popup (`enabled: false` mematikan gesture
+  "pilih lalu tutup" bawaan `PopupMenuItem`, tapi `Switch` di dalamnya tetap
+  menerima tap sendiri karena gesture recognizer-nya independen).
+- **Retrofit warna** dari hardcode (`Colors.white`, `Colors.black87`, dst) ke
+  `Theme.of(context).colorScheme.surface`/`.onSurface` sudah menjangkau
+  SEMUA layar utama: shell (`main_shell.dart`), bottom nav bar, side drawer,
+  top app bar (`top_app_bar.dart` — dipakai Profile & `SpaceWebViewScreen`),
+  Home, Spaces, Courses, Members, Messages, Chat, Profile, Notification
+  Settings, dan popup menu profil (`profile_menu.dart`). Semua sudah
+  diverifikasi langsung di device, tidak ada teks tak terbaca di dark mode.
+- **Sengaja TIDAK diretrofit** (bukan bug yang terlewat):
+  - Warna aksen brand (`AppColors.primary`, indigo `#6366F1`, dst) dan
+    elemen putih-di-atas-badge-solid (mis. teks "Follow"/"Join" putih di
+    atas tombol biru solid) — sudah kontras di kedua tema, mengubahnya
+    justru menghilangkan identitas warna brand.
+  - `AppColors.divider` (garis pemisah abu-abu tipis, dipakai lintas app) —
+    di dark mode jadi garis terang tipis, masih cukup terlihat, cuma
+    kosmetik minor bukan blocker keterbacaan. Kalau mau diretrofit,
+    ubahnya di `lib/constants/app_colors.dart` (satu tempat, dampaknya
+    lintas app — jangan diubah per call-site).
+
+### Catatan teknis sesi ini (jangan diulang)
+
+- **Sesi `flutter run` yang sangat panjang (30+ rebuild berturut-turut)
+  bikin ART verification jadi lambat drastis**, kadang macet total di
+  splash screen (bukan crash — log tetap jalan, cuma sangat lambat).
+  Solusinya: `adb -s emulator-5554 emu kill` lalu jalankan emulator baru
+  dari awal. Jangan tunggu lebih dari ~30 detik di splash screen saat log
+  sudah berhenti bertambah — itu tanda emulator perlu di-restart, bukan
+  tanda harus menunggu lebih lama.
