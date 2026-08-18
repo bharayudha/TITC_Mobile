@@ -147,14 +147,14 @@ class _MainShellState extends State<MainShell> {
     // dibungkus, supaya yang disampel adalah tab di baliknya, bukan bar-nya).
     return GlassContentAwareScope(
       child: Scaffold(
-        // Spaces punya latar biru muda sendiri (selaras dengan tema glass
-        // birunya); tab lain jatuh ke putih — `AnimatedSlide` saat pindah tab
-        // bisa menyisakan celah sepersekian detik (seam antar frame animasi)
-        // yang menampakkan warna dasar Scaffold, jadi disamakan dengan warna
-        // latar tab yang aktif supaya celah itu tidak terlihat mencolok.
-        backgroundColor: _currentIndex == MainShell.tabSpaces
-            ? const Color(0xFFCDE6F7)
-            : Colors.white,
+        // Home/Spaces/Courses/Members sekarang sama-sama melukis latar putih
+        // sendiri (lihat masing-masing build() di setiap layar) yang menutup
+        // SELURUH area tab-nya masing-masing — tapi warna ini masih dipakai
+        // sebagai fallback: `AnimatedSlide` saat pindah tab bisa menyisakan
+        // celah sepersekian detik (seam antar frame animasi) yang menampakkan
+        // warna dasar Scaffold. Disamakan dengan warna latar tiap tab (bukan
+        // hitam bawaan) supaya celah itu tidak terlihat mencolok.
+        backgroundColor: Colors.white,
         // WAJIB true supaya body (gradient warna-warni tiap tab) menembus
         // sampai ke belakang bottomNavigationBar. Tanpa ini, BackdropFilter
         // blur di BottomNavBar tidak punya apa pun yang berwarna untuk
@@ -256,8 +256,9 @@ class _MainShellState extends State<MainShell> {
         bottomNavigationBar: BottomNavBar(
           currentIndex: _currentIndex,
           onTap: _onNavTap,
-          isSpacesTab: _currentIndex == MainShell.tabSpaces,
-          isCoursesTab: _currentIndex == MainShell.tabCourses,
+          // Sama seperti backgroundColor Scaffold di atas: gaya glass ini
+          // sekarang berlaku untuk semua tab, bukan cuma Spaces.
+          isSpacesTab: true,
         ),
       ),
     );

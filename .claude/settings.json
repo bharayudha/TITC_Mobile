@@ -115,7 +115,13 @@
       "Bash(kill -9 12361)",
       "Bash(git check-ignore *)",
       "Bash(echo \"exit: $?\")",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash('C:\\\\Users\\\\ANDHIKA\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe' -s emulator-5554 shell input tap 539 1449)",
+      "Bash('C:\\\\Users\\\\ANDHIKA\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe' -s emulator-5554 exec-out screencap -p)",
+      "Bash(kill -9 90)",
+      "Bash('C:\\\\Users\\\\ANDHIKA\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe' -s emulator-5554 shell input tap 124 1478)",
+      "Bash('C:\\\\Users\\\\ANDHIKA\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe' -s emulator-5554 shell input keyevent KEYCODE_BACK)",
+      "Bash('C:\\\\Users\\\\ANDHIKA\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe' -s emulator-5554 shell input tap 539 1491)"
     ],
     "additionalDirectories": [
       "C:\\Users\\ANDHIKA\\AppData\\Local\\Temp\\claude\\d--Interns-TITC-titc-mobile-main\\e1654a1e-58f9-460d-b763-ecfd8f968498\\scratchpad",
