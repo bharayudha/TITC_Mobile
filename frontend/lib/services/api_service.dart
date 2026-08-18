@@ -920,9 +920,11 @@ class ApiService {
       final uri = Uri.parse(
         '$_baseUrl/profile/$username/${follow ? 'follow' : 'unfollow'}',
       );
+      print('TOGGLE_FOLLOW REQ: $uri');
       final response = await client
           .post(uri, headers: authHeaders)
           .timeout(const Duration(seconds: 30));
+      print('TOGGLE_FOLLOW RES: ${response.statusCode} - ${response.body}');
 
       final ok = response.statusCode == 200 ||
           response.statusCode == 201 ||

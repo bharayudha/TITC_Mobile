@@ -9,6 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
+import 'package:magang_titc/constants/fcom_member_profile_css.dart';
 
 const List<String> _notificationTabs = [
   'Recent',
@@ -308,6 +309,7 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
           nextScreen = AuthenticatedWebViewScreen(
             url: targetUrl,
             title: 'Member Profile',
+            extraCss: kFcomMemberProfileCss,
           );
         } else {
           // Post dibuka FCOM sebagai dialog overlay, jadi butuh CSS yang
