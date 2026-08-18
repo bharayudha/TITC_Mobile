@@ -4,6 +4,8 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:magang_titc/app.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/messages_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:magang_titc/services/firebase_messaging_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +20,14 @@ void main() async {
   // sekali — lihat catatan lengkap di
   // `MessagesService.preloadCachedUnreadCount`.
   await MessagesService.preloadCachedUnreadCount();
+  
+  try {
+    await Firebase.initializeApp();
+    await FirebaseMessagingService.init();
+  } catch (e) {
+    print('Error initializing Firebase: $e');
+  }
+
   runApp(
     LiquidGlassWidgets.wrap(
       // `Theme.maybeBrightnessOf` menjembatani `ThemeMode` MaterialApp ke

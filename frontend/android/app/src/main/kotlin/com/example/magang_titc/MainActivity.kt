@@ -1,4 +1,4 @@
-package com.example.magang_titc
+package titc.mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

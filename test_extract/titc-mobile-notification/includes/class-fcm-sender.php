@@ -104,42 +104,4 @@ class TITC_FCM_Sender {
 
         return true;
     }
-
-    public function send_notification_to_topic($topic, $title, $body, $data = []) {
-        $access_token = $this->get_access_token();
-        if (!$access_token) {
-            return false;
-        }
-
-        $key_data = json_decode(file_get_contents($this->service_account_path), true);
-        $project_id = $key_data['project_id'];
-        
-        $fcm_url = "https://fcm.googleapis.com/v1/projects/{$project_id}/messages:send";
-
-        $message = [
-            'message' => [
-                'topic' => $topic,
-                'notification' => [
-                    'title' => $title,
-                    'body' => $body
-                ],
-                'data' => $data
-            ]
-        ];
-
-        $response = wp_remote_post($fcm_url, [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $access_token,
-                'Content-Type'  => 'application/json'
-            ],
-            'body' => json_encode($message)
-        ]);
-
-        if (is_wp_error($response)) {
-            error_log('TITC FCM Topic Send Error: ' . $response->get_error_message());
-            return false;
-        }
-
-        return true;
-    }
 }
