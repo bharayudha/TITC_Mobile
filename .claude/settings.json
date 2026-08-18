@@ -112,7 +112,10 @@
       "Bash(kill -9 12191)",
       "WebFetch(domain:iconmonstr.com)",
       "Bash(kill -9 12247)",
-      "Bash(kill -9 12361)"
+      "Bash(kill -9 12361)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\ANDHIKA\\AppData\\Local\\Temp\\claude\\d--Interns-TITC-titc-mobile-main\\e1654a1e-58f9-460d-b763-ecfd8f968498\\scratchpad",
