@@ -27,7 +27,30 @@ class _PreparationTestWebviewScreenState
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) => setState(() => _isLoading = true),
-          onPageFinished: (_) => setState(() => _isLoading = false),
+          onPageFinished: (_) async {
+            // Sembunyikan header/footer bawaan tema WordPress (kotak biru
+            // "TITC Indonesia" + hamburger) supaya tidak dobel dengan AppBar
+            // Flutter di atasnya. Injeksi CSS lewat JS hanya berlaku di sisi
+            // WebView klien saat itu saja — TIDAK mengubah apa pun di server
+            // atau tampilan yang dilihat pengunjung web asli.
+            await _controller.runJavaScript('''
+              (function() {
+                var style = document.createElement('style');
+                style.innerHTML = `
+                  header, .site-header, #masthead, .ast-site-header, .elementor-location-header,
+                  footer, .site-footer, #colophon, .ast-site-footer, .elementor-location-footer, .footer-widgets {
+                    display: none !important;
+                  }
+                  body {
+                    padding-top: 0 !important;
+                    margin: 0 !important;
+                  }
+                `;
+                document.head.appendChild(style);
+              })();
+            ''');
+            setState(() => _isLoading = false);
+          },
         ),
       )
       ..loadRequest(Uri.parse(preparationTestUrl));
@@ -51,7 +74,14 @@ class _PreparationTestWebviewScreenState
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
-          if (_isLoading) const Center(child: CircularProgressIndicator()),
+          // Penutup solid (bukan cuma spinner mengambang) supaya header web
+          // asli tidak sempat kelihatan sekilas sebelum CSS injeksi selesai
+          // menyembunyikannya di onPageFinished.
+          if (_isLoading)
+            Container(
+              color: Colors.white,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
         ],
       ),
     );

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -5,7 +7,6 @@ import 'package:magang_titc/constants/app_text_styles.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/portal_navigator.dart';
 import 'package:magang_titc/widgets/shared/admin_only.dart';
-import 'package:magang_titc/widgets/shared/section_header.dart';
 import '../../../models/activity_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
@@ -86,17 +87,19 @@ class _HomeScreenState extends State<HomeScreen> {
       _seedLikedFromServer(cached);
       _isLoadingFirstPage = false;
       _nextPage = 2;
-      ApiService.fetchActivities().then((fresh) {
-        if (!mounted) return;
-        setState(() {
-          _activities
-            ..clear()
-            ..addAll(fresh);
-          _seedLikedFromServer(fresh);
-          _nextPage = 2;
-          _hasMore = fresh.length >= ApiService.feedsPerPage;
-        });
-      }).catchError((_) {});
+      ApiService.fetchActivities()
+          .then((fresh) {
+            if (!mounted) return;
+            setState(() {
+              _activities
+                ..clear()
+                ..addAll(fresh);
+              _seedLikedFromServer(fresh);
+              _nextPage = 2;
+              _hasMore = fresh.length >= ApiService.feedsPerPage;
+            });
+          })
+          .catchError((_) {});
     } else {
       _loadFirstPage();
     }
@@ -262,126 +265,171 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(wantLike ? 'Gagal menyukai post.' : 'Gagal batal menyukai post.')),
+      SnackBar(
+        content: Text(
+          wantLike ? 'Gagal menyukai post.' : 'Gagal batal menyukai post.',
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _loadFirstPage,
-      child: ListView(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
+    // Latar glassmorphism — palet & orb sama persis dengan SpacesListScreen
+    // supaya berpindah tab Home <-> Spaces terasa konsisten. Konten di
+    // bawahnya (RefreshIndicator/ListView/fetch/handler/urutan/padding)
+    // TIDAK diubah sama sekali — header "Announcement" TETAP ikut scroll
+    // bersama konten seperti semula, bukan dijadikan bar melayang di atas
+    // (sempat dicoba, ternyata mengubah posisi konten dan diminta dibalik).
+    //
+    // MainShell memakai `extendBodyBehindAppBar: true` supaya
+    // TitcAppBar(glass: true) bisa nge-blur latar ini — tanpa offset ini,
+    // konten akan mulai dari belakang app bar (tertutup).
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
+    return SizedBox.expand(
+      child: Stack(
         children: [
-          // 1. Promo Banner (Mock)
-          Container(
-            height: 150,
-            decoration: BoxDecoration(
-              color: Colors.blue.shade900,
-              borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: CachedNetworkImageProvider(
-                  'https://titc.or.id/wp-content/uploads/2025/07/cropped-TORC.png', // Placeholder
-                  headers: AuthService.imageAuthHeaders,
-                ),
-                fit: BoxFit.cover,
-                colorFilter: const ColorFilter.mode(Colors.black54, BlendMode.darken),
-              ),
-            ),
-            child: const Center(
-              child: Text(
-                'COMING SOON\nTOEFL iBT',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
+          const Positioned.fill(child: ColoredBox(color: Colors.white)),
+          Positioned.fill(
+            child: RefreshIndicator(
+              onRefresh: _loadFirstPage,
+              child: ListView(
+                controller: _scrollController,
+                padding: EdgeInsets.fromLTRB(16, 16 + topInset, 16, 16),
+                children: [
+                  // 1. Promo Banner (Mock)
+                  Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade900,
+                      borderRadius: BorderRadius.circular(12),
+                      image: DecorationImage(
+                        image: CachedNetworkImageProvider(
+                          'https://titc.or.id/wp-content/uploads/2025/07/cropped-TORC.png', // Placeholder
+                          headers: AuthService.imageAuthHeaders,
+                        ),
+                        fit: BoxFit.cover,
+                        colorFilter: const ColorFilter.mode(
+                          Colors.black54,
+                          BlendMode.darken,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
 
-          // 3. Header Feed
-          SectionHeader(
-            title: 'Announcement',
-            // Menu "⋮" ini mengelola konten seluruh komunitas (banner &
-            // link cepat Home), bukan sesuatu punya masing2 user — sama
-            // seperti "New Course"/"New Space", digating admin-only lewat
-            // AdminOnly. Untuk user biasa tombolnya hilang total
-            // (sebelumnya selalu tampil tapi tidak berbuat apa2 untuk
-            // siapa pun — bukan mundur, cuma jadi jujur soal siapa yang
-            // sebenarnya bisa memakainya).
-            trailing: AdminOnly(
-              builder: (context) => PopupMenuButton<String>(
-                icon: const PhosphorIcon(PhosphorIconsRegular.dotsThreeVertical, color: Colors.black54),
-                onSelected: _openFeedManageMenu,
-                offset: const Offset(0, 36),
-                elevation: 6,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'Welcome Banner',
-                    height: 44,
-                    child: Row(
-                      children: [
-                        PhosphorIcon(PhosphorIconsRegular.image, size: 18, color: Colors.black54),
-                        SizedBox(width: 10),
-                        Text('Welcome Banner'),
-                      ],
-                    ),
+                  // 3. Header Feed — ikut scroll bersama konten, posisi &
+                  // urutan sama seperti sebelum restyle kaca.
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Announcement',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      AdminOnly(
+                        builder: (context) => PopupMenuButton<String>(
+                          icon: const PhosphorIcon(
+                            PhosphorIconsRegular.dotsThreeVertical,
+                            color: Colors.black54,
+                          ),
+                          onSelected: _openFeedManageMenu,
+                          offset: const Offset(0, 36),
+                          elevation: 6,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(
+                              value: 'Welcome Banner',
+                              height: 44,
+                              child: Row(
+                                children: [
+                                  PhosphorIcon(
+                                    PhosphorIconsRegular.image,
+                                    size: 18,
+                                    color: Colors.black54,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Welcome Banner'),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'Manage Links',
+                              height: 44,
+                              child: Row(
+                                children: [
+                                  PhosphorIcon(
+                                    PhosphorIconsRegular.link,
+                                    size: 18,
+                                    color: Colors.black54,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Manage Links'),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  PopupMenuItem(
-                    value: 'Manage Links',
-                    height: 44,
-                    child: Row(
-                      children: [
-                        PhosphorIcon(PhosphorIconsRegular.link, size: 18, color: Colors.black54),
-                        SizedBox(width: 10),
-                        Text('Manage Links'),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: 4),
+
+                  // 4. Deretan link cepat, mengikuti Home web: satu baris di
+                  // bawah header Feed yang bisa digulir mendatar.
+                  _buildQuickLinks(context),
+                  const SizedBox(height: 12),
+
+                  // 5. Activity Feed — dimuat bertahap (infinite scroll). `/feeds`
+                  // cuma mengembalikan sejumlah item per panggilan, jadi feed di web
+                  // yang jumlahnya lebih banyak baru bisa disamakan kalau app terus
+                  // meminta halaman berikutnya saat user scroll ke bawah.
+                  if (_isLoadingFirstPage)
+                    const Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Center(
+                      child: Text(
+                        'Error: $_error',
+                        style: const TextStyle(color: Colors.black87),
+                      ),
+                    )
+                  else if (_activities.isEmpty)
+                    const Center(
+                      child: Text(
+                        'Belum ada aktivitas.',
+                        style: TextStyle(color: Colors.black54),
+                      ),
+                    )
+                  else ...[
+                    for (final activity in _activities) ...[
+                      _buildActivityCard(activity),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_isLoadingMore)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 4),
-
-          // 4. Deretan link cepat, mengikuti Home web: satu baris di bawah
-          // header Feed yang bisa digulir mendatar.
-          _buildQuickLinks(context),
-          const SizedBox(height: 12),
-
-          // 5. Activity Feed — dimuat bertahap (infinite scroll). `/feeds`
-          // cuma mengembalikan sejumlah item per panggilan, jadi feed di web
-          // yang jumlahnya lebih banyak baru bisa disamakan kalau app terus
-          // meminta halaman berikutnya saat user scroll ke bawah.
-          if (_isLoadingFirstPage)
-            const Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_error != null)
-            Center(child: Text('Error: $_error'))
-          else if (_activities.isEmpty)
-            const Center(child: Text('Belum ada aktivitas.'))
-          else ...[
-            for (final activity in _activities) ...[
-              _buildActivityCard(activity),
-              const SizedBox(height: 12),
-            ],
-            if (_isLoadingMore)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              ),
-          ],
         ],
       ),
     );
@@ -430,23 +478,47 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _quickLinks.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 2),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final link = _quickLinks[index];
-          return InkWell(
-            onTap: () => _onQuickLinkTap(link),
-            borderRadius: BorderRadius.circular(6),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Row(
-                children: [
-                  Text(link.emoji, style: emojiStyle(size: 14)),
-                  const SizedBox(width: 6),
-                  Text(
-                    link.label,
-                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(19),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Material(
+                color: Colors.white.withValues(alpha: 0.55),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(19),
+                  side: BorderSide(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    width: 1.0,
                   ),
-                ],
+                ),
+                child: InkWell(
+                  onTap: () => _onQuickLinkTap(link),
+                  borderRadius: BorderRadius.circular(19),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(link.emoji, style: emojiStyle(size: 14)),
+                        const SizedBox(width: 6),
+                        Text(
+                          link.label,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           );
@@ -460,10 +532,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (url != null) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => AuthenticatedWebViewScreen(
-            url: url,
-            title: link.label,
-          ),
+          builder: (_) =>
+              AuthenticatedWebViewScreen(url: url, title: link.label),
         ),
       );
       return;
@@ -569,91 +639,151 @@ class _HomeScreenState extends State<HomeScreen> {
     final likeColor = isLiked ? const Color(0xFFE0245E) : Colors.grey.shade600;
 
     // Seluruh kartu bisa diketuk untuk membuka post + komentar, meniru web.
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () => _openComments(activity),
-      child: Card(
-        elevation: 0,
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey.shade200),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: Colors.grey.shade300,
-                    backgroundImage: activity.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(activity.avatarUrl, headers: AuthService.imageAuthHeaders) : null,
-                    child: activity.avatarUrl.isEmpty ? Text(activity.authorName[0]) : null,
+    // Bungkus glass (ClipRRect+BackdropFilter) sama seperti kartu Space —
+    // Card putih polos diganti kaca supaya konsisten dengan latar
+    // berwarna, isinya (avatar/teks/tombol like/comment) tidak diubah
+    // fungsinya sama sekali.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => _openComments(activity),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Text(activity.authorName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        if (activity.date.isNotEmpty)
-                          Text(activity.date.split('T')[0], style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                        CircleAvatar(
+                          backgroundColor: Colors.grey.shade300,
+                          backgroundImage: activity.avatarUrl.isNotEmpty
+                              ? CachedNetworkImageProvider(
+                                  activity.avatarUrl,
+                                  headers: AuthService.imageAuthHeaders,
+                                )
+                              : null,
+                          child: activity.avatarUrl.isEmpty
+                              ? Text(activity.authorName[0])
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                activity.authorName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              if (activity.date.isNotEmpty)
+                                Text(
+                                  activity.date.split('T')[0],
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                // Simple strip HTML
-                activity.content.replaceAll(RegExp(r'<[^>]*>'), ''),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  // GestureDetector opaque: tombol Like ada DI DALAM kartu
-                  // yang seluruhnya sudah bisa diketuk untuk buka komentar.
-                  // Tanpa opaque + onTap sendiri di sini, tap like akan ikut
-                  // "ditelan" InkWell kotak utama dan malah membuka komentar.
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _toggleLike(activity),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          PhosphorIcon(
-                            isLiked ? PhosphorIconsFill.heart : PhosphorIconsRegular.heart,
-                            size: 20,
-                            color: likeColor,
+                    const SizedBox(height: 12),
+                    Text(
+                      // Simple strip HTML
+                      activity.content.replaceAll(RegExp(r'<[^>]*>'), ''),
+                      style: const TextStyle(color: Colors.black87),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        // GestureDetector opaque: tombol Like ada DI DALAM kartu
+                        // yang seluruhnya sudah bisa diketuk untuk buka komentar.
+                        // Tanpa opaque + onTap sendiri di sini, tap like akan ikut
+                        // "ditelan" InkWell kotak utama dan malah membuka komentar.
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _toggleLike(activity),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                PhosphorIcon(
+                                  isLiked
+                                      ? PhosphorIconsFill.heart
+                                      : PhosphorIconsRegular.heart,
+                                  size: 20,
+                                  color: likeColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$displayedLikeCount',
+                                  style: TextStyle(color: likeColor),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(width: 4),
-                          Text('$displayedLikeCount', style: TextStyle(color: likeColor)),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 16),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _openComments(activity),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                PhosphorIcon(
+                                  PhosphorIconsRegular.chatCircle,
+                                  size: 20,
+                                  color: Colors.grey.shade600,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${activity.commentCount}',
+                                  style: TextStyle(color: Colors.grey.shade600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _openComments(activity),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          PhosphorIcon(PhosphorIconsRegular.chatCircle, size: 20, color: Colors.grey.shade600),
-                          const SizedBox(width: 4),
-                          Text('${activity.commentCount}', style: TextStyle(color: Colors.grey.shade600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            ],
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

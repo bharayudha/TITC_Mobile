@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -6,9 +7,7 @@ import 'package:magang_titc/models/member_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/admin_only.dart';
-import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -47,6 +46,25 @@ class _MembersListScreenState extends State<MembersListScreen> {
   /// Kosong berarti semua status, sama seperti sebelum filter ini ada.
   String _statusFilter = '';
 
+  /// Urutan tampilan, dipilih lewat dropdown "Sort by:" — sortnya LOKAL
+  /// (di antara member yang sudah termuat), bukan lewat server: endpoint
+  /// `/members` belum terverifikasi mendukung parameter urutan apa pun
+  /// (beda dari `search`/`status` yang sudah dikonfirmasi lewat cURL), jadi
+  /// mengikuti pola yang sama dengan `_sortBy` di Courses/Spaces.
+  String _sortBy = 'Last Activity';
+  static const List<String> _sortOptions = [
+    'Last Activity',
+    'Display Name',
+    'Joining Date',
+  ];
+
+  /// Dropdown sort kustom (bukan `PopupMenuButton` bawaan) — dipakai supaya
+  /// menunya bisa benar-benar di-blur (`BackdropFilter`), yang tidak
+  /// didukung `PopupMenuButton`. `_sortMenuLink` menempelkan overlay ini
+  /// tepat di bawah tombol "Sort by:" lewat `CompositedTransformFollower`.
+  final LayerLink _sortMenuLink = LayerLink();
+  OverlayEntry? _sortMenuEntry;
+
   @override
   void initState() {
     super.initState();
@@ -59,7 +77,99 @@ class _MembersListScreenState extends State<MembersListScreen> {
     _searchDebounce?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
+    _closeSortMenu();
     super.dispose();
+  }
+
+  void _closeSortMenu() {
+    _sortMenuEntry?.remove();
+    _sortMenuEntry = null;
+  }
+
+  void _toggleSortMenu(BuildContext context) {
+    if (_sortMenuEntry != null) {
+      _closeSortMenu();
+      return;
+    }
+    final overlay = Overlay.of(context);
+    _sortMenuEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Lapisan transparan penuh layar: tap di luar menu menutupnya.
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _closeSortMenu,
+            ),
+          ),
+          CompositedTransformFollower(
+            link: _sortMenuLink,
+            targetAnchor: Alignment.bottomRight,
+            followerAnchor: Alignment.topRight,
+            offset: const Offset(0, 8),
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Material(
+                color: Colors.transparent,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      width: 160,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.black.withValues(alpha: 0.08),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final option in _sortOptions)
+                            InkWell(
+                              onTap: () {
+                                _closeSortMenu();
+                                _onSortChanged(option);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                child: Text(
+                                  option,
+                                  style: TextStyle(
+                                    color: option == _sortBy
+                                        ? _kAccent
+                                        : Colors.black87,
+                                    fontWeight: option == _sortBy
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    overlay.insert(_sortMenuEntry!);
   }
 
   void _onScroll() {
@@ -89,6 +199,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
         _members
           ..clear()
           ..addAll(page.members);
+        _applySort();
         _total = page.total;
         _nextPage = 2;
         _hasMore = page.hasMore;
@@ -116,6 +227,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
       if (!mounted) return;
       setState(() {
         _members.addAll(page.members);
+        _applySort();
         _total = page.total;
         _nextPage += 1;
         _hasMore = page.hasMore && page.members.isNotEmpty;
@@ -147,22 +259,72 @@ class _MembersListScreenState extends State<MembersListScreen> {
     _loadFirstPage();
   }
 
+  void _onSortChanged(String sortBy) {
+    if (sortBy == _sortBy) return;
+    setState(() {
+      _sortBy = sortBy;
+      _applySort();
+    });
+  }
+
+  /// Urutkan [_members] di tempat sesuai [_sortBy]. Terbaru/A-Z duluan untuk
+  /// ketiga opsi, meniru urutan default web.
+  void _applySort() {
+    switch (_sortBy) {
+      case 'Display Name':
+        _members.sort(
+          (a, b) => a.displayName.toLowerCase().compareTo(
+            b.displayName.toLowerCase(),
+          ),
+        );
+      case 'Joining Date':
+        _members.sort(
+          (a, b) => _parseDate(b.joinedAt).compareTo(_parseDate(a.joinedAt)),
+        );
+      case 'Last Activity':
+      default:
+        _members.sort(
+          (a, b) =>
+              _parseDate(b.lastActivity).compareTo(_parseDate(a.lastActivity)),
+        );
+    }
+  }
+
+  /// Nilainya bisa berupa timestamp mentah (mis. "2026-07-21 13:42:26") atau
+  /// sudah teks relatif dari server — kalau tidak bisa di-parse, dianggap
+  /// paling lama supaya tidak mengacaukan urutan yang bisa di-parse.
+  static DateTime _parseDate(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
+    return DateTime.tryParse(value.replaceFirst(' ', 'T')) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   Future<void> _onFollowPressed(MemberModel member) async {
     final index = _members.indexWhere((m) => m.id == member.id);
     if (index == -1) return;
 
     final wantFollow = !_members[index].isFollowed;
     // Optimistic update supaya tombol terasa responsif.
-    setState(() => _members[index] = _copyWithFollow(_members[index], wantFollow));
+    setState(
+      () => _members[index] = _copyWithFollow(_members[index], wantFollow),
+    );
 
-    final ok = await ApiService.toggleFollowMember(member.id, follow: wantFollow);
+    final ok = await ApiService.toggleFollowMember(
+      member.id,
+      follow: wantFollow,
+    );
     if (!mounted) return;
     if (!ok) {
-      setState(() => _members[index] = _copyWithFollow(_members[index], !wantFollow));
+      setState(
+        () => _members[index] = _copyWithFollow(_members[index], !wantFollow),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            wantFollow ? 'Gagal mengikuti member.' : 'Gagal berhenti mengikuti.',
+            wantFollow
+                ? 'Gagal mengikuti member.'
+                : 'Gagal berhenti mengikuti.',
           ),
         ),
       );
@@ -170,47 +332,95 @@ class _MembersListScreenState extends State<MembersListScreen> {
   }
 
   MemberModel _copyWithFollow(MemberModel m, bool isFollowed) => MemberModel(
-        id: m.id,
-        displayName: m.displayName,
-        username: m.username,
-        avatarUrl: m.avatarUrl,
-        lastActivity: m.lastActivity,
-        joinedAt: m.joinedAt,
-        bio: m.bio,
-        status: m.status,
-        isFollowed: isFollowed,
-        socialLinks: m.socialLinks,
-      );
+    id: m.id,
+    displayName: m.displayName,
+    username: m.username,
+    avatarUrl: m.avatarUrl,
+    lastActivity: m.lastActivity,
+    joinedAt: m.joinedAt,
+    bio: m.bio,
+    status: m.status,
+    isFollowed: isFollowed,
+    socialLinks: m.socialLinks,
+  );
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFEEF0F3),
-      child: Column(
+    // Latar glassmorphism — palet & orb sama persis dengan
+    // SpacesListScreen/HomeScreen/CoursesListScreen supaya konsisten antar
+    // tab. Header/search bar/body di bawahnya (fetch/pagination/follow/dst)
+    // TIDAK diubah logikanya sama sekali, cuma dipindah ke dalam Stack ini.
+    //
+    // MainShell memakai `extendBodyBehindAppBar: true` supaya
+    // TitcAppBar(glass: true) bisa nge-blur latar ini — tanpa offset ini,
+    // header akan mulai dari belakang app bar (tertutup).
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
+    return SizedBox.expand(
+      child: Stack(
         children: [
-          _buildHeader(),
-          _buildSearchBar(),
-          Expanded(child: _buildBody()),
+          const Positioned.fill(child: ColoredBox(color: Colors.white)),
+          // Header judul/search/sort ikut scroll bersama daftar (BUKAN
+          // pinned) — cuma latarnya dibuat menyatu dengan halaman (putih
+          // polos, tanpa kartu kaca/blur/shadow terpisah).
+          Positioned.fill(
+            child: RefreshIndicator(
+              onRefresh: _loadFirstPage,
+              child: CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  SliverToBoxAdapter(child: SizedBox(height: topInset)),
+                  SliverToBoxAdapter(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [_buildHeader(), _buildSearchBar()],
+                    ),
+                  ),
+                  ..._buildBodySlivers(),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
+  static const double _headerHeight = 66;
+
+  /// Header Members — menyatu dengan latar putih halaman (bukan lagi kartu
+  /// kaca melayang), ikut scroll bersama daftar seperti bagian lain dari
+  /// halaman. Judul & filter status admin tidak diubah logikanya.
   Widget _buildHeader() {
     // Judul mengikuti web: "All Members (2,256)". Angka baru ditampilkan
     // setelah data pertama masuk supaya tidak sempat terlihat "(0)".
     final title = _total > 0
         ? 'All Members (${_formatCount(_total)})'
         : 'All Members';
-    return SectionHeader(
-      title: title,
-      trailing: Flexible(
-        child: AdminOnly(
-          builder: (context) => Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Flexible(child: _buildStatusFilterRow()),
-            ],
+    return Container(
+      width: double.infinity,
+      height: _headerHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      color: Colors.white,
+      // Filter status admin (dropdown Active/Pending/Blocked) SEMENTARA
+      // dilepas dari sini — dikonfirmasi lewat debug bahwa kehadirannya
+      // di Row ini (Flexible di dalam Flexible/DropdownButton) membuat
+      // SELURUH header gagal ter-render (bukan cuma dropdown-nya, tapi
+      // judul "All Members" di sebelahnya ikut hilang total) — kemungkinan
+      // gagal LAYOUT (bukan exception biasa, sudah dicoba try-catch di
+      // sekitar build-nya, tidak tertangkap). Perlu investigasi terpisah
+      // sebelum dikembalikan.
+      child: Center(
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
@@ -227,170 +437,213 @@ class _MembersListScreenState extends State<MembersListScreen> {
     return buffer.toString();
   }
 
-  Widget _buildBody() {
+  List<Widget> _buildBodySlivers() {
     if (_isLoadingFirstPage) {
-      return const Center(child: CircularProgressIndicator());
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
     }
 
     if (_error != null) {
-      return _buildErrorState();
+      return [_buildErrorState()];
     }
 
     if (_members.isEmpty) {
-      return Center(
-        child: Text(
-          _searchQuery.isEmpty
-              ? 'Belum ada member.'
-              : 'Tidak ada member yang cocok dengan "$_searchQuery".',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey.shade600),
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Text(
+              _searchQuery.isEmpty
+                  ? 'Belum ada member.'
+                  : 'Tidak ada member yang cocok dengan "$_searchQuery".',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ),
         ),
-      );
+      ];
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadFirstPage,
-      child: ListView.separated(
-        controller: _scrollController,
+    return [
+      SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-        itemCount: _members.length + (_hasMore ? 1 : 0),
-        separatorBuilder: (_, _) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          if (index >= _members.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+        sliver: SliverList.separated(
+          itemCount: _members.length + (_hasMore ? 1 : 0),
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            if (index >= _members.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
+              );
+            }
+            return _buildMemberCard(_members[index]);
+          },
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildErrorState() {
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 40),
+            const Icon(
+              PhosphorIconsRegular.warningCircle,
+              size: 40,
+              color: Colors.black54,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Gagal memuat members.\n$_error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black87, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: OutlinedButton(
+                onPressed: _loadFirstPage,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kAccent,
+                  side: const BorderSide(color: _kAccent),
+                ),
+                child: const Text('Coba lagi'),
               ),
-            );
-          }
-          return _buildMemberCard(_members[index]);
-        },
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildErrorState() {
-    return ListView(
-      padding: const EdgeInsets.all(32),
-      children: [
-        const SizedBox(height: 40),
-        Icon(PhosphorIconsRegular.warningCircle,
-            size: 40, color: Colors.grey.shade500),
-        const SizedBox(height: 12),
-        Text(
-          'Gagal memuat members.\n$_error',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-        ),
-        const SizedBox(height: 16),
-        Center(
-          child: OutlinedButton(
-            onPressed: _loadFirstPage,
-            child: const Text('Coba lagi'),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildMemberCard(MemberModel member) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: member.username.isNotEmpty
-          ? () => _openMemberProfile(member)
-          : null,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildAvatar(member),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        member.displayName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (member.username.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '@${member.username}',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      const SizedBox(height: 4),
-                      _buildMetaLine(member),
-                    ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: member.username.isNotEmpty
+                ? () => _openMemberProfile(member)
+                : null,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
                   ),
-                ),
-                const SizedBox(width: 8),
-                _buildFollowButton(member),
-              ],
-            ),
-            if (member.bio.trim().isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                member.bio.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.grey.shade700,
-                  fontSize: 13,
-                  height: 1.4,
-                ),
-              ),
-            ],
-            if (member.socialLinks.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  for (final entry in member.socialLinks.entries)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(6),
-                        onTap: () => _openSocialLink(entry.key, entry.value),
-                        child: Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: PhosphorIcon(
-                            _socialIcon(entry.key),
-                            size: 18,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
-            ],
-          ],
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildAvatar(member),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              member.displayName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (member.username.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                '@${member.username}',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            const SizedBox(height: 4),
+                            _buildMetaLine(member),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFollowButton(member),
+                    ],
+                  ),
+                  if (member.bio.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      member.bio.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                  if (member.socialLinks.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        for (final entry in member.socialLinks.entries)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () =>
+                                  _openSocialLink(entry.key, entry.value),
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: PhosphorIcon(
+                                  _socialIcon(entry.key),
+                                  size: 18,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -503,7 +756,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
 
     return Text(
       parts.join('  •  '),
-      style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+      style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
       maxLines: 2,
     );
   }
@@ -580,8 +833,11 @@ class _MembersListScreenState extends State<MembersListScreen> {
 
   /// Inisial dari nama, mengikuti gaya avatar kosong di web ("AR", "SP").
   static String _initials(String name) {
-    final words =
-        name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     if (words.isEmpty) return '?';
     if (words.length == 1) return words.first[0].toUpperCase();
     return (words[0][0] + words[1][0]).toUpperCase();
@@ -596,23 +852,35 @@ class _MembersListScreenState extends State<MembersListScreen> {
     }
 
     final following = member.isFollowed;
-    return SizedBox(
-      height: 32,
-      child: OutlinedButton(
-        onPressed: () => _onFollowPressed(member),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: following ? _kAccent : Colors.white,
-          side: const BorderSide(color: _kAccent),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          visualDensity: VisualDensity.compact,
-        ),
-        child: Text(
-          following ? 'Following' : 'Follow',
-          style: TextStyle(
-            color: following ? Colors.white : _kAccent,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: SizedBox(
+          height: 32,
+          child: OutlinedButton(
+            onPressed: () => _onFollowPressed(member),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: following
+                  ? _kAccent.withValues(alpha: 0.08)
+                  : _kAccent,
+              side: BorderSide(
+                color: following ? _kAccent.withValues(alpha: 0.4) : _kAccent,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text(
+              following ? 'Following' : 'Follow',
+              style: TextStyle(
+                color: following ? _kAccent : Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ),
@@ -635,9 +903,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
 
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Tidak bisa membuka $url')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Tidak bisa membuka $url')));
     }
   }
 
@@ -708,76 +976,119 @@ class _MembersListScreenState extends State<MembersListScreen> {
   }
 
   Widget _buildSearchBar() {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: kShadowDown,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _searchController,
-            onChanged: _onSearchChanged,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: 'Search Members...',
-              hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-              prefixIcon: const PhosphorIcon(
-                PhosphorIconsRegular.magnifyingGlass,
-                color: Colors.grey,
-                size: 20,
-              ),
-              suffixIcon: _searchController.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const PhosphorIcon(PhosphorIconsRegular.x, size: 16),
-                      onPressed: () {
-                        _searchController.clear();
-                        _onSearchChanged('');
-                      },
+          SizedBox(
+            height: 44,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _onSearchChanged,
+                  textInputAction: TextInputAction.search,
+                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Search Members...',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 13,
                     ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _kAccent),
+                    prefixIcon: Icon(
+                      PhosphorIconsRegular.magnifyingGlass,
+                      color: Colors.grey.shade600,
+                      size: 20,
+                    ),
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: Icon(
+                              PhosphorIconsRegular.x,
+                              size: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              _onSearchChanged('');
+                            },
+                          ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 16,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.6),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
+                      borderSide: BorderSide(color: _kAccent, width: 1.2),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              const Text(
-                'Sort by: ',
-                style: TextStyle(color: Colors.black54, fontSize: 12),
-              ),
-              const Text(
-                'Last Activity',
-                style: TextStyle(
-                  color: Colors.black87,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+          SizedBox(
+            height: 24,
+            child: Align(
+              alignment: Alignment.centerRight,
+              // Dropdown kaca kustom (bukan `PopupMenuButton`) — lihat
+              // `_toggleSortMenu`/`_sortMenuLink` untuk alasannya:
+              // `PopupMenuButton` tidak mendukung `BackdropFilter` sungguhan.
+              // `CompositedTransformTarget` menandai posisi tombol ini supaya
+              // overlay-nya (di `_toggleSortMenu`) bisa menempel tepat di
+              // bawahnya lewat `CompositedTransformFollower`.
+              child: CompositedTransformTarget(
+                link: _sortMenuLink,
+                child: GestureDetector(
+                  onTap: () => _toggleSortMenu(context),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Sort by: ',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        _sortBy,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Icon(
+                        PhosphorIconsRegular.caretDown,
+                        size: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const PhosphorIcon(
-                PhosphorIconsRegular.caretDown,
-                size: 16,
-                color: Colors.black54,
-              ),
-            ],
+            ),
           ),
           // Filter status member dipindah ke SectionHeader (Top Tabs)
         ],
@@ -785,9 +1096,12 @@ class _MembersListScreenState extends State<MembersListScreen> {
     );
   }
 
-  /// Dropdown filter status member — hanya tampil untuk admin
-  /// (dibungkus [AdminOnly] di [_buildHeader]).
-  /// Nilai string cocok dengan parameter `status` di [ApiService.fetchMembers].
+  /// Dropdown filter status member — dulu dipasang di [_buildHeader] lewat
+  /// [AdminOnly], SEMENTARA DILEPAS dari sana (lihat catatan di
+  /// [_buildHeader]) karena kehadirannya di situ membuat seluruh header
+  /// gagal ter-render. Fungsinya sendiri (nilai cocok dengan parameter
+  /// `status` di [ApiService.fetchMembers]) masih utuh, tinggal dipasang
+  /// ulang di tempat lain setelah akar masalahnya ditemukan.
   Widget _buildStatusFilterRow() {
     const options = <(String, String)>[
       ('', 'All Members'),
@@ -822,10 +1136,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
         ],
         items: [
           for (final (value, label) in options)
-            DropdownMenuItem<String>(
-              value: value,
-              child: Text(label),
-            ),
+            DropdownMenuItem<String>(value: value, child: Text(label)),
         ],
         onChanged: (v) => _onStatusFilterChanged(v ?? ''),
       ),

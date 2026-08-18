@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
@@ -132,8 +133,11 @@ class _SideDrawerState extends State<SideDrawer> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           RichText(
-            text: const TextSpan(
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            text: TextSpan(
+              style: GoogleFonts.fredoka(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
               children: [
                 TextSpan(
                   text: 'TITC ',

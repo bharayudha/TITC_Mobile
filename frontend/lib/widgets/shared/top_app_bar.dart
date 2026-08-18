@@ -30,9 +30,8 @@ class _TitcAppBarState extends State<TitcAppBar> {
   Widget build(BuildContext context) {
     return AppBar(
       backgroundColor: Colors.white,
-      // Drop shadow lembut, bukan garis datar.
-      elevation: 3,
-      scrolledUnderElevation: 3,
+      elevation: 0,
+      scrolledUnderElevation: 0,
       shadowColor: kShadowColor,
       surfaceTintColor: Colors.transparent,
       // Default Flutter (16dp) membuat "TITC Indonesia" terlalu jauh dari
@@ -106,8 +105,14 @@ class _TitcAppBarState extends State<TitcAppBar> {
       text: TextSpan(
         style: GoogleFonts.fredoka(fontSize: 22, fontWeight: FontWeight.bold),
         children: [
-          TextSpan(text: 'TITC ', style: TextStyle(color: AppColors.primary)),
-          TextSpan(text: 'Indonesia', style: TextStyle(color: Colors.black54)),
+          TextSpan(
+            text: 'TITC ',
+            style: TextStyle(color: AppColors.primary),
+          ),
+          TextSpan(
+            text: 'Indonesia',
+            style: TextStyle(color: Colors.black54),
+          ),
         ],
       ),
     );
@@ -132,6 +137,4 @@ class _TitcAppBarState extends State<TitcAppBar> {
       ),
     );
   }
-
-
 }

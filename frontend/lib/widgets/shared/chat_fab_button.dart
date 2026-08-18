@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/services/messages_service.dart';
 
 const double kChatFabSize = 56;
@@ -19,65 +21,50 @@ class ChatFabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      // Ikon "ChatCircleDots" dari Phosphor, sesuai layer di Figma.
-      // Kotak 56x56 dipertahankan supaya area sentuhnya tetap nyaman.
-      child: SizedBox(
-        width: kChatFabSize,
-        height: kChatFabSize,
-        child: Center(
-          // Widget `Badge` bawaan Material dilepas — posisinya (kombinasi
-          // `alignment` + `offset`) terbukti tidak bisa didekatkan ke ikon
-          // sekencang apa pun offset-nya diubah (sudah dicoba beberapa
-          // nilai, tetap ada jarak). Diganti `Stack` + `Positioned` manual
-          // supaya badge-nya benar2 nempel di pojok kanan-atas GLYPH ikon
-          // (bukan pojok kotak sentuh 56px), sesuai gaya badge notifikasi
-          // umum (mis. WhatsApp).
-          child: ValueListenableBuilder<int>(
-            valueListenable: MessagesService.unreadCountNotifier,
-            builder: (context, unreadCount, child) {
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  child!,
-                  if (unreadCount > 0)
-                    Positioned(
-                      top: -4,
-                      right: -4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(9),
-                          border: Border.all(color: Colors.white, width: 1.5),
-                        ),
-                        alignment: Alignment.center,
-                        // Angka besar dipendekkan jadi "99+" supaya badge
-                        // tidak melebar sampai menutupi ikonnya sendiri.
-                        child: Text(
-                          unreadCount > 99 ? '99+' : '$unreadCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            height: 1,
-                          ),
-                        ),
-                      ),
-                    ),
+    // Diluruskan lagi: BUKAN lingkaran kaca DI LUAR ikon — kaca harus jadi
+    // ISI bubble-nya sendiri. Tapi `LiquidShape` package (sealed class,
+    // cuma Oval/RoundedRectangle/RoundedSuperellipse) tidak bisa dibentuk
+    // persis siluet bubble+ekor, jadi shader refraksi sungguhan (dipakai
+    // `GlassIconButton`) tidak bisa mengisi bentuk ini secara langsung.
+    //
+    // Solusinya: `ShaderMask` — gradasi kaca (highlight putih di kiri-atas
+    // memudar ke biru tint di kanan-bawah, meniru refleksi cahaya kaca)
+    // dilukis HANYA pada piksel ikon yang solid (memakai alpha glyph-nya
+    // sebagai mask), jadi bentuknya tetap persis bubble+ekor+tiga titik,
+    // tanpa lingkaran/latar tambahan apa pun di sekelilingnya.
+    return SizedBox(
+      width: kChatFabSize,
+      height: kChatFabSize,
+      child: Center(
+        child: ValueListenableBuilder<int>(
+          valueListenable: MessagesService.unreadCountNotifier,
+          builder: (context, unreadCount, child) {
+            return GlassBadge(count: unreadCount, child: child!);
+          },
+          child: ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) {
+              // Meniru gradasi kaca dock bawah (`kBottomBarGlassDefaults`:
+              // dasar putih translucent + `lightAngle` 135° kiri-atas) —
+              // highlight putih terang di kiri-atas (arah cahaya sama),
+              // memudar ke tint biru pucat, lalu ke `AppColors.primary`
+              // pekat di kanan-bawah untuk kesan kedalaman/refraksi.
+              return LinearGradient(
+                begin: const Alignment(-0.6, -0.9),
+                end: const Alignment(0.9, 0.9),
+                colors: [
+                  Colors.white.withValues(alpha: 0.95),
+                  const Color(0xFFBBD6FF).withValues(alpha: 0.85),
+                  AppColors.primary.withValues(alpha: 0.9),
+                  AppColors.primaryDark,
                 ],
-              );
+                stops: const [0.0, 0.35, 0.7, 1.0],
+              ).createShader(bounds);
             },
-            // Ikon dibuat di luar builder karena isinya tidak bergantung
-            // pada angka unread — jadi tidak perlu dibangun ulang tiap
-            // badge berubah.
             child: const PhosphorIcon(
-              PhosphorIconsRegular.chatCircleDots,
-              color: Colors.black87,
-              size: 34,
+              PhosphorIconsFill.chatCircleDots,
+              color: Colors.white,
+              size: 46,
             ),
           ),
         ),

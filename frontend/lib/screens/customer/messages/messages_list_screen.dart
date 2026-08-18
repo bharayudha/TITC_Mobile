@@ -1,20 +1,25 @@
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:magang_titc/screens/main_shell.dart';
 import 'package:magang_titc/services/webview_click_helper.dart';
 import 'package:magang_titc/services/webview_cookie_helper.dart';
-import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/models/message_model.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/messages_service.dart';
 import 'package:magang_titc/screens/customer/preparation_test/preparation_test_webview_screen.dart';
 import 'package:magang_titc/screens/customer/messages/chat_detail_screen.dart';
 import 'package:magang_titc/widgets/customer/customer_bottom_nav_bar.dart';
+import 'package:magang_titc/widgets/customer/main_shell_glass_bar.dart';
 import 'package:magang_titc/widgets/customer/side_drawer.dart';
-import 'package:magang_titc/widgets/shared/top_app_bar.dart';
+import 'package:magang_titc/widgets/shared/scroll_hide_controller.dart';
+
+const Color _kAccent = Color(0xFF1E5AF5);
 
 class MessagesListScreen extends StatefulWidget {
   const MessagesListScreen({super.key});
@@ -34,6 +39,10 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
   bool _groupsExpanded = true;
   bool _directExpanded = true;
 
+  // Sama seperti `MainShell._scrollHide` — lihat [ScrollHideController]
+  // untuk aturan threshold jaraknya.
+  final _scrollHide = ScrollHideController();
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +52,7 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollHide.dispose();
     super.dispose();
   }
 
@@ -96,110 +106,190 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: const TitcAppBar(),
-      drawer: const SideDrawer(),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Blok header + search dipisahkan dari daftar lewat drop shadow.
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: kShadowDown,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildMessagesHeader(),
-                    _buildSearchBar(),
-                    const SizedBox(height: 12),
-                  ],
+    // Glassmorphism — palet/orb & mekanisme app bar+bottom nav kaca sama
+    // persis dengan MainShell (lihat main_shell_glass_bar.dart untuk alasan
+    // kenapa bar-nya widget body biasa, bukan Scaffold.appBar).
+    final topInset = MainShellGlassBar.heightOf(context);
+    return GlassContentAwareScope(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBody: true,
+        drawer: const SideDrawer(),
+        body: Stack(
+          children: [
+            const Positioned.fill(child: ColoredBox(color: Colors.white)),
+            Positioned.fill(
+              child: GlassContentAwareContent(
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _scrollHide.onNotification,
+                  child: RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(height: topInset),
+                          // Blok header + search — kaca, mengikuti resep header
+                          // Spaces/Courses/Members.
+                          ClipRect(
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.06,
+                                      ),
+                                      width: 1.0,
+                                    ),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildMessagesHeader(),
+                                    _buildSearchBar(),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          FutureBuilder<ChatThreadsResult>(
+                            future: _threadsFuture,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(32.0),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              }
+                              if (snapshot.hasError) {
+                                return Padding(
+                                  padding: const EdgeInsets.all(32.0),
+                                  child: Center(
+                                    child: Text(
+                                      'Gagal memuat: ${snapshot.error}',
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final result = snapshot.data!;
+                              final query = _searchController.text
+                                  .trim()
+                                  .toLowerCase();
+                              final communities = _filterThreads(
+                                result.communityThreads,
+                                query,
+                              );
+                              // Dulu digabung jadi satu section "DIRECT MESSAGES" —
+                              // padahal `result.groupThreads` sudah terpisah sendiri
+                              // dari `result.directThreads` di model. Web-nya punya 3
+                              // section (COMMUNITIES/GROUPS/DIRECT MESSAGES), bukan 2.
+                              final groups = _filterThreads(
+                                result.groupThreads,
+                                query,
+                              );
+                              final directs = _filterThreads(
+                                result.directThreads,
+                                query,
+                              );
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _buildSectionLabel(
+                                    'COMMUNITIES',
+                                    expanded: _communitiesExpanded,
+                                    onToggle: () => setState(
+                                      () => _communitiesExpanded =
+                                          !_communitiesExpanded,
+                                    ),
+                                  ),
+                                  if (_communitiesExpanded) ...[
+                                    const SizedBox(height: 12),
+                                    _buildThreadSection(
+                                      communities,
+                                      'Belum ada percakapan komunitas.',
+                                    ),
+                                  ],
+                                  const SizedBox(height: 24),
+                                  _buildSectionLabel(
+                                    'GROUPS',
+                                    expanded: _groupsExpanded,
+                                    onToggle: () => setState(
+                                      () => _groupsExpanded = !_groupsExpanded,
+                                    ),
+                                  ),
+                                  if (_groupsExpanded) ...[
+                                    const SizedBox(height: 12),
+                                    _buildThreadSection(
+                                      groups,
+                                      'Belum ada grup.',
+                                    ),
+                                  ],
+                                  const SizedBox(height: 24),
+                                  _buildSectionLabel(
+                                    'DIRECT MESSAGES',
+                                    expanded: _directExpanded,
+                                    onToggle: () => setState(
+                                      () => _directExpanded = !_directExpanded,
+                                    ),
+                                  ),
+                                  if (_directExpanded) ...[
+                                    const SizedBox(height: 12),
+                                    _buildThreadSection(
+                                      directs,
+                                      'Belum ada pesan langsung.',
+                                    ),
+                                  ],
+                                  const SizedBox(height: 24),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-              FutureBuilder<ChatThreadsResult>(
-                future: _threadsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(32.0),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (snapshot.hasError) {
-                    return Padding(
-                      padding: const EdgeInsets.all(32.0),
-                      child: Center(child: Text('Gagal memuat: ${snapshot.error}')),
-                    );
-                  }
-
-                  final result = snapshot.data!;
-                  final query = _searchController.text.trim().toLowerCase();
-                  final communities = _filterThreads(result.communityThreads, query);
-                  // Dulu digabung jadi satu section "DIRECT MESSAGES" —
-                  // padahal `result.groupThreads` sudah terpisah sendiri
-                  // dari `result.directThreads` di model. Web-nya punya 3
-                  // section (COMMUNITIES/GROUPS/DIRECT MESSAGES), bukan 2.
-                  final groups = _filterThreads(result.groupThreads, query);
-                  final directs = _filterThreads(result.directThreads, query);
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildSectionLabel(
-                        'COMMUNITIES',
-                        expanded: _communitiesExpanded,
-                        onToggle: () => setState(
-                          () => _communitiesExpanded = !_communitiesExpanded,
-                        ),
-                      ),
-                      if (_communitiesExpanded) ...[
-                        const SizedBox(height: 12),
-                        _buildThreadSection(communities, 'Belum ada percakapan komunitas.'),
-                      ],
-                      const SizedBox(height: 24),
-                      _buildSectionLabel(
-                        'GROUPS',
-                        expanded: _groupsExpanded,
-                        onToggle: () => setState(() => _groupsExpanded = !_groupsExpanded),
-                      ),
-                      if (_groupsExpanded) ...[
-                        const SizedBox(height: 12),
-                        _buildThreadSection(groups, 'Belum ada grup.'),
-                      ],
-                      const SizedBox(height: 24),
-                      _buildSectionLabel(
-                        'DIRECT MESSAGES',
-                        expanded: _directExpanded,
-                        onToggle: () => setState(() => _directExpanded = !_directExpanded),
-                      ),
-                      if (_directExpanded) ...[
-                        const SizedBox(height: 12),
-                        _buildThreadSection(directs, 'Belum ada pesan langsung.'),
-                      ],
-                      const SizedBox(height: 24),
-                    ],
-                  );
-                },
+            ),
+            // Bar "TITC Indonesia" versi kaca, dengan tap-judul-untuk-pulang
+            // aktif (layar ini di-push di atas MainShell).
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: MainShellGlassBar(
+                homeTapEnabled: true,
+                visible: _scrollHide.visible,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: -1,
-        onTap: _onNavTap,
+        bottomNavigationBar: BottomNavBar(
+          currentIndex: -1,
+          onTap: _onNavTap,
+          isSpacesTab: true,
+        ),
       ),
     );
   }
 
-  List<ChatThreadModel> _filterThreads(List<ChatThreadModel> threads, String query) {
+  List<ChatThreadModel> _filterThreads(
+    List<ChatThreadModel> threads,
+    String query,
+  ) {
     if (query.isEmpty) return threads;
     return threads.where((t) => t.title.toLowerCase().contains(query)).toList();
   }
@@ -212,14 +302,18 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
         children: [
           const Text(
             'MESSAGES',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
           Row(
             children: [
               IconButton(
                 icon: const PhosphorIcon(
                   PhosphorIconsRegular.paperPlaneTilt,
-                  color: Colors.black87,
+                  color: _kAccent,
                 ),
                 tooltip: 'New message',
                 onPressed: _openNewMessage,
@@ -234,28 +328,41 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: TextField(
-        controller: _searchController,
-        onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(
-          hintText: 'Search conversations',
-          hintStyle: const TextStyle(color: Colors.grey),
-          prefixIcon: const PhosphorIcon(
-            PhosphorIconsRegular.magnifyingGlass,
-            color: Colors.grey,
-          ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF1E5AF5)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(color: Colors.black87, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Search conversations',
+              hintStyle: TextStyle(color: Colors.grey.shade500),
+              prefixIcon: Icon(
+                PhosphorIconsRegular.magnifyingGlass,
+                color: Colors.grey.shade600,
+              ),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.6),
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: Colors.black.withValues(alpha: 0.08),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: Colors.black.withValues(alpha: 0.08),
+                ),
+              ),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+                borderSide: BorderSide(color: _kAccent, width: 1.2),
+              ),
+            ),
           ),
         ),
       ),
@@ -276,8 +383,8 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: Colors.black54,
+              style: TextStyle(
+                color: Colors.grey.shade700,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,
               ),
@@ -287,10 +394,10 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
             AnimatedRotation(
               turns: expanded ? 0.25 : 0,
               duration: const Duration(milliseconds: 150),
-              child: const PhosphorIcon(
+              child: PhosphorIcon(
                 PhosphorIconsRegular.caretRight,
                 size: 16,
-                color: Colors.black54,
+                color: Colors.grey.shade600,
               ),
             ),
           ],
@@ -299,75 +406,134 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
     );
   }
 
-  Widget _buildThreadSection(List<ChatThreadModel> threads, String emptyMessage) {
+  Widget _buildThreadSection(
+    List<ChatThreadModel> threads,
+    String emptyMessage,
+  ) {
     if (threads.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.white.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
           ),
-          child: Text(emptyMessage, style: TextStyle(color: Colors.grey.shade600)),
+          child: Text(
+            emptyMessage,
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
         ),
       );
     }
 
-    return Column(
-      children: threads.map(_buildThreadTile).toList(),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          for (final thread in threads) ...[
+            _buildThreadTile(thread),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
     );
   }
 
   Widget _buildThreadTile(ChatThreadModel thread) {
-    return InkWell(
-      onTap: () => _openThread(thread),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: Colors.blue.shade50,
-              backgroundImage: thread.avatarUrl.isNotEmpty ? CachedNetworkImageProvider(thread.avatarUrl, headers: AuthService.imageAuthHeaders) : null,
-              child: thread.avatarUrl.isEmpty
-                  ? Text(thread.title.isNotEmpty ? thread.title[0].toUpperCase() : '?')
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    thread.title,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _openThread(thread),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
-                  if (thread.lastMessagePreview.isNotEmpty)
-                    Text(
-                      thread.lastMessagePreview,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.grey.shade300,
+                    backgroundImage: thread.avatarUrl.isNotEmpty
+                        ? CachedNetworkImageProvider(
+                            thread.avatarUrl,
+                            headers: AuthService.imageAuthHeaders,
+                          )
+                        : null,
+                    child: thread.avatarUrl.isEmpty
+                        ? Text(
+                            thread.title.isNotEmpty
+                                ? thread.title[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(color: Colors.grey.shade700),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          thread.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (thread.lastMessagePreview.isNotEmpty)
+                          Text(
+                            thread.lastMessagePreview,
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (thread.unreadCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E5AF5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${thread.unreadCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                 ],
               ),
             ),
-            if (thread.unreadCount > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E5AF5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${thread.unreadCount}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -451,7 +617,9 @@ class _NewMessageDialogState extends State<_NewMessageDialog> {
             // backdrop), jadi aman diukur ulang tiap tab berganti (mis.
             // "Direct Messages" ↔ "New Group" tingginya beda) — kotaknya
             // ikut menyesuaikan alih-alih menyisakan ruang kosong di bawah.
-            final raw = message.message.substring('MODAL_HEIGHT:'.length).trim();
+            final raw = message.message
+                .substring('MODAL_HEIGHT:'.length)
+                .trim();
             final measured = double.tryParse(raw);
             if (measured != null && mounted) {
               final clamped = measured.clamp(280.0, 600.0);

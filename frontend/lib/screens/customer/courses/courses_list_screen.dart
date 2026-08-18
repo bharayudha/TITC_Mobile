@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +7,6 @@ import 'package:magang_titc/models/course_model.dart';
 import 'package:magang_titc/services/api_service.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/widgets/shared/admin_only.dart';
-import 'package:magang_titc/widgets/shared/section_header.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
@@ -65,20 +65,23 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         _allFetchedCourses = cached;
         _coursesFuture = Future.value(cached);
       });
-      ApiService.fetchCourses().then((courses) {
-        if (mounted) {
-          setState(() {
-            _allFetchedCourses = courses;
-            _coursesFuture = Future.value(courses);
-          });
-        }
-      }).catchError((_) {});
+      ApiService.fetchCourses()
+          .then((courses) {
+            if (mounted) {
+              setState(() {
+                _allFetchedCourses = courses;
+                _coursesFuture = Future.value(courses);
+              });
+            }
+          })
+          .catchError((_) {});
       return;
     }
 
     setState(() {
-      _coursesFuture =
-          ApiService.fetchCourses(search: _searchQuery).then((courses) {
+      _coursesFuture = ApiService.fetchCourses(search: _searchQuery).then((
+        courses,
+      ) {
         _allFetchedCourses = courses;
         return courses;
       });
@@ -87,93 +90,137 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // MainShell memakai `extendBodyBehindAppBar: true` supaya
+    // TitcAppBar(glass: true) bisa nge-blur latar ini — tanpa offset ini,
+    // header & konten akan mulai dari belakang app bar (tertutup).
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
     return SizedBox.expand(
       child: Stack(
         children: [
-          const Positioned.fill(child: ColoredBox(color: Color(0xFFF5F6F8))),
+          // Latar glassmorphism — palet & orb sama persis dengan
+          // SpacesListScreen/HomeScreen supaya konsisten antar tab.
+          const Positioned.fill(child: ColoredBox(color: Colors.white)),
 
-          // Data List
+          // Header judul/tab/search/sort ikut scroll bersama daftar (BUKAN
+          // pinned) — cuma latarnya dibuat menyatu dengan halaman (putih
+          // polos, tanpa kartu kaca/blur/shadow terpisah).
           Positioned.fill(
-            top: 70, // Beri jarak untuk SectionHeader
-            child: Column(
-              children: [
-                _buildSearchAndSortBar(),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      _loadCourses();
-                      await _coursesFuture;
-                    },
-                    child: FutureBuilder<List<CourseModel>>(
-                      future: _coursesFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        } else if (snapshot.hasError) {
-                          return Center(child: Text('Error: ${snapshot.error}'));
-                        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return const Center(child: Text('Belum ada course.'));
-                        }
-
-                        final query = _searchQuery.toLowerCase();
-                        var filteredCourses =
-                            _allFetchedCourses.where((course) {
-                          // Filter tab Enrolled/All: murni pilihan lokal.
-                          if (!_showAllCourses && !course.isEnrolled) {
-                            return false;
-                          }
-
-                          // Penyaring cadangan — alasannya sama dengan yang
-                          // dijelaskan di `spaces_list_screen.dart`: kata
-                          // kunci sudah dikirim ke server, tapi belum terbukti
-                          // endpoint-nya menghormati ?search=.
-                          if (query.isEmpty) return true;
-                          return course.title.toLowerCase().contains(query) ||
-                              course.description.toLowerCase().contains(query);
-                        }).toList();
-
-                        // Local Sorting
-                        if (_sortBy == 'Alphabetical') {
-                          filteredCourses.sort((a, b) => a.title.compareTo(b.title));
-                        } else if (_sortBy == 'Students') {
-                          filteredCourses.sort((a, b) => b.studentsCount.compareTo(a.studentsCount));
-                        }
-
-                        if (filteredCourses.isEmpty) {
-                          return Center(
-                            child: Text(
-                              _searchQuery.isEmpty
-                                  ? 'Tidak ada course di kategori ini.'
-                                  : 'Tidak ada course yang cocok dengan "$_searchQuery".',
-                              textAlign: TextAlign.center,
-                            ),
-                          );
-                        }
-
-                        return ListView.separated(
-                          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 80, top: 8),
-                          itemCount: filteredCourses.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 16),
-                          itemBuilder: (context, index) {
-                            return _buildCourseCard(filteredCourses[index]);
-                          },
-                        );
-                      },
+            child: RefreshIndicator(
+              onRefresh: () async {
+                _loadCourses();
+                await _coursesFuture;
+              },
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(child: SizedBox(height: topInset)),
+                  SliverToBoxAdapter(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildCoursesHeader(),
+                        _buildSearchAndSortBar(),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  ..._buildCourseSlivers(),
+                ],
+              ),
             ),
-          ),
-
-          // Header diletakkan di atas agar shadow tidak tertutup list
-          Align(
-            alignment: Alignment.topCenter,
-            child: _buildCoursesHeader(),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _buildCourseSlivers() {
+    return [
+      FutureBuilder<List<CourseModel>>(
+        future: _coursesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          } else if (snapshot.hasError) {
+            return SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text(
+                  'Error: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.black87),
+                ),
+              ),
+            );
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text(
+                  'Belum ada course.',
+                  style: TextStyle(color: Colors.black54),
+                ),
+              ),
+            );
+          }
+
+          final query = _searchQuery.toLowerCase();
+          var filteredCourses = _allFetchedCourses.where((course) {
+            // Filter tab Enrolled/All: murni pilihan lokal.
+            if (!_showAllCourses && !course.isEnrolled) {
+              return false;
+            }
+
+            // Penyaring cadangan — alasannya sama dengan yang dijelaskan di
+            // `spaces_list_screen.dart`: kata kunci sudah dikirim ke
+            // server, tapi belum terbukti endpoint-nya menghormati ?search=.
+            if (query.isEmpty) return true;
+            return course.title.toLowerCase().contains(query) ||
+                course.description.toLowerCase().contains(query);
+          }).toList();
+
+          // Local Sorting
+          if (_sortBy == 'Alphabetical') {
+            filteredCourses.sort((a, b) => a.title.compareTo(b.title));
+          } else if (_sortBy == 'Students') {
+            filteredCourses.sort(
+              (a, b) => b.studentsCount.compareTo(a.studentsCount),
+            );
+          }
+
+          if (filteredCourses.isEmpty) {
+            return SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text(
+                  _searchQuery.isEmpty
+                      ? 'Tidak ada course di kategori ini.'
+                      : 'Tidak ada course yang cocok dengan "$_searchQuery".',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.black87),
+                ),
+              ),
+            );
+          }
+
+          return SliverPadding(
+            padding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: 80,
+              top: 8,
+            ),
+            sliver: SliverList.separated(
+              itemCount: filteredCourses.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                return _buildCourseCard(filteredCourses[index]);
+              },
+            ),
+          );
+        },
+      ),
+    ];
   }
 
   Widget _buildSearchAndSortBar() {
@@ -181,56 +228,104 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Column(
         children: [
-          TextField(
-            onChanged: _onSearchChanged,
-            decoration: InputDecoration(
-              hintText: 'Search Course...',
-              hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-              prefixIcon: Icon(PhosphorIconsRegular.magnifyingGlass, color: Colors.grey.shade500),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF1E5AF5)),
+          SizedBox(
+            height: 48,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: TextField(
+                  onChanged: _onSearchChanged,
+                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Search Course...',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Icon(
+                      PhosphorIconsRegular.magnifyingGlass,
+                      color: Colors.grey.shade600,
+                      size: 20,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 0,
+                      horizontal: 16,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF1E5AF5),
+                        width: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Text('Sort by: ', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-              DropdownButton<String>(
-                value: _sortBy,
-                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-                elevation: 16,
-                style: const TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600),
-                underline: const SizedBox(),
-                onChanged: (String? value) {
-                  if (value != null) {
-                    setState(() {
-                      _sortBy = value;
-                    });
-                  }
-                },
-                items: <String>['Alphabetical', 'Students']
-                    .map<DropdownMenuItem<String>>((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-              ),
-            ],
+          SizedBox(
+            height: 32,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'Sort by: ',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                ),
+                Theme(
+                  data: Theme.of(context).copyWith(canvasColor: Colors.white),
+                  child: DropdownButton<String>(
+                    value: _sortBy,
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 18,
+                      color: Color(0xFF1E5AF5),
+                    ),
+                    elevation: 8,
+                    style: const TextStyle(
+                      color: Color(0xFF1E5AF5),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    dropdownColor: Colors.white,
+                    underline: const SizedBox(),
+                    onChanged: (String? value) {
+                      if (value != null) {
+                        setState(() {
+                          _sortBy = value;
+                        });
+                      }
+                    },
+                    items: <String>['Alphabetical', 'Students']
+                        .map<DropdownMenuItem<String>>((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        })
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -238,165 +333,308 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
   }
 
   Widget _buildCourseCard(CourseModel course) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Cover image & Tag
-          Stack(
-            children: [
-              Container(
-                height: 130,
-                color: Colors.grey.shade200,
-                child: course.coverPhotoUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: course.coverPhotoUrl,
-                        httpHeaders: AuthService.imageAuthHeaders,
-                        height: 130,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorWidget: (context, url, error) => Center(
-                          child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
-                        ),
-                      )
-                    : Center(
-                        child: PhosphorIcon(PhosphorIconsRegular.image, color: Colors.grey.shade400),
-                      ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.black.withValues(alpha: 0.06),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-              if (course.isEnrolled)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade700,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'Enrolled',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: course.logoUrl.isNotEmpty
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Cover image & Tag
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                    child: Container(
+                      height: 130,
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+                      child: course.coverPhotoUrl.isNotEmpty
                           ? CachedNetworkImage(
-                              imageUrl: course.logoUrl,
+                              imageUrl: course.coverPhotoUrl,
                               httpHeaders: AuthService.imageAuthHeaders,
+                              height: 130,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorWidget: (context, url, error) =>
+                                  const Center(
+                                    child: PhosphorIcon(
+                                      PhosphorIconsRegular.image,
+                                      color: Color(0xFFA5B4FC),
+                                    ),
+                                  ),
+                            )
+                          : const Center(
+                              child: PhosphorIcon(
+                                PhosphorIconsRegular.image,
+                                color: Color(0xFFA5B4FC),
+                              ),
+                            ),
+                    ),
+                  ),
+                  if (course.isEnrolled)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFF22C55E,
+                              ).withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: const Text(
+                              'Enrolled',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
                               width: 48,
                               height: 48,
-                              fit: BoxFit.cover,
-                              errorWidget: (context, url, error) => const Center(
-                                child: PhosphorIcon(PhosphorIconsRegular.graduationCap, color: Colors.grey),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF1E5AF5,
+                                ).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.06),
+                                  width: 1.0,
+                                ),
                               ),
-                            )
-                          : const Center(child: PhosphorIcon(PhosphorIconsRegular.graduationCap, color: Colors.grey)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            course.title,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                              child: course.logoUrl.isNotEmpty
+                                  ? CachedNetworkImage(
+                                      imageUrl: course.logoUrl,
+                                      httpHeaders: AuthService.imageAuthHeaders,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      errorWidget: (context, url, error) =>
+                                          const Center(
+                                            child: PhosphorIcon(
+                                              PhosphorIconsRegular
+                                                  .graduationCap,
+                                              color: Color(0xFF818CF8),
+                                            ),
+                                          ),
+                                    )
+                                  : const Center(
+                                      child: PhosphorIcon(
+                                        PhosphorIconsRegular.graduationCap,
+                                        color: Color(0xFF818CF8),
+                                      ),
+                                    ),
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              PhosphorIcon(PhosphorIconsRegular.bookOpen, size: 12, color: Colors.grey.shade500),
-                              const SizedBox(width: 4),
-                              Text('${course.lessonsCount} Lessons', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                              const SizedBox(width: 12),
-                              PhosphorIcon(PhosphorIconsRegular.users, size: 12, color: Colors.grey.shade500),
-                              const SizedBox(width: 4),
-                              Text('${course.studentsCount} Students', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                              Text(
+                                course.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                  letterSpacing: 0.1,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    PhosphorIconsRegular.bookOpen,
+                                    size: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${course.lessonsCount} Lessons',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Icon(
+                                    PhosphorIconsRegular.users,
+                                    size: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${course.studentsCount} Students',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      course.description.replaceAll(RegExp(r'<[^>]*>'), ''),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 13,
+                        height: 1.4,
                       ),
+                    ),
+                    if (course.isEnrolled) ...[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: (course.progress.clamp(0, 100)) / 100,
+                          minHeight: 6,
+                          backgroundColor: Colors.grey.shade300,
+                          valueColor: const AlwaysStoppedAnimation(
+                            Color(0xFF1E5AF5),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${course.progress}% selesai',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 38,
+                      child: course.isEnrolled
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 12,
+                                  sigmaY: 12,
+                                ),
+                                child: OutlinedButton(
+                                  onPressed: () => _onCourseAction(course),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF1E5AF5),
+                                    side: const BorderSide(
+                                      color: Color(0xFF1E5AF5),
+                                      width: 1.0,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    backgroundColor: const Color(
+                                      0xFF1E5AF5,
+                                    ).withValues(alpha: 0.08),
+                                  ),
+                                  child: const Text(
+                                    'Continue Learning',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 12,
+                                  sigmaY: 12,
+                                ),
+                                child: ElevatedButton(
+                                  onPressed: () => _onCourseAction(course),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1E5AF5),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Enroll',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  course.description.replaceAll(RegExp(r'<[^>]*>'), ''),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4),
-                ),
-                if (course.isEnrolled) ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: (course.progress.clamp(0, 100)) / 100,
-                      minHeight: 6,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF1E5AF5)),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('${course.progress}% selesai', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 38,
-                  child: ElevatedButton(
-                    onPressed: () => _onCourseAction(course),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: course.isEnrolled ? Colors.white : const Color(0xFF1E5AF5),
-                      foregroundColor: course.isEnrolled ? const Color(0xFF1E5AF5) : Colors.white,
-                      elevation: 0,
-                      side: course.isEnrolled ? const BorderSide(color: Color(0xFF1E5AF5)) : null,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: Text(
-                      course.isEnrolled ? 'Continue Learning' : 'Enroll',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -425,36 +663,61 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         const SnackBar(content: Text('Berhasil mendaftar ke Course!')),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
     }
   }
 
+  static const double _coursesHeaderHeight = 66;
+
+  /// Header Courses — menyatu dengan latar putih halaman (bukan lagi kartu
+  /// kaca melayang), ikut scroll bersama daftar seperti bagian lain dari
+  /// halaman. Mengikuti pola `_buildSpacesHeader` di SpacesListScreen.
+  /// Semua handler (filter, New Course) tidak diubah.
   Widget _buildCoursesHeader() {
-    return SectionHeader(
-      title: 'Courses',
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    return Container(
+      width: double.infinity,
+      height: _coursesHeaderHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      color: Colors.white,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildFilterChip('All Courses', selected: _showAllCourses),
-          const SizedBox(width: 8),
-          _buildFilterChip('My Courses', selected: !_showAllCourses),
-          // Hanya admin/manager komunitas FCOM yang bisa membuat course baru
-          // — tombolnya ditempelkan lewat AdminOnly, tidak mengubah apa pun
-          // untuk user biasa (SizedBox.shrink kalau bukan admin).
-          AdminOnly(
-            builder: (context) => Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: IconButton(
-                onPressed: _openManageCourses,
-                icon: const PhosphorIcon(PhosphorIconsRegular.plusCircle, color: Color(0xFF1E5AF5)),
-                tooltip: 'New Course',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
+          const Text(
+            'Courses',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildFilterChip('All Courses', selected: _showAllCourses),
+              const SizedBox(width: 8),
+              _buildFilterChip('My Courses', selected: !_showAllCourses),
+              // Hanya admin/manager komunitas FCOM yang bisa membuat course baru
+              // — tombolnya ditempelkan lewat AdminOnly, tidak mengubah apa pun
+              // untuk user biasa (SizedBox.shrink kalau bukan admin).
+              AdminOnly(
+                builder: (context) => Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: IconButton(
+                    onPressed: _openManageCourses,
+                    icon: const PhosphorIcon(
+                      PhosphorIconsRegular.plusCircle,
+                      color: Color(0xFF1E5AF5),
+                    ),
+                    tooltip: 'New Course',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -519,15 +782,23 @@ class _CoursesListScreenState extends State<CoursesListScreen> {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF1FF) : Colors.transparent,
+          color: selected
+              ? const Color(0xFF1E5AF5).withValues(alpha: 0.12)
+              : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF1E5AF5).withValues(alpha: 0.4)
+                : Colors.black.withValues(alpha: 0.06),
+            width: 1.0,
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
             color: selected ? const Color(0xFF1E5AF5) : Colors.black54,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
+            fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+            fontSize: 12,
           ),
         ),
       ),
