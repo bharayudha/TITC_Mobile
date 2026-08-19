@@ -4,7 +4,7 @@ Catatan progres perbaikan aplikasi Flutter `titc_mobile` yang meniru portal
 Fluent Community di `titc.or.id`. Dipakai sebagai rekam jejak supaya pekerjaan
 bisa dilanjutkan di sesi berikutnya.
 
-Terakhir diperbarui: 6 Agustus 2026.
+Terakhir diperbarui: 20 Agustus 2026.
 
 ---
 
@@ -1291,3 +1291,20 @@ adalah menyalin bentuknya utuh, bukan menebak subset mana yang "penting".
 > method-nya. Status 200 dari API **bukan** bukti data tersimpan — kalau
 > ragu, verifikasi independen di luar app (di sini: reload halaman web
 > aslinya) sebelum melaporkan sesuatu "sudah beres".
+
+---
+
+## Sinkronisasi GitHub — 20 Agustus 2026
+
+Branch lokal `main` sudah disinkronkan dengan `origin/main` melalui fast-forward
+tanpa konflik. Dua commit terbaru yang masuk:
+
+- `23f538c` — penyelesaian menu profil user dan alur profil Spaces/Courses,
+  termasuk update profil FCOM dan kartu navigasi profil.
+- `6563df6` — perbaikan header WebView course agar sticky, tanpa pita kosong
+  dan tanpa tumpang tindih.
+
+Perubahan lokal yang belum dikomit tetap dipertahankan setelah merge:
+`frontend/lib/screens/customer/home/home_screen.dart`,
+`frontend/pubspec.yaml`, `frontend/pubspec.lock`, serta enam asset gambar di
+`frontend/assets/images/`.

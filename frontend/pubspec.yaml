@@ -41,6 +41,7 @@ dependencies:
   shared_preferences: ^2.5.5
   image_picker: ^1.2.3
   cached_network_image: ^3.4.1
+  flutter_svg: ^2.2.1
   url_launcher: ^6.3.1
   google_fonts: ^6.2.1
   liquid_glass_widgets: ^0.29.7
@@ -64,6 +65,9 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+
+  assets:
+    - assets/images/
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
