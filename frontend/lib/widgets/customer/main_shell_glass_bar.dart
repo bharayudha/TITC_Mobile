@@ -7,9 +7,10 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:magang_titc/constants/app_colors.dart';
 import 'package:magang_titc/screens/customer/search/search_results_screen.dart';
 import 'package:magang_titc/services/notifications_service.dart';
-import 'package:magang_titc/widgets/shared/notifications_popup.dart';
 import 'package:magang_titc/widgets/shared/profile_menu.dart';
 import 'package:magang_titc/widgets/shared/search_overlay.dart';
+import 'package:magang_titc/widgets/shared/notifications_popup.dart';
+import 'package:magang_titc/services/api_service.dart';
 
 /// Versi kaca dari [TitcAppBar], KHUSUS dipakai [MainShell]
 /// (Home/Spaces/Courses/Members) yang badannya bergaya glassmorphism.

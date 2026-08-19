@@ -51,6 +51,7 @@ class ApiService {
     cachedCourses = null;
     _joinedSpacesCache = {};
     _likedFeedIdsCache = {};
+    _followedUsernamesCache = {};
   }
 
   // Menyimpan slug space yang sudah di-join secara lokal sebagai fallback
@@ -110,6 +111,50 @@ class ApiService {
     await prefs.setStringList(
       'liked_feed_ids',
       _likedFeedIdsCache.map((e) => e.toString()).toList(),
+    );
+  }
+
+  // Menyimpan username member yang sudah di-follow secara lokal — pola yang
+  // sama persis dengan `_likedFeedIdsCache` di atas, karena masalahnya juga
+  // sama: respons `/members` TIDAK punya field status follow sama sekali
+  // (dibuktikan log `MEMBER_JSON`: hanya ada user_id, display_name,
+  // username, avatar, status, meta, dst). Akibatnya semua member selalu
+  // dianggap belum di-follow, tombolnya menampilkan "Follow", lalu server
+  // menolak dengan 422 "You are already following..." saat ditekan.
+  static Set<String> _followedUsernamesCache = {};
+  static bool _followedUsernamesCacheLoaded = false;
+
+  static Future<void> _initFollowedUsernamesCache() async {
+    if (_followedUsernamesCacheLoaded) return;
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getStringList('followed_usernames');
+    if (cached != null) {
+      _followedUsernamesCache = cached.toSet();
+    }
+    _followedUsernamesCacheLoaded = true;
+  }
+
+  /// Dipakai layar Members untuk mengisi status Follow seketika saat daftar
+  /// dimuat, tanpa bergantung pada field server yang memang tidak ada.
+  static Future<Set<String>> getFollowedUsernamesCache() async {
+    await _initFollowedUsernamesCache();
+    return Set<String>.from(_followedUsernamesCache);
+  }
+
+  static Future<void> _setMemberFollowedLocally(
+    String username,
+    bool followed,
+  ) async {
+    await _initFollowedUsernamesCache();
+    if (followed) {
+      _followedUsernamesCache.add(username);
+    } else {
+      _followedUsernamesCache.remove(username);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'followed_usernames',
+      _followedUsernamesCache.toList(),
     );
   }
 
@@ -842,18 +887,59 @@ class ApiService {
   }
 
   /// Ikuti / berhenti mengikuti seorang member.
-  static Future<bool> toggleFollowMember(int memberId, {required bool follow}) async {
+  ///
+  /// Endpoint `POST /profile/{username}/follow` (dan `/unfollow`) **sudah
+  /// terbukti benar** — dikonfirmasi dari respons server yang menjawab
+  /// dengan pesan bermakna, bukan 404.
+  ///
+  /// Status 422 diperlakukan sebagai BERHASIL. Server membalas 422 dengan
+  /// "You are already following or blocked this user." ketika user memang
+  /// sudah mengikuti member itu — kondisi yang justru sudah sesuai keinginan
+  /// user. Ini terjadi karena `/members` tidak mengirim status follow sama
+  /// sekali (lihat catatan di `_followedUsernamesCache`), jadi tombol selalu
+  /// tampil "Follow" walau sebenarnya sudah diikuti.
+  ///
+  /// Konsekuensi yang perlu diketahui: pesan 422 itu menggabungkan dua
+  /// keadaan — "sudah follow" DAN "user diblokir" — dan server tidak
+  /// membedakannya. Untuk kasus terblokir, tombol jadi menampilkan
+  /// "Following" padahal sebenarnya tidak. Itu kasus yang jauh lebih jarang
+  /// daripada "sudah follow", dan menampilkan error di kasus umum lebih
+  /// merugikan daripada label yang meleset di kasus langka.
+  static Future<bool> toggleFollowMember(String username, {required bool follow}) async {
     if (!AuthService.isLoggedIn) return false;
+
+    // Username kosong bikin URL jadi `/profile//follow` yang pasti ditolak
+    // server. Dihentikan lebih awal supaya penyebabnya jelas di log, bukan
+    // muncul sebagai 404 yang membingungkan.
+    if (username.trim().isEmpty) {
+      print('TOGGLE_FOLLOW: dibatalkan — username KOSONG (follow=$follow)');
+      return false;
+    }
+
     try {
+      final uri = Uri.parse(
+        '$_baseUrl/profile/$username/${follow ? 'follow' : 'unfollow'}',
+      );
+      print('TOGGLE_FOLLOW REQ: $uri');
       final response = await client
-          .post(
-            Uri.parse('$_baseUrl/members/$memberId/${follow ? 'follow' : 'unfollow'}'),
-            headers: authHeaders,
-          )
+          .post(uri, headers: authHeaders)
           .timeout(const Duration(seconds: 30));
-      return response.statusCode == 200 || response.statusCode == 201;
+      print('TOGGLE_FOLLOW RES: ${response.statusCode} - ${response.body}');
+
+      final ok = response.statusCode == 200 ||
+          response.statusCode == 201 ||
+          // "Sudah dalam keadaan yang diminta" — lihat penjelasan di atas.
+          response.statusCode == 422;
+
+      print('TOGGLE_FOLLOW: $uri follow=$follow status=${response.statusCode} ok=$ok '
+          'body=${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+
+      // Simpan ke perangkat supaya tombolnya tetap benar setelah restart,
+      // tanpa bergantung field server yang memang tidak ada.
+      if (ok) await _setMemberFollowedLocally(username, follow);
+      return ok;
     } catch (e) {
-      print('Exception in toggleFollowMember: $e');
+      print('TOGGLE_FOLLOW: exception username=$username follow=$follow -> $e');
       return false;
     }
   }

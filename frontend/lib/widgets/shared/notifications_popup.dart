@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import 'package:magang_titc/constants/app_colors.dart';
+import 'package:magang_titc/constants/fcom_post_dialog_css.dart';
 import 'package:magang_titc/services/notifications_service.dart';
 
 import 'package:magang_titc/models/notification_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/screens/customer/spaces/space_webview_screen.dart';
+import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
+import 'package:magang_titc/constants/fcom_member_profile_css.dart';
 
 const List<String> _notificationTabs = [
   'Recent',
@@ -262,15 +265,33 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
     return InkWell(
       onTap: () {
         String? targetUrl = notif.url;
-        if (targetUrl == null && notif.route != null) {
-          final routeName = notif.route!['name'];
-          final params = notif.route!['params'] as Map<String, dynamic>? ?? {};
-          if (routeName == 'space_feed' && params.containsKey('space')) {
-            targetUrl = 'https://titc.or.id/portal/spaces/${params['space']}';
-          } else {
-            targetUrl = 'https://titc.or.id/portal/';
-          }
+
+        // Percayakan pada URL bawaan dari FCOM API (karena FCOM sudah membuat link yang tepat).
+        // Kadang FCOM mengembalikan URL relatif (dimulai dengan '/'), jadi kita pastikan jadi absolut.
+        if (targetUrl != null && targetUrl.isNotEmpty) {
+           if (targetUrl.startsWith('/')) {
+              targetUrl = 'https://titc.or.id$targetUrl';
+           }
+        } else if (notif.route != null) {
+           // Jika FCOM tidak memberikan URL, kita rakit sendiri secara dinamis berdasarkan parameter yang ada.
+           final params = notif.route!['params'] as Map<String, dynamic>? ?? {};
+
+           final space = params['space'] ?? params['group'];
+           final slug = params['slug'] ?? params['post'] ?? params['post_slug'] ?? params['id'] ?? params['feed_id'] ?? params['feed'];
+           final user = params['user'] ?? params['username'];
+
+           if (space != null && slug != null) {
+             targetUrl = 'https://titc.or.id/portal/space/$space/post/$slug';
+           } else if (slug != null) {
+             targetUrl = 'https://titc.or.id/portal/post/$slug';
+           } else if (space != null) {
+             targetUrl = 'https://titc.or.id/portal/space/$space';
+           } else if (user != null) {
+             targetUrl = 'https://titc.or.id/portal/u/$user';
+           }
         }
+
+        // Jika semua gagal, baru lempar ke halaman depan portal.
         targetUrl ??= 'https://titc.or.id/portal/';
 
         // Decrement local badge counter if it was unread
@@ -284,12 +305,35 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
           NotificationsService.markAsRead(notif.id);
         }
 
+        Widget nextScreen;
+        if (targetUrl.contains('/portal/u/')) {
+          nextScreen = AuthenticatedWebViewScreen(
+            url: targetUrl,
+            title: 'Member Profile',
+            extraCss: kFcomMemberProfileCss,
+          );
+        } else {
+          // Post dibuka FCOM sebagai dialog overlay, jadi butuh CSS yang
+          // sama persis dengan yang dipakai ikon komentar di Home —
+          // sebelumnya di sini ada salinan terpotong (kehilangan aturan
+          // footer, tombol, dan `.fcom_dot_menu` per komentar), itulah
+          // kenapa post dari notifikasi tampil beda dari yang dibuka lewat
+          // Home. Sekarang keduanya menunjuk ke satu konstanta yang sama.
+          //
+          // Diterapkan TANPA syarat URL mengandung '/post/': notifikasi
+          // datang dalam banyak bentuk URL, dan pengecekan itu membuat
+          // sebagian post tidak dapat CSS sama sekali. Aman karena semua
+          // aturannya hanya cocok kalau `.el-dialog` memang ada.
+          nextScreen = SpaceWebViewScreen(
+            overrideUrl: targetUrl,
+            title: 'Notification',
+            extraCss: kFcomPostDialogCss,
+          );
+        }
+
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => SpaceWebViewScreen(
-              overrideUrl: targetUrl!,
-              title: 'Notification',
-            ),
+            builder: (_) => nextScreen,
           ),
         );
       },

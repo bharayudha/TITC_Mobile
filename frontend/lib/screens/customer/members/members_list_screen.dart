@@ -65,11 +65,29 @@ class _MembersListScreenState extends State<MembersListScreen> {
   final LayerLink _sortMenuLink = LayerLink();
   OverlayEntry? _sortMenuEntry;
 
+  /// Username member yang sudah di-follow menurut catatan LOKAL di
+  /// perangkat. Ini sumber kebenaran satu-satunya untuk tombol Follow,
+  /// karena respons `/members` sama sekali tidak punya field status follow
+  /// (dibuktikan log `MEMBER_JSON`) — tanpa ini semua member selalu tampil
+  /// "Follow" walau sebenarnya sudah diikuti, lalu server menolak dengan
+  /// 422 "You are already following..." saat ditekan. Pola yang sama persis
+  /// dipakai status Like di Home.
+  final Set<String> _followedUsernames = {};
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _seedFollowedFromLocalCache();
     _loadFirstPage();
+  }
+
+  /// Muat daftar follow tersimpan sekali di awal, berjalan independen dari
+  /// pemuatan daftar member itu sendiri.
+  Future<void> _seedFollowedFromLocalCache() async {
+    final usernames = await ApiService.getFollowedUsernamesCache();
+    if (!mounted || usernames.isEmpty) return;
+    setState(() => _followedUsernames.addAll(usernames));
   }
 
   @override
@@ -309,48 +327,41 @@ class _MembersListScreenState extends State<MembersListScreen> {
   }
 
   Future<void> _onFollowPressed(MemberModel member) async {
-    final index = _members.indexWhere((m) => m.id == member.id);
-    if (index == -1) return;
+    final username = member.username.trim();
+    if (username.isEmpty) return;
 
-    final wantFollow = !_members[index].isFollowed;
+    final wantFollow = !_followedUsernames.contains(username);
     // Optimistic update supaya tombol terasa responsif.
-    setState(
-      () => _members[index] = _copyWithFollow(_members[index], wantFollow),
-    );
+    setState(() {
+      if (wantFollow) {
+        _followedUsernames.add(username);
+      } else {
+        _followedUsernames.remove(username);
+      }
+    });
 
     final ok = await ApiService.toggleFollowMember(
-      member.id,
+      username,
       follow: wantFollow,
     );
-    if (!mounted) return;
-    if (!ok) {
-      setState(
-        () => _members[index] = _copyWithFollow(_members[index], !wantFollow),
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            wantFollow
-                ? 'Gagal mengikuti member.'
-                : 'Gagal berhenti mengikuti.',
-          ),
-        ),
-      );
-    }
-  }
+    if (!mounted || ok) return;
 
-  MemberModel _copyWithFollow(MemberModel m, bool isFollowed) => MemberModel(
-    id: m.id,
-    displayName: m.displayName,
-    username: m.username,
-    avatarUrl: m.avatarUrl,
-    lastActivity: m.lastActivity,
-    joinedAt: m.joinedAt,
-    bio: m.bio,
-    status: m.status,
-    isFollowed: isFollowed,
-    socialLinks: m.socialLinks,
-  );
+    // Gagal beneran — kembalikan tampilan ke keadaan semula.
+    setState(() {
+      if (wantFollow) {
+        _followedUsernames.remove(username);
+      } else {
+        _followedUsernames.add(username);
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          wantFollow ? 'Gagal mengikuti member.' : 'Gagal berhenti mengikuti.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -889,7 +900,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
       return const SizedBox.shrink();
     }
 
-    final following = member.isFollowed;
+    // Dibaca dari catatan lokal, BUKAN `member.isFollowed` — server tidak
+    // pernah mengirim status itu (lihat catatan di [_followedUsernames]).
+    final following = _followedUsernames.contains(member.username);
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: BackdropFilter(

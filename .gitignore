@@ -24,6 +24,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Firebase service account credentials — private key, JANGAN pernah commit.
+# Sempat ter-commit ke `main` (harus di-rotate di Firebase Console), file
+# ini mencegahnya kejadian lagi.
+service-account.json
+titc-mobile-firebase-adminsdk-*.json
+
 # Editor & OS files
 .vscode/
 .idea/

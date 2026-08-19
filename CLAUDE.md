@@ -1167,3 +1167,58 @@ liquid_glass_widgets".
   dari awal. Jangan tunggu lebih dari ~30 detik di splash screen saat log
   sudah berhenti bertambah — itu tanda emulator perlu di-restart, bukan
   tanda harus menunggu lebih lama.
+
+---
+
+## Sesi 19 Agustus 2026 — Fitur Push Notification FCM (Follow & Global Feed)
+
+> Ditulis ulang dari commit teman (`bbce8b1`) — teks aslinya di git history
+> rusak encoding-nya (tiap karakter terpisah spasi, kemungkinan tersimpan
+> sebagai UTF-16 lalu ter-diff sebagai UTF-8). Isinya di bawah ini sudah
+> dirapikan supaya terbaca, makna aslinya dipertahankan.
+
+### 1. Perbaikan bug Android build (desugaring)
+- Memperbaiki kegagalan build Gradle saat kompilasi plugin
+  `flutter_local_notifications` v22.3.0.
+- Menambahkan konfigurasi **`coreLibraryDesugaringEnabled true`** beserta
+  dependensi `com.android.tools:desugar_jdk_libs:2.1.5` di
+  `frontend/android/app/build.gradle.kts`.
+
+### 2. Sinkronisasi nama paket FCM
+- Nama paket di `build.gradle.kts` dan deklarasi `MainActivity.kt` diperbarui
+  dari `com.example.magang_titc` menjadi `titc.mobile` agar presisi dengan
+  konfigurasi Firebase di `google-services.json`.
+- Ini mengatasi `ClassNotFoundException` saat notifikasi ditekan.
+
+### 3. Integrasi `firebase_messaging` & `flutter_local_notifications`
+- Mengganti pemanggilan API notifikasi yang sudah usang (deprecated) ke
+  format named-parameter (`settings:` dan `id:`) di
+  `lib/services/firebase_messaging_service.dart`.
+- Subscribe otomatis ke topik FCM `global_feeds` saat inisialisasi aplikasi,
+  supaya siap menerima broadcast Feed dari server.
+
+### 4. Plugin WordPress (pendeteksi otomatis & FCM sender)
+- **Pencegat REST API:** action hook internal Fluent Community tertutup dan
+  berisiko putus kalau plugin WP di-update, jadi plugin PHP menyadap lalu
+  lintas REST API WP tingkat inti lewat `rest_request_after_callbacks`.
+- **Trigger notifikasi Follow:** menyadap rute
+  `POST /fluent-community/v2/profile/{username}/follow`. Kalau statusnya 200,
+  WP diam-diam mengirim payload FCM ("Pengikut Baru") ke HP user yang
+  di-follow, real-time.
+- **Trigger notifikasi Feed global:** menyadap rute
+  `POST /fluent-community/v2/feeds`. Setiap Admin bikin pengumuman, WP kirim
+  Push Notification ke topik `global_feeds` supaya diterima semua HP yang
+  sudah pasang app TITC.
+
+> [!WARNING]
+> Commit yang sama (`bbce8b1` dkk) juga mengklaim sudah menghapus file tes
+> eksperimental (`scratch_fcom_follow.py`, endpoint `/test-fcm`, file zip,
+> tombol Bug di app bar) — **tapi belum, masih ada di repo** per pengecekan
+> 19 Agt: `scratch_fcom_routes.py`, `titc-mobile-notification-root.zip`,
+> folder `test_extract/` semua masih ter-commit. Perlu dibersihkan.
+>
+> **Lebih penting:** commit ini juga meng-commit kredensial Firebase Admin
+> SDK asli (`service_account.json` / `titc-mobile-firebase-adminsdk-*.json`,
+> berisi `private_key` sungguhan) ke tiga lokasi di repo. Ini HARUS di-rotate
+> di Firebase Console (anggap key lama sudah bocor) dan file-nya dihapus
+> dari repo + ditambahkan ke `.gitignore` — belum dikerjakan per 19 Agt.
