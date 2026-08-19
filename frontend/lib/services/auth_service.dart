@@ -39,6 +39,7 @@ class AuthService {
   static String? _userEmail;
   static String? _userName;
   static String? _userSlug;
+  static int? _userId;
 
   /// URL foto profil user. Dibungkus ValueNotifier supaya widget yang
   /// menampilkannya (mis. tombol profil di app bar) ikut ter-update begitu
@@ -87,6 +88,7 @@ class AuthService {
   static String? get userName => _userName;
   static String? get userSlug => _userSlug;
   static String? get userAvatarUrl => _userAvatarUrl;
+  static int? get userId => _userId;
 
   /// Inisialisasi: coba muat cookies yang pernah disimpan sebelumnya.
   static Future<void> init() async {
@@ -95,6 +97,8 @@ class AuthService {
     _userName = await _storage.read(key: _userNameKey);
     _userSlug = await _storage.read(key: 'wp_user_slug');
     _userAvatarUrl = await _storage.read(key: 'wp_user_avatar');
+    final storedUserId = await _storage.read(key: 'wp_user_id');
+    if (storedUserId != null) _userId = int.tryParse(storedUserId);
 
     if (_cookies != null) {
       print('=== AUTH DEBUG ===');
@@ -250,6 +254,14 @@ class AuthService {
         if (slug != null) {
           _userSlug = slug;
           await _storage.write(key: 'wp_user_slug', value: _userSlug);
+        }
+        
+        final id = data['id'];
+        if (id != null) {
+          _userId = id is int ? id : int.tryParse('$id');
+          if (_userId != null) {
+            await _storage.write(key: 'wp_user_id', value: _userId.toString());
+          }
         }
 
         if (data['avatar_urls'] != null) {

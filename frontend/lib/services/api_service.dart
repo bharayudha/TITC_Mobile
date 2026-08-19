@@ -983,6 +983,167 @@ class ApiService {
       return false;
     }
   }
+  /// Ambil profil lengkap member.
+  static Future<MemberModel?> fetchMemberProfile(String slug) async {
+    if (!AuthService.isLoggedIn) return null;
+    try {
+      final uri = Uri.parse('$_baseUrl/profile/$slug?_t=${DateTime.now().millisecondsSinceEpoch}');
+      final response = await authorizedGet(uri);
+      print('FETCH_MEMBER_PROFILE ($slug) STATUS: ${response.statusCode}');
+      print('FETCH_MEMBER_PROFILE BODY: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data is Map && data['profile'] != null) {
+          return MemberModel.fromJson(data['profile']);
+        } else if (data is Map && data['user'] != null) {
+          return MemberModel.fromJson(data['user']);
+        }
+        return MemberModel.fromJson(data as Map<String, dynamic>);
+      }
+    } catch (e) {
+      print('fetchMemberProfile error: $e');
+    }
+    return null;
+  }
+
+  /// Ambil feed spesifik untuk seorang user.
+  static Future<List<ActivityModel>> fetchUserFeeds(String slug) async {
+    if (!AuthService.isLoggedIn) return [];
+    try {
+      final uri = Uri.parse('$_baseUrl/profile/$slug/feeds');
+      final response = await authorizedGet(uri);
+      print('fetchUserFeeds STATUS: ${response.statusCode}');
+      print('fetchUserFeeds BODY: ${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      if (response.statusCode == 200) {
+        final items = _extractFeedItems(json.decode(response.body));
+        print('fetchUserFeeds ITEMS COUNT: ${items.length}');
+        return items.map((e) => ActivityModel.fromFluentCommunity(e)).toList();
+      }
+    } catch (e) {
+      print('fetchUserFeeds error: $e');
+    }
+    return [];
+  }
+
+  /// Ambil space spesifik untuk seorang user.
+  static Future<List<SpaceModel>> fetchUserSpaces(String slug) async {
+    if (!AuthService.isLoggedIn) return [];
+    try {
+      final uri = Uri.parse('$_baseUrl/profile/$slug/spaces');
+      final response = await authorizedGet(uri);
+      print('fetchUserSpaces STATUS: ${response.statusCode}');
+      print('fetchUserSpaces BODY: ${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final collected = <int, Map<String, dynamic>>{};
+        _collectSpaceLikeObjects(data, collected);
+        print('fetchUserSpaces COLLECTED: ${collected.length}');
+        // `/profile/{slug}/spaces` = space milik profil ini sendiri, jadi
+        // pasti sudah di-join — tapi endpoint ini tidak selalu mengirim
+        // `space_pivot` seperti `/spaces/discover`. Tanpa paksaan ini,
+        // SpaceModel.isJoined jatuh ke false dan kartu menampilkan tombol
+        // "Join" alih-alih "View Space" (Join tidak menavigasi ke mana pun).
+        //
+        // Cover foto endpoint ini juga tidak bisa dipercaya begitu saja:
+        // `cover_photo` di sini sering berisi banner branding portal generik
+        // yang sama untuk banyak space (nama filenya "PORTAL-HEADER.webp" /
+        // "HEADER-TITC-INDONESIA.webp", terverifikasi dari log
+        // SPACE_PROFILE_ITEM — dua space beda bisa punya `cover_photo` dengan
+        // nama file identik), sedangkan `settings.og_image` berisi foto asli
+        // yang beda-beda per space. Utamakan `og_image` di sini kalau ada.
+        return collected.values
+            .where((json) => (json['type'] as String?) != 'course')
+            .map((e) {
+              final settings = e['settings'];
+              final ogImage =
+                  settings is Map ? settings['og_image'] as String? : null;
+              final merged = {...e, 'is_joined': true};
+              if (ogImage != null && ogImage.trim().isNotEmpty) {
+                merged['cover_photo'] = ogImage;
+              }
+              return SpaceModel.fromJson(merged);
+            })
+            .toList();
+      }
+    } catch (e) {
+      print('fetchUserSpaces error: $e');
+    }
+    return [];
+  }
+
+  /// Ambil course spesifik untuk seorang user.
+  static Future<List<CourseModel>> fetchUserCourses(String slug) async {
+    if (!AuthService.isLoggedIn) return [];
+    try {
+      final uri = Uri.parse('$_baseUrl/profile/$slug/courses');
+      final response = await authorizedGet(uri);
+      print('fetchUserCourses STATUS: ${response.statusCode}');
+      print('fetchUserCourses BODY: ${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final collected = <int, Map<String, dynamic>>{};
+        _collectSpaceLikeObjects(data, collected);
+        print('fetchUserCourses COLLECTED: ${collected.length}');
+        // Sama seperti fetchUserSpaces: course di profil sendiri pasti sudah
+        // ter-enroll, tapi endpoint ini tidak selalu mengirim `isEnrolled`.
+        // Tanpa paksaan ini kartu menampilkan "Enroll" (URL space default,
+        // salah untuk course) alih-alih "Continue Learning".
+        return collected.values
+            .map((e) => CourseModel.fromJson({...e, 'isEnrolled': true}))
+            .toList();
+      }
+    } catch (e) {
+      print('fetchUserCourses error: $e');
+    }
+    return [];
+  }
+
+  /// Update profil FCOM (headline, short bio, social links).
+  static Future<bool> updateFcomProfile({
+    required String slug,
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final cookies = AuthService.cookies;
+      final nonce = AuthService.wpNonce;
+
+      if (cookies == null || nonce == null) {
+        print('Missing auth cookies or nonce for updateFcomProfile');
+        return false;
+      }
+
+      final fcomUrl = Uri.parse('$_baseUrl/profile/$slug');
+      // Bentuk persis dikonfirmasi dari cURL DevTools web asli (bukan
+      // tebakan): method POST (bukan PUT — PUT membalas 200 tapi diam-diam
+      // tidak menyimpan apa pun untuk field selain avatar), dan
+      // `query_timestamp` sejajar dengan `data`, bukan di dalamnya.
+      final bodyStr = json.encode({
+        'data': data,
+        'query_timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+      print('updateFcomProfile PAYLOAD: $bodyStr');
+      print('updateFcomProfile URL: $fcomUrl');
+      final response = await http.post(
+        fcomUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': cookies,
+          'X-WP-Nonce': nonce,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'Referer': 'https://titc.or.id/portal/u/$slug/update',
+        },
+        body: bodyStr,
+      );
+
+      print('updateFcomProfile Status: ${response.statusCode}');
+      print('updateFcomProfile Body: ${response.body}');
+      
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print('Exception in updateFcomProfile: $e');
+      return false;
+    }
+  }
 
   static Future<bool> updateProfile({
     String? firstName,
@@ -991,6 +1152,7 @@ class ApiService {
     String? email,
     String? website,
     String? password,
+    Map<String, dynamic>? meta,
   }) async {
     try {
       final cookies = AuthService.cookies;
@@ -1013,6 +1175,7 @@ class ApiService {
       if (email != null && email.isNotEmpty) body['email'] = email;
       if (website != null) body['url'] = website;
       if (password != null && password.isNotEmpty) body['password'] = password;
+      if (meta != null) body['meta'] = meta;
 
       final response = await http.post(
         url,

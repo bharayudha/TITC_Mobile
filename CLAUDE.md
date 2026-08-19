@@ -1097,3 +1097,170 @@ course baru langsung muncul tanpa perlu pull-to-refresh.
  -   M e n g h a p u s   s e m u a   f i l e   t e s   e k s p e r i m e n t a l   ( \ s c r a t c h _ f c o m _ f o l l o w . p y \ ,   e n d p o i n t   t e s t   \ / t e s t - f c m \ ,   f i l e   z i p   s i s a ,   d a n   t o m b o l   B u g   d i   a p p   b a r )   a g a r   k o d e   t e t a p   m u r n i   d a n   b e r s i h   s e b e l u m   d i g u n a k a n   ( * p r o d u c t i o n - r e a d y * ) . 
   
  
+
+---
+
+## Sesi 20 Agustus 2026 — Navigasi Space/Course dari Profil & Update Account Settings
+
+### Masalah 1 — Klik Space/Course dari tab profil tidak menavigasi ke halaman yang benar
+
+**Dilaporkan user:** tab Spaces & Courses di halaman Profil sudah menarik data
+yang benar, tapi mengklik salah satu kartu tidak masuk ke halaman space/course
+yang dituju, dan seharusnya ada tombol "View Space" yang tidak muncul.
+
+**Investigasi.** `profile_screen.dart` (`_buildSpacesTab`/`_buildCoursesTab`)
+ternyata memakai `SpaceCard`/`CourseCard` dari `widgets/customer/*.dart` —
+widget lama yang sebelumnya ditandai "tidak terpakai di runtime" di catatan
+sesi-sesi lalu, karena `spaces_list_screen.dart`/`courses_list_screen.dart`
+sudah lama pindah ke `_buildCourseCard`/`_buildSpaceCard` privat sendiri.
+Begitu `profile_screen.dart` mulai memakainya lagi, bug lama di widget itu
+ikut aktif kembali tanpa disadari.
+
+**Akar masalah (dua bug independen, saling memperkuat gejala):**
+
+1. **`CourseCard._onCourseAction` tidak mengirim `portalSegment`/`initialPath`.**
+   `SpaceWebViewScreen` default ke `portalSegment: 'space', initialPath: 'home'`
+   kalau parameter itu tidak diisi. Untuk course, ini membuka
+   `.../portal/space/<slug>/home` — URL SPACE, bukan course — sedangkan
+   `courses_list_screen.dart` yang sudah terverifikasi benar selalu memakai
+   `portalSegment: 'course', initialPath: 'lessons'`. Course yang diklik dari
+   profil jadi membuka halaman yang salah/rusak.
+2. **`isJoined`/`isEnrolled` salah `false`, menyembunyikan tombol "View Space"/
+   "Continue Learning".** Endpoint yang dipakai tab profil
+   (`/profile/{slug}/spaces` dan `/profile/{slug}/courses`) tidak selalu
+   mengirim `space_pivot`/`isEnrolled` seperti endpoint lain
+   (`/spaces/discover`), sehingga `SpaceModel`/`CourseModel` menganggap belum
+   join/enroll — padahal ini tab "punya saya sendiri", pasti sudah
+   join/enroll. Kartu jadi menampilkan tombol "Join"/"Enroll" (yang memang
+   tidak menavigasi ke mana pun) alih-alih "View Space"/"Continue Learning".
+
+**Solusi:**
+
+- `lib/widgets/customer/course_card.dart` — `_onCourseAction` ditulis ulang
+  mengikuti persis logika `courses_list_screen.dart`: kalau `isEnrolled`,
+  navigasi dengan `portalSegment: 'course', initialPath: 'lessons'`; kalau
+  belum, panggil `ApiService.enrollCourse(course.id)` dulu baru beri
+  feedback snackbar.
+- `lib/services/api_service.dart` — di `fetchUserSpaces()` dan
+  `fetchUserCourses()`, hasil parsing dipaksa `is_joined: true` /
+  `isEnrolled: true` sebelum masuk ke `SpaceModel.fromJson`/
+  `CourseModel.fromJson`, karena secara semantik entri di kedua endpoint itu
+  memang selalu milik/sudah diikuti pemilik profil.
+
+```dart
+// fetchUserSpaces
+return collected.values
+    .where((json) => (json['type'] as String?) != 'course')
+    .map((e) => SpaceModel.fromJson({...e, 'is_joined': true}))
+    .toList();
+
+// fetchUserCourses
+return collected.values
+    .map((e) => CourseModel.fromJson({...e, 'isEnrolled': true}))
+    .toList();
+```
+
+> [!NOTE]
+> Kalau nanti ada tab profil ORANG LAIN (bukan diri sendiri) yang memakai
+> `fetchUserSpaces`/`fetchUserCourses`, paksaan `is_joined`/`isEnrolled: true`
+> ini HARUS ditinjau ulang — asumsinya cuma valid untuk "space/course milik
+> profil yang sedang dilihat", bukan berarti PENGGUNA YANG SEDANG LOGIN ikut
+> jadi anggota.
+
+---
+
+### Masalah 2 — Account Settings: Headline, Short Bio, Social Links tidak tersimpan
+
+**Dilaporkan user:** setelah mengganti Headline/Short Bio/Social Links dan
+klik Save, datanya tidak berubah — baik di tampilan About profil di app,
+maupun di web asli (titc.or.id) setelah dicek langsung.
+
+**Percobaan pertama (SALAH, jangan diulang tanpa bukti baru).** Berdasarkan
+`member_model.dart` (sisi baca) yang membaca `headline` dan tautan sosial
+dari dalam `xprofile.meta`, saya memindahkan payload kirim dari key datar
+root (`data.headline`, `data.social_links`) ke `data.meta.headline` +
+key provider langsung di `data.meta`. Request membalas **200 "Profile
+updated"**, dan bahkan re-fetch (`FETCH_MEMBER_PROFILE`) langsung setelahnya
+ikut menampilkan nilai baru — **tapi ternyata itu bukan bukti data
+tersimpan sungguhan.** Setelah dicek user di web asli, datanya tidak
+berubah. Pelajaran: **status 200 + response yang "kelihatan benar" bisa jadi
+cuma echo, bukan bukti persist ke database — satu-satunya bukti valid
+adalah cek independen di luar jalur yang sama (di sini: buka web asli).**
+
+**Cara menemukan bentuk yang benar — cURL DevTools dari web asli.** User
+membuka halaman edit profil di **web** (bukan app), mengganti Headline/Short
+Bio/Social Link di sana, Save, lalu ambil request-nya dari DevTools Network
+tab (Copy as cURL) dan kirim ke saya. Setelah decode escaping cmd.exe-nya,
+body asli yang dikirim web:
+
+```json
+{
+  "data": {
+    "username": "arnanda",
+    "display_name": "Arnanda ppp",
+    "first_name": "Arnanda",
+    "last_name": "ppp",
+    "email": "arnandasty@gmail.com",
+    "website": "",
+    "headline": "mbut",
+    "short_description": "clek\n",
+    "user_id": 727,
+    "is_verified": 0,
+    "is_flagged": "no",
+    "social_links": { "instagram": "@arnandasty" },
+    "badge_slugs": [],
+    "status": "active",
+    "custom_fields": {}
+  },
+  "query_timestamp": 1787160581800
+}
+```
+
+**Dua temuan yang membantah dugaan sebelumnya:**
+
+1. **`headline` dan `social_links` memang ada di ROOT `data`**, bukan di
+   dalam `meta` — dugaan sesi ini di atas (percobaan pertama) salah arah.
+2. **Method-nya `POST`, bukan `PUT`.** Tidak ada flag `-X` di cURL manapun,
+   dan curl otomatis pakai `POST` saat ada `--data-raw` tanpa override.
+   `uploadAvatar()` yang sudah lama terbukti jalan memakai `PUT` — tapi itu
+   khusus untuk field `avatar` saja. Untuk update field teks profil,
+   `PUT` membalas 200 tapi **diam-diam tidak menyimpan apa pun** — endpoint
+   yang sama, method berbeda, perilaku beda total.
+
+**Field pass-through yang wajib ikut dikirim.** Selain field yang memang
+diedit (`headline`, `short_description`, `social_links`, nama, email,
+website), web JUGA mengirim ulang seluruh state profil yang sedang tidak
+diedit: `username`, `display_name`, `user_id`, `is_verified`, `is_flagged`,
+`badge_slugs`, `status`, `custom_fields`, plus `query_timestamp` (timestamp
+milidetik, sejajar dengan `data` — bukan di dalamnya). Tidak jelas apakah
+SEMUA field ini betul-betul divalidasi server atau cuma sebagian — karena
+tidak ada cara memverifikasi tanpa akses kode backend, pilihan paling aman
+adalah menyalin bentuknya utuh, bukan menebak subset mana yang "penting".
+
+**Solusi (diterapkan, status: menunggu konfirmasi user setelah dicek di web):**
+
+- `lib/models/member_model.dart` — ditambah 4 field pass-through baru:
+  `isVerified` (int), `isFlagged` (String), `badgeSlugs` (List<String>),
+  `customFields` (Map). Diparse dengan `asJsonList`/`asJsonMap` (bukan cast
+  langsung) mengikuti aturan proyek soal PHP menyerialkan array asosiatif
+  kosong sebagai `[]`.
+- `lib/services/api_service.dart` — `updateFcomProfile()`:
+  `http.put` → `http.post`; body jadi
+  `json.encode({'data': data, 'query_timestamp': DateTime.now().millisecondsSinceEpoch})`;
+  header `Referer` disamakan persis: `https://titc.or.id/portal/u/$slug/update`.
+- `lib/screens/customer/profile/profile_edit_screen.dart` — `ProfileEditScreen`
+  menerima parameter baru (`username`, `userId`, `status`, `isVerified`,
+  `isFlagged`, `badgeSlugs`, `customFields`); `_saveProfile()` membangun
+  `fcomData` mengikuti persis bentuk cURL di atas.
+- `lib/screens/customer/profile/profile_screen.dart` — `_openEditProfile()`
+  meneruskan field-field itu dari `_memberProfile` (hasil fetch profil
+  terbaru) saat membuka layar edit.
+
+> [!IMPORTANT]
+> **Metodologi yang berhasil di sini, ulangi kalau ada endpoint FCOM lain
+> yang perilakunya tidak jelas dari respons saja:** minta user reproduksi
+> aksi yang sama di WEB (bukan app), ambil request asli dari DevTools
+> Network tab (Copy as cURL), lalu cocokkan bentuknya field-per-field dan
+> method-nya. Status 200 dari API **bukan** bukti data tersimpan — kalau
+> ragu, verifikasi independen di luar app (di sini: reload halaman web
+> aslinya) sebelum melaporkan sesuatu "sudah beres".

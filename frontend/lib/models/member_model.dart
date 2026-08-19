@@ -12,9 +12,23 @@ class MemberModel {
   final String status; // misal: 'online', 'offline'
   final bool isFollowed;
 
+  /// Headline profile
+  final String headline;
+
   /// Tautan sosial yang dipakai untuk ikon kecil di kartu member,
   /// mis. `{'linkedin': 'https://...', 'facebook': 'https://...'}`.
   final Map<String, String> socialLinks;
+
+  /// Field pass-through berikut TIDAK ditampilkan di UI mana pun — disimpan
+  /// semata supaya saat profil di-update, app bisa mengirim ulang bentuk
+  /// payload persis seperti yang dikirim web asli (lihat cURL DevTools yang
+  /// jadi acuan `ProfileEditScreen._saveProfile`). Tanpa field ini,
+  /// PUT/POST `/profile/{slug}` membalas 200 tapi diam-diam tidak
+  /// menyimpan apa pun.
+  final int isVerified;
+  final String isFlagged;
+  final List<String> badgeSlugs;
+  final Map<String, dynamic> customFields;
 
   MemberModel({
     required this.id,
@@ -26,7 +40,12 @@ class MemberModel {
     this.bio = '',
     this.status = 'offline',
     this.isFollowed = false,
+    this.headline = '',
     this.socialLinks = const {},
+    this.isVerified = 0,
+    this.isFlagged = 'no',
+    this.badgeSlugs = const [],
+    this.customFields = const {},
   });
 
   /// Factory untuk membuat object dari JSON response Fluent Community API.
@@ -65,7 +84,23 @@ class MemberModel {
           '',
       status: pick<String>('status') ?? 'offline',
       isFollowed: pick<bool>('is_followed') ?? pick<bool>('is_following') ?? false,
-      socialLinks: _parseSocialLinks(json['meta'] ?? xprofile['meta']),
+      headline: pick<String>('headline') ??
+          ((json['meta'] != null && json['meta']['headline'] != null)
+              ? json['meta']['headline']
+              : (xprofile['meta'] != null && xprofile['meta']['headline'] != null
+                  ? xprofile['meta']['headline']
+                  : '')),
+      socialLinks: _parseSocialLinks({
+        'social_links': json['social_links'],
+        ...asJsonMap(json['meta']),
+        ...asJsonMap(xprofile['meta']),
+      }),
+      isVerified: pick<int>('is_verified') ?? 0,
+      isFlagged: pick<String>('is_flagged') ?? 'no',
+      badgeSlugs: asJsonList(json['badge_slugs'] ?? xprofile['badge_slugs'])
+          .map((e) => e.toString())
+          .toList(),
+      customFields: asJsonMap(json['custom_fields'] ?? xprofile['custom_fields']),
     );
   }
 
@@ -79,6 +114,7 @@ class MemberModel {
     'youtube',
     'github',
     'tiktok',
+    'telegram',
     'website',
   ];
 
@@ -89,12 +125,14 @@ class MemberModel {
   /// tiap provider kemungkinan disimpan sebagai key tersendiri di `meta`.
   /// Karena itu di sini dicoba dua-duanya: `social_links` kalau ada, dan
   /// pemindaian langsung key `meta` untuk nama provider yang dikenal.
-  static Map<String, String> _parseSocialLinks(dynamic meta) {
-    if (meta is! Map) return const {};
+  static Map<String, String> _parseSocialLinks(dynamic metaOrJson) {
+    if (metaOrJson is! Map) return const {};
     final result = <String, String>{};
 
     // Bentuk 1: terkumpul di `social_links` (Map atau List).
-    final raw = meta['social_links'];
+    // metaOrJson bisa jadi adalah root `json` (yang punya `social_links`) atau object `meta`.
+    final raw = metaOrJson['social_links'] ?? (metaOrJson.containsKey('instagram') ? metaOrJson : null);
+    
     if (raw is Map) {
       raw.forEach((key, value) {
         if (value is String && value.trim().isNotEmpty) {
@@ -113,10 +151,10 @@ class MemberModel {
       }
     }
 
-    // Bentuk 2: tiap provider jadi key tersendiri di `meta`.
+    // Bentuk 2: tiap provider jadi key tersendiri.
     for (final provider in _socialProviders) {
       if (result.containsKey(provider)) continue;
-      final value = meta[provider];
+      final value = metaOrJson[provider];
       if (value is String && value.trim().isNotEmpty) {
         result[provider] = value.trim();
       }
