@@ -503,3 +503,143 @@ bukan bentuk datanya, melainkan **tempat** datanya.
 
 `flutter analyze` → **0 error**. Semua probe (`CHAT_PROBE`, `CHAT_EXTRA_*`,
 `CHAT_ENVELOPE`, `CHAT_MEDIA_JSON`) sudah dicabut — tidak menambah utang debug.
+
+---
+
+## Sesi 19 Agustus 2026 — Header WebView akhirnya beres (setelah 4 kesalahan)
+
+Aturan hasilnya ada di CLAUDE.md. Di sini kronologinya, karena keempat
+kesalahannya punya pola yang sama dan layak diingat.
+
+### Kesalahan 1 — menilai "kosong" dari keadaan yang kita sendiri sebabkan
+
+`hasContent` menilai isi header dari tinggi anak-anaknya. Kalau false, header
+di-`display: none`. Tapi anak dari elemen tersembunyi tingginya SELALU 0, jadi
+putaran berikutnya membaca false lagi — terkunci permanen.
+
+Diperbaiki dengan mengembalikan header ke keadaan tampil sebelum diukur. Tapi
+itu belum menyelesaikan masalahnya, karena penyebab sebenarnya beda (lihat 3).
+
+### Kesalahan 2 — backtick di dalam template literal
+
+Komentar CSS ditulis memakai backtick untuk memformat nama properti. CSS itu
+berada di dalam template literal JavaScript, jadi backtick pertama menutupnya
+lebih awal → seluruh skrip syntax error → tidak ada CSS tersuntik sama sekali.
+
+Gejalanya: menu atas & menu bawah FCOM ikut muncul. `flutter analyze` tidak
+bisa menangkapnya — bagi Dart isinya cuma string.
+
+Sejak itu dipasang pemeriksa parse terpisah (cek keseimbangan string, komentar,
+dan kurung) sebelum menyatakan skripnya benar.
+
+### Kesalahan 3 — asumsi yang dirusak sendiri dua langkah kemudian
+
+Pengukuran tumpang tindih memakai `getBoundingClientRect()` dengan alasan
+tertulis: *"kedua kotak dibaca pada saat yang sama, jadi selisihnya bebas dari
+posisi gulir."*
+
+Benar — SELAMA keduanya menggulung bersama. Lalu di langkah berikutnya header
+dibuat `sticky`, dan alasan itu gugur: header berhenti di atas, konten terus
+turun, selisihnya membesar seiring gulir. Konten terdorong ratusan piksel.
+
+Asumsinya dibangun, lalu dilanggar sendiri, tanpa ditengok ulang.
+
+### Kesalahan 4 — reset-lalu-ukur bikin halaman melompat
+
+Pola "nolkan dulu, ukur, pasang lagi" benar secara hitungan tapi membuat tinggi
+dokumen menyusut sesaat. Browser menjepit posisi gulir → halaman melompat ke
+atas. Dan karena `MutationObserver` menjalankan `fixLayout()` tiap 200ms selama
+FCOM lazy-load saat digulir, lompatan itu beruntun terus.
+
+Diperbaiki dengan mengurangkan nilai yang sedang terpasang alih-alih menolkan,
+plus hanya menulis style kalau nilainya berubah.
+
+### Yang akhirnya menemukan jawabannya: probe, bukan tebakan
+
+Setelah tiga kali menebak, probe DOM diperluas untuk melaporkan rincian tiap
+anak header. Perbandingan dua barisnya langsung menjawab:
+
+```
+sehat : DIV.el-breadcrumb{disp=block vis=visible h=14 teks=39}
+hilang: DIV.el-breadcrumb{disp=block vis=hidden  h=0  teks=39}
+```
+
+`teks` tidak berubah — isinya masih ada. Yang berubah cuma `visibility`, dan
+persis saat `INDUK top` jadi negatif alias mulai tergulir. Ternyata FCOM punya
+auto-hide-on-scroll bawaan.
+
+Probe itu sendiri sempat punya titik buta: `meta`/`visibility` masuk daftar
+"sudah dikenal" sehingga perubahannya tidak dilaporkan. Pelajarannya sama
+dengan kasus reaksi chat — **probe yang menyaring berdasarkan kunci yang
+dikenal harus ikut memeriksa isi kunci itu.**
+
+### Catatan: CLAUDE.md sempat rusak
+
+Commit `bbce8b1` ("claude,mdd") mendorong CLAUDE.md yang korup: 2.184 byte NUL
+dan seluruh backtick di bagian barunya hilang. Penyebabnya PowerShell — backtick
+adalah karakter escape di sana, jadi `` `f `` jadi form-feed, `` `b `` jadi
+backspace, sisanya jadi backslash. Encoding-nya juga tercampur UTF-16.
+
+Dipulihkan 19 Agustus: NUL dibuang, 44 backtick dikembalikan. Bagian file yang
+lain (1.182 backtick) tidak tersentuh dan terbukti utuh.
+
+**Pelajaran:** menulis berkas dari PowerShell pakai `Out-File`/`>` berbahaya
+untuk teks ber-backtick dan non-ASCII. Pakai `-Encoding utf8` eksplisit, atau
+tulis lewat editor.
+
+---
+
+## ARSIP — bagian "BELUM SELESAI" lama dari CLAUDE.md
+
+Dipindahkan ke sini 19 Agustus 2026 setelah masalahnya selesai. Isinya data
+probe dan daftar hipotesis yang sempat dicoba — tidak lagi berlaku, tapi
+disimpan karena menunjukkan jalan yang sudah ditempuh.
+
+### BELUM SELESAI — baris breadcrumb + "Continue Course" masih meleset
+
+Header web (`.fhr_content_layout_header`, isinya breadcrumb + tombol
+"Continue Course") dulu di-collapse ke `height: 0`. User minta header itu
+**ditampilkan** seperti di web, rapi di bawah navbar, tidak tumpang tindih.
+Sampai akhir sesi **masih belum benar**.
+
+Kunci pemahaman: `height: 0` + `overflow: visible` membuat isi header tetap
+tergambar tanpa menempati ruang → menimpa konten di bawahnya. Itu penyebab
+tumpang tindih yang awalnya dilaporkan.
+
+**Data probe DOM (dari perangkat user, header masih di-collapse saat itu):**
+
+```
+HEADER  DIV.fhr_content_layout_header [pos=relative top=56 h=52]
+SEBELUM tidak ada
+SESUDAH DIV.fhr_content_layout_body   [pos=static  top=52 h=1306]
+ANAK[0] DIV.el-breadcrumb             [pos=static  top=75 h=14]
+ANAK[1] DIV.fhr_page_actions          [pos=static  top=66 h=32]
+```
+
+Dua fakta penting dari angka itu:
+1. Header anak pertama (`SEBELUM: tidak ada`) tapi mulai di `top=56` → ada 56px
+   jarak yang disumbang induk-induknya. 56px ≈ tinggi `.fcom_top_menu` yang
+   kita `display: none`; besar dugaan `padding-top` untuk menu `position: fixed`
+   itu tertinggal.
+2. Body mulai di `top=52`, padahal header menempati 56–108 → keduanya bertumpuk.
+
+**Sudah dicoba, belum menuntaskan** (jangan diulang tanpa data baru):
+- `overflow: hidden` pada header → menghilangkan tumpang tindih tapi ikut
+  menyembunyikan breadcrumb & tombol; user menolak, mau keduanya tetap tampil.
+- `.fhr_content_layout_header > *:not(.fcom_dot_menu) { position: static }` →
+  **berhasil** untuk isi header (probe membuktikan anak-anaknya jadi `static`
+  dan rapi di dalam kotak). Pertahankan.
+- `.fhr_content_layout_body { margin-top: 0; position: static }` → menyasar
+  hipotesis margin negatif; belum terbukti benar/salah.
+- Induk header dipaksa `display: block` → menyasar hipotesis induk `grid`
+  yang menumpuk header & body di sel sama; belum terbukti.
+- Sapu `padding-top`/`margin-top` = 0 ke **seluruh rantai induk** header sampai
+  `<body>` → menyasar pita kosong 56px; belum terbukti.
+
+**Langkah berikutnya:** jalankan app, buka course, ambil baris `WEBVIEW_DOM:`
+yang baru. Probe sekarang sudah melaporkan `INDUK[0..5]` lengkap dengan `top`,
+`mt`, `pt`, dan `display` masing-masing. Itu memisahkan dua hipotesis yang
+tersisa: kalau ada induk ber-`display: grid` → penyebabnya penumpukan sel;
+kalau ada induk dengan `pt`/`mt` bukan 0 → penyebabnya padding sisa.
+**Jangan menebak selector lagi — baca angkanya dulu.**
+

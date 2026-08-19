@@ -473,53 +473,81 @@ Menerima `NavigatorState` & `ScaffoldMessengerState`, **bukan** `BuildContext`,
 karena drawer harus menutup dirinya lebih dulu dan setelah itu context-nya
 sudah tidak mounted.
 
-### BELUM SELESAI — baris breadcrumb + "Continue Course" masih meleset
+### SELESAI — baris breadcrumb + "Continue Course" (19 Agustus 2026)
 
-Header web (`.fhr_content_layout_header`, isinya breadcrumb + tombol
-"Continue Course") dulu di-collapse ke `height: 0`. User minta header itu
-**ditampilkan** seperti di web, rapi di bawah navbar, tidak tumpang tindih.
-Sampai akhir sesi **masih belum benar**.
+Masalah yang menggantung berminggu-minggu ini **sudah beres**. Header web
+(`.fhr_content_layout_header`, isinya breadcrumb + tombol "Continue Course")
+kini tampil rapi di bawah navbar, diam saat konten digulir, tanpa pita kosong
+maupun tumpang tindih. Berlaku untuk kesembilan course di drawer sekaligus,
+karena semuanya melewati `SpaceWebViewScreen` yang sama.
 
-Kunci pemahaman: `height: 0` + `overflow: visible` membuat isi header tetap
-tergambar tanpa menempati ruang → menimpa konten di bawahnya. Itu penyebab
-tumpang tindih yang awalnya dilaporkan.
+Kronologi lengkapnya di RIWAYAT_PERCAKAPAN.md. Yang di bawah ini aturannya.
 
-**Data probe DOM (dari perangkat user, header masih di-collapse saat itu):**
+#### Temuan kunci: FCOM menyembunyikan isi header saat digulir
 
+Portal punya perilaku *auto-hide on scroll* bawaan yang menyetel
+**`visibility: hidden`** — bukan `display: none` — pada isi header. Di web itu
+wajar karena headernya memang menggulung pergi; di app header dibuat sticky,
+jadi yang tersisa cuma bar kosong.
+
+> [!IMPORTANT]
+> **Jangan menilai "header kosong" dari `visibility`.** Hanya `display: none`
+> yang boleh dianggap bukti kosong. Terbukti lewat probe: teks anaknya tetap
+> utuh (`teks=39`), hanya `vis` yang berubah `visible`→`hidden` persis saat
+> mulai tergulir. Kalau `visibility` ikut dihitung, header dimatikan lalu
+> **tidak pernah muncul lagi** — karena anak dari elemen tersembunyi selalu
+> bertinggi 0, sehingga keputusan itu mengunci dirinya sendiri.
+
+Lawan penyembunyiannya di dua tempat sekaligus: aturan CSS **dan** inline
+style lewat JS. Yang inline perlu karena kalau FCOM menyetelnya sebagai inline
+style, `!important` di stylesheet bisa kalah.
+
+#### Pendekatan: UKUR, jangan tebak selector
+
+Mencari elemen mana yang menyisakan pita kosong sudah berkali-kali gagal.
+Yang akhirnya berhasil adalah membalik arahnya — ukur jaraknya lalu tarik
+header naik sebesar itu:
+
+```js
+gap = jumlah offsetTop sepanjang rantai offsetParent
+header.marginTop = -(gap - marginTop_yang_sedang_terpasang)
 ```
-HEADER  DIV.fhr_content_layout_header [pos=relative top=56 h=52]
-SEBELUM tidak ada
-SESUDAH DIV.fhr_content_layout_body   [pos=static  top=52 h=1306]
-ANAK[0] DIV.el-breadcrumb             [pos=static  top=75 h=14]
-ANAK[1] DIV.fhr_page_actions          [pos=static  top=66 h=32]
-```
 
-Dua fakta penting dari angka itu:
-1. Header anak pertama (`SEBELUM: tidak ada`) tapi mulai di `top=56` → ada 56px
-   jarak yang disumbang induk-induknya. 56px ≈ tinggi `.fcom_top_menu` yang
-   kita `display: none`; besar dugaan `padding-top` untuk menu `position: fixed`
-   itu tertinggal.
-2. Body mulai di `top=52`, padahal header menempati 56–108 → keduanya bertumpuk.
+Berlaku untuk penyebab apa pun (padding induk, margin, elemen kosong) karena
+yang dibaca hasil akhirnya, bukan dugaan tentang sebabnya. Cara yang sama
+dipakai untuk mendorong konten agar mulai setelah header.
 
-**Sudah dicoba, belum menuntaskan** (jangan diulang tanpa data baru):
-- `overflow: hidden` pada header → menghilangkan tumpang tindih tapi ikut
-  menyembunyikan breadcrumb & tombol; user menolak, mau keduanya tetap tampil.
-- `.fhr_content_layout_header > *:not(.fcom_dot_menu) { position: static }` →
-  **berhasil** untuk isi header (probe membuktikan anak-anaknya jadi `static`
-  dan rapi di dalam kotak). Pertahankan.
-- `.fhr_content_layout_body { margin-top: 0; position: static }` → menyasar
-  hipotesis margin negatif; belum terbukti benar/salah.
-- Induk header dipaksa `display: block` → menyasar hipotesis induk `grid`
-  yang menumpuk header & body di sel sama; belum terbukti.
-- Sapu `padding-top`/`margin-top` = 0 ke **seluruh rantai induk** header sampai
-  `<body>` → menyasar pita kosong 56px; belum terbukti.
+> [!WARNING]
+> **Pakai `offsetTop`, JANGAN `getBoundingClientRect()`.** Rect mengukur
+> relatif viewport, jadi nilainya berubah saat digulir — dan karena header
+> sticky, header berhenti di atas sementara konten terus turun, sehingga
+> selisih keduanya justru MEMBESAR seiring gulir. Akibatnya konten terdorong
+> makin jauh ke bawah. `offsetTop` murni posisi layout: bebas dari gulir
+> maupun sticky.
 
-**Langkah berikutnya:** jalankan app, buka course, ambil baris `WEBVIEW_DOM:`
-yang baru. Probe sekarang sudah melaporkan `INDUK[0..5]` lengkap dengan `top`,
-`mt`, `pt`, dan `display` masing-masing. Itu memisahkan dua hipotesis yang
-tersisa: kalau ada induk ber-`display: grid` → penyebabnya penumpukan sel;
-kalau ada induk dengan `pt`/`mt` bukan 0 → penyebabnya padding sisa.
-**Jangan menebak selector lagi — baca angkanya dulu.**
+> [!WARNING]
+> **Jangan pakai pola reset-lalu-ukur.** Menolkan margin/padding dulu sebelum
+> mengukur memang benar secara hitungan, tapi membuat tinggi dokumen menyusut
+> sesaat — browser lalu menjepit posisi gulir dan halaman terlihat melompat
+> sendiri ke atas. Karena `MutationObserver` menjalankan `fixLayout()` tiap
+> 200ms selama FCOM lazy-load saat digulir, lompatan itu beruntun terus.
+> Sebagai gantinya, kurangkan nilai yang sedang terpasang, dan tulis style
+> HANYA kalau nilainya benar-benar berubah.
+
+#### Jebakan paling mematikan: backtick di dalam CSS
+
+CSS di `_injectScript` berada di dalam **template literal JavaScript**.
+
+> [!CAUTION]
+> **JANGAN PERNAH menulis karakter backtick di dalam blok CSS itu** — termasuk
+> di komentar. Satu backtick menutup template literal lebih awal, seluruh
+> skrip jadi syntax error, dan **tidak ada CSS yang tersuntik sama sekali**.
+>
+> Gejalanya khas dan mudah dikenali: **menu atas FCOM dan menu bawahnya
+> ikut muncul**, padahal keduanya disembunyikan lewat CSS.
+>
+> `flutter analyze` **TIDAK BISA** menangkap ini — bagi Dart isinya cuma
+> string biasa. Sudah pernah terjadi 19 Agustus 2026.
 
 ### Alat debug yang ditambahkan (HAPUS SEBELUM RILIS)
 
@@ -780,7 +808,7 @@ jalan sungguhan dan hardcode email bisa dibuang.
 | Daftar Spaces lengkap (6/6) | ✅ 13 Agt, lewat `/spaces/discover?type=all` |
 | Tombol Join/View Space benar | ✅ 13 Agt, lewat `space_pivot` |
 | Deteksi admin/moderator FCOM | ⬜ Diserahkan ke tim backend — petunjuk: `space_pivot.role` |
-| Header web (breadcrumb + Continue Course) | ❌ **Masih tumpang tindih / meleset** |
+| Header web (breadcrumb + Continue Course) | ✅ **Selesai 19 Agt** — sticky, tanpa pita kosong, berlaku di 9 course |
 | Tujuan tombol "Continue Course" | ❓ Belum diperiksa, pakai log `WEBVIEW_NAV:` |
 | Members list (2.256) | ✅ Dikonfirmasi user |
 | Ikon sosial clickable | ✅ url_launcher |
@@ -1074,29 +1102,28 @@ course baru langsung muncul tanpa perlu pull-to-refresh.
 - **Perbaikan CustomerBottomNavBar:**
   - Memperbaiki visibilitas ikon dan teks navigasi dengan menerapkan warna dinamis gelap spesifik saat tab Spaces aktif agar tidak menyatu dengan background cerah.
 
- # #   S e s i   1 9   A g u s t u s   2 0 2 6      F i t u r   P u s h   N o t i f i c a t i o n   F C M   ( F o l l o w   &   G l o b a l   F e e d ) 
- 
- # # #   1 .   P e r b a i k a n   B u g   A n d r o i d   B u i l d   ( D e s u g a r i n g ) 
- -   M e m p e r b a i k i   k e g a g a l a n   b u i l d   G r a d l e   s a a t   k o m p i l a s i   p l u g i n   \  l u t t e r _ l o c a l _ n o t i f i c a t i o n s \   v 2 2 . 3 . 0 . 
- -   M e n a m b a h k a n   k o n f i g u r a s i   * * c o r e L i b r a r y D e s u g a r i n g E n a b l e d   t r u e * *   b e s e r t a   d e p e n d e n s i   \ c o m . a n d r o i d . t o o l s : d e s u g a r _ j d k _ l i b s : 2 . 1 . 5 \   d i   \  r o n t e n d / a n d r o i d / a p p / b u i l d . g r a d l e . k t s \ . 
- 
- # # #   2 .   S i n k r o n i s a s i   N a m a   P a k e t   F C M 
- -   N a m a   p a k e t   d i   \  u i l d . g r a d l e . k t s \   d a n   d e k l a r a s i   \ M a i n A c t i v i t y . k t \   d i p e r b a r u i   d a r i   \ c o m . e x a m p l e . m a g a n g _ t i t c \   m e n j a d i   \ 	 i t c . m o b i l e \   a g a r   p r e s i s i   d e n g a n   k o n f i g u r a s i   F i r e b a s e   d i   f i l e   \ g o o g l e - s e r v i c e s . j s o n \ .   
- -   H a l   i n i   m e n g a t a s i   m a s a l a h   \ C l a s s N o t F o u n d E x c e p t i o n \   s a a t   m e n e k a n   n o t i f i k a s i . 
- 
- # # #   3 .   I n t e g r a s i   \  i r e b a s e _ m e s s a g i n g \   &   \  l u t t e r _ l o c a l _ n o t i f i c a t i o n s \ 
- -   M e n g g a n t i   p e m a n g g i l a n   A P I   N o t i f i k a s i   y a n g   s u d a h   u s a n g   ( * d e p r e c a t e d * )   m e n j a d i   f o r m a t   n a m e d - p a r a m e t e r   ( \ s e t t i n g s : \   d a n   \ i d : \ )   d i   \ l i b / s e r v i c e s / f i r e b a s e _ m e s s a g i n g _ s e r v i c e . d a r t \ . 
- -   M e n a m b a h k a n   l a n g g a n a n   ( s u b s c r i b e )   o t o m a t i s   k e   t o p i k   F C M   \ g l o b a l _ f e e d s \   s a a t   i n i s i a l i s a s i   a p l i k a s i   u n t u k   b e r s i a p   m e n e r i m a   b r o a d c a s t   * F e e d *   d a r i   s e r v e r . 
- 
- # # #   4 .   P l u g i n   W o r d P r e s s   ( P e n d e t e k s i   O t o m a t i s   &   F C M   S e n d e r ) 
- -   * * L o g i k a   C e r d a s   P e n c e g a t   R E S T   A P I : * *   K a r e n a   _ a c t i o n   h o o k _   i n t e r n a l   F l u e n t   C o m m u n i t y   s a n g a t   t e r t u t u p   d a n   b e r i s i k o   p u t u s   j i k a   p l u g i n   W P   d i - u p d a t e ,   s a y a   t e l a h   m e m p r o g r a m   p l u g i n   P H P   u n t u k   m e n y a d a p   l a l u   l i n t a s   R E S T   A P I   W P   t i n g k a t   i n t i   ( \  e s t _ r e q u e s t _ a f t e r _ c a l l b a c k s \ ) . 
- -   * * T r i g g e r   N o t i f i k a s i   F o l l o w : * *   M e n y a d a p   r u t e   \ P O S T   / f l u e n t - c o m m u n i t y / v 2 / p r o f i l e / { u s e r n a m e } / f o l l o w \ .   J i k a   b e r s t a t u s   2 0 0   ( S u k s e s ) ,   W P   a k a n   d i a m - d i a m   m e n g i r i m   p a y l o a d   n o t i f i k a s i   F C M   ( \  
- P e n g i k u t  
- B a r u \ )   s p e s i f i k   k e   H P   u s e r   y a n g   d i - f o l l o w   s e c a r a   s e k e t i k a   ( * r e a l - t i m e * ) . 
- -   * * T r i g g e r   N o t i f i k a s i   F e e d   G l o b a l : * *   M e n y a d a p   r u t e   \ P O S T   / f l u e n t - c o m m u n i t y / v 2 / f e e d s \ .   S e t i a p   k a l i   A d m i n   m e m b u a t   p e n g u m u m a n ,   W P   a k a n   m e n g i r i m k a n   s i n y a l   P u s h   N o t i f i c a t i o n   k e   t o p i k   \ g l o b a l _ f e e d s \   a g a r   d i t e r i m a   m e r a t a   o l e h   s e m u a   p o n s e l   y a n g   t e l a h   d i p a s a n g i   a p p   T I T C . 
- -   M e n g h a p u s   s e m u a   f i l e   t e s   e k s p e r i m e n t a l   ( \ s c r a t c h _ f c o m _ f o l l o w . p y \ ,   e n d p o i n t   t e s t   \ / t e s t - f c m \ ,   f i l e   z i p   s i s a ,   d a n   t o m b o l   B u g   d i   a p p   b a r )   a g a r   k o d e   t e t a p   m u r n i   d a n   b e r s i h   s e b e l u m   d i g u n a k a n   ( * p r o d u c t i o n - r e a d y * ) . 
-  
- 
+## Sesi 19 Agustus 2026 —  Fitur Push Notification FCM (Follow & Global Feed)
+
+### 1. Perbaikan Bug Android Build (Desugaring)
+- Memperbaiki kegagalan build Gradle saat kompilasi plugin `flutter_local_notifications` v22.3.0.
+- Menambahkan konfigurasi **coreLibraryDesugaringEnabled true** beserta dependensi `com.android.tools:desugar_jdk_libs:2.1.5` di `frontend/android/app/build.gradle.kts`.
+
+### 2. Sinkronisasi Nama Paket FCM
+- Nama paket di `build.gradle.kts` dan deklarasi `MainActivity.kt` diperbarui dari `com.example.magang_titc` menjadi `titc.mobile` agar presisi dengan konfigurasi Firebase di file `google-services.json`. 
+- Hal ini mengatasi masalah `ClassNotFoundException` saat menekan notifikasi.
+
+### 3. Integrasi `firebase_messaging` & `flutter_local_notifications`n- Mengganti pemanggilan API Notifikasi yang sudah usang (*deprecated*) menjadi format named-parameter (`settings:` dan `id:`) di `lib/services/firebase_messaging_service.dart`.
+- Menambahkan langganan (subscribe) otomatis ke topik FCM `global_feeds` saat inisialisasi aplikasi untuk bersiap menerima broadcast *Feed* dari server.
+
+### 4. Plugin WordPress (Pendeteksi Otomatis & FCM Sender)
+- **Logika Cerdas Pencegat REST API:** Karena _action hook_ internal Fluent Community sangat tertutup dan berisiko putus jika plugin WP di-update, saya telah memprogram plugin PHP untuk menyadap lalu lintas REST API WP tingkat inti (`rest_request_after_callbacks`).
+- **Trigger Notifikasi Follow:** Menyadap rute `POST /fluent-community/v2/profile/{username}/follow`. Jika berstatus 200 (Sukses), WP akan diam-diam mengirim payload notifikasi FCM (`r
+Pengikut
+Baru`) spesifik ke HP user yang di-follow secara seketika (*real-time*).
+- **Trigger Notifikasi Feed Global:** Menyadap rute `POST /fluent-community/v2/feeds`. Setiap kali Admin membuat pengumuman, WP akan mengirimkan sinyal Push Notification ke topik `global_feeds` agar diterima merata oleh semua ponsel yang telah dipasangi app TITC.
+- Menghapus semua file tes eksperimental (`scratch_fcom_follow.py`, endpoint test `/test-fcm`, file zip sisa, dan tombol Bug di app bar) agar kode tetap murni dan bersih sebelum digunakan (*production-ready*).
+
+
 
 ---
 
@@ -1203,7 +1230,7 @@ body asli yang dikirim web:
     "email": "arnandasty@gmail.com",
     "website": "",
     "headline": "mbut",
-    "short_description": "clek\n",
+    "short_description": "clek`n",
     "user_id": 727,
     "is_verified": 0,
     "is_flagged": "no",
