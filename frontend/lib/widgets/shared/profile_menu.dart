@@ -147,75 +147,105 @@ class ProfileMenuButton extends StatelessWidget {
     return PopupMenuButton<ProfileMenuAction>(
       icon: const _ProfileAvatarIcon(),
       tooltip: 'Profil',
-      color: Theme.of(context).colorScheme.surface,
+      // Transparan: latar sungguhan digambar oleh Container di dalam
+      // ValueListenableBuilder di bawah, supaya BISA ikut berubah reaktif
+      // saat dark mode ditoggle sementara popup masih terbuka. Popup route
+      // dari `showMenu` hanya dibangun SEKALI saat dibuka — `color:` di sini
+      // (kalau memakai Theme.of(context) seperti sebelumnya) akan membeku
+      // pada warna saat itu dan tidak ikut berganti lagi setelahnya.
+      color: Colors.transparent,
       elevation: 8,
+      padding: EdgeInsets.zero,
       // Digeser ke bawah agar popup muncul di bawah app bar, bukan menimpanya.
       offset: const Offset(0, kToolbarHeight - 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      onSelected: (action) => _onSelected(context, action),
       itemBuilder: (context) => [
         PopupMenuItem<ProfileMenuAction>(
-          // Mengetuk identitas membuka halaman profil.
-          value: ProfileMenuAction.viewProfile,
-          height: 64,
-          child: _buildAccountHeader(context),
-        ),
-        const PopupMenuDivider(),
-        _buildItem(
-          context: context,
-          value: ProfileMenuAction.myCourses,
-          emoji: '📘',
-          label: 'My Courses',
-        ),
-        _buildItem(
-          context: context,
-          value: ProfileMenuAction.mySpaces,
-          emoji: '🔔',
-          label: 'My Spaces',
-        ),
-        _buildItem(
-          context: context,
-          value: ProfileMenuAction.certificate,
-          emoji: '🎖️',
-          label: 'Certificate',
-        ),
-        _buildDarkModeItem(),
-        PopupMenuItem<ProfileMenuAction>(
-          value: ProfileMenuAction.logout,
-          height: 44,
-          child: Row(
-            children: [
-              const SizedBox(
-                width: 28,
-                child: PhosphorIcon(
-                  PhosphorIconsBold.power,
-                  color: _dangerColor,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Log Out',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
-          ),
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: _buildMenuContent(context),
         ),
       ],
     );
   }
 
-  Widget _buildAccountHeader(BuildContext context) {
+  /// Seluruh isi popup (identitas, item menu, toggle dark mode) dibungkus
+  /// SATU `ValueListenableBuilder` di sini — bukan disebar satu per item
+  /// seperti sebelumnya — supaya latar DAN semua warna teks/ikon ikut
+  /// berganti bersamaan begitu dark mode ditoggle, bukan cuma baris
+  /// togglenya sendiri sementara sisanya (My Courses, My Spaces, dst) tetap
+  /// beku di warna lama karena warnanya sudah kadung "dibekukan" saat popup
+  /// pertama kali dibuka.
+  Widget _buildMenuContent(BuildContext outerContext) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, mode, _) {
+        final scheme = Theme.of(context).colorScheme;
+        final isDark = mode == ThemeMode.dark;
+
+        void select(ProfileMenuAction action) {
+          Navigator.of(context).pop();
+          _onSelected(outerContext, action);
+        }
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            color: scheme.surface,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => select(ProfileMenuAction.viewProfile),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: _buildAccountHeader(context, scheme),
+                  ),
+                ),
+                Divider(height: 1, color: scheme.outlineVariant),
+                _buildRow(
+                  scheme: scheme,
+                  emoji: '📘',
+                  label: 'My Courses',
+                  onTap: () => select(ProfileMenuAction.myCourses),
+                ),
+                _buildRow(
+                  scheme: scheme,
+                  emoji: '🔔',
+                  label: 'My Spaces',
+                  onTap: () => select(ProfileMenuAction.mySpaces),
+                ),
+                _buildRow(
+                  scheme: scheme,
+                  emoji: '🎖️',
+                  label: 'Certificate',
+                  onTap: () => select(ProfileMenuAction.certificate),
+                ),
+                _buildDarkModeRow(scheme: scheme, isDark: isDark),
+                _buildRow(
+                  scheme: scheme,
+                  icon: PhosphorIconsBold.power,
+                  iconColor: _dangerColor,
+                  label: 'Log Out',
+                  onTap: () => select(ProfileMenuAction.logout),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAccountHeader(BuildContext context, ColorScheme scheme) {
     final name = AuthService.userName ?? 'User';
     final email = AuthService.userEmail ?? '';
     final avatarUrl = AuthService.userAvatarUrl;
     final initial = name.isEmpty ? '?' : name[0].toUpperCase();
-    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final onSurface = scheme.onSurface;
 
     return Row(
       children: [
@@ -272,49 +302,64 @@ class ProfileMenuButton extends StatelessWidget {
     );
   }
 
-  PopupMenuItem<ProfileMenuAction> _buildItem({
-    required BuildContext context,
-    required ProfileMenuAction value,
-    required String emoji,
+  /// Baris menu generik (My Courses/My Spaces/Certificate/Log Out). Diberi
+  /// `GestureDetector` + `InkWell` sendiri (bukan `PopupMenuItem` terpisah
+  /// lagi) karena semuanya sekarang hidup di dalam SATU item popup yang
+  /// sama — lihat `_buildMenuContent`.
+  Widget _buildRow({
+    required ColorScheme scheme,
     required String label,
+    required VoidCallback onTap,
+    String? emoji,
+    IconData? icon,
+    Color? iconColor,
   }) {
-    return PopupMenuItem<ProfileMenuAction>(
-      value: value,
-      height: 44,
-      child: Row(
-        children: [
-          // Lebar emoji berbeda antar perangkat, dikunci agar teks sejajar.
-          SizedBox(width: 28, child: Text(emoji, style: emojiStyle(size: 16))),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.8),
-            ),
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 44,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              // Lebar ikon/emoji berbeda antar perangkat, dikunci agar teks
+              // sejajar.
+              SizedBox(
+                width: 28,
+                child: icon != null
+                    ? PhosphorIcon(icon, color: iconColor, size: 18)
+                    : Text(emoji ?? '', style: emojiStyle(size: 16)),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: iconColor ?? scheme.onSurface.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  /// Baris toggle Dark Mode. `enabled: false` mematikan gesture "pilih lalu
-  /// tutup popup" bawaan `PopupMenuItem` — tapi [Switch] di dalamnya tetap
-  /// menerima tap sendiri (gesture recognizer-nya independen dari InkWell
-  /// milik item), jadi menu TIDAK tertutup begitu toggle ditekan dan user
-  /// bisa langsung lihat perubahannya sambil popup masih terbuka.
-  PopupMenuItem<ProfileMenuAction> _buildDarkModeItem() {
-    return PopupMenuItem<ProfileMenuAction>(
-      value: ProfileMenuAction.darkMode,
-      enabled: false,
-      height: 44,
-      child: ValueListenableBuilder<ThemeMode>(
-        valueListenable: ThemeService.themeModeNotifier,
-        builder: (context, mode, _) {
-          final isDark = mode == ThemeMode.dark;
-          return Row(
+  /// Baris toggle Dark Mode. Tidak memanggil `select()` — menekannya HANYA
+  /// mengganti tema, popup sengaja TIDAK ditutup, supaya user langsung
+  /// lihat seluruh menu ikut berganti warna sambil popup masih terbuka.
+  Widget _buildDarkModeRow({
+    required ColorScheme scheme,
+    required bool isDark,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => ThemeService.setDarkMode(!isDark),
+      child: SizedBox(
+        height: 44,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
             children: [
               SizedBox(
                 width: 28,
@@ -326,22 +371,24 @@ class ProfileMenuButton extends StatelessWidget {
                   isDark ? 'Dark Mode' : 'Light Mode',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.8),
+                    color: scheme.onSurface.withValues(alpha: 0.8),
                   ),
                 ),
               ),
               Transform.scale(
                 scale: 0.75,
-                child: Switch(
-                  value: isDark,
-                  onChanged: ThemeService.setDarkMode,
+                // `IgnorePointer` supaya Switch tidak ikut menerima tap
+                // (sudah ditangani GestureDetector di atas) — tapi
+                // `onChanged` tetap diisi (no-op) supaya warnanya tetap
+                // vivid seperti switch aktif, bukan pudar seperti switch
+                // disabled (`onChanged: null` membuatnya terlihat mati).
+                child: IgnorePointer(
+                  child: Switch(value: isDark, onChanged: (_) {}),
                 ),
               ),
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }

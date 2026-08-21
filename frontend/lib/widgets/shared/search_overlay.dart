@@ -124,8 +124,8 @@ class _SearchOverlayState extends State<SearchOverlay> {
         color: Colors.transparent,
         child: Container(
           width: double.infinity,
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
             boxShadow: kShadowDown,
           ),
           child: SafeArea(
@@ -154,18 +154,19 @@ class _SearchOverlayState extends State<SearchOverlay> {
   }
 
   Widget _buildSearchField() {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.black87, width: 1.5),
+        border: Border.all(color: onSurface.withValues(alpha: 0.8), width: 1.5),
         borderRadius: BorderRadius.circular(28),
       ),
       child: Row(
         children: [
           IconButton(
-            icon: const PhosphorIcon(
+            icon: PhosphorIcon(
               PhosphorIconsRegular.arrowLeft,
-              color: Colors.black87,
+              color: onSurface.withValues(alpha: 0.8),
             ),
             onPressed: _cancel,
           ),
@@ -181,13 +182,16 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 hintText: _spaceSlug.isEmpty
                     ? 'Search for anything...'
                     : 'Search in #$_spaceSlug',
-                hintStyle: const TextStyle(color: Colors.black54, fontSize: 16),
+                hintStyle: TextStyle(
+                  color: onSurface.withValues(alpha: 0.6),
+                  fontSize: 16,
+                ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 isCollapsed: true,
               ),
-              style: const TextStyle(fontSize: 16, color: Colors.black87),
+              style: TextStyle(fontSize: 16, color: onSurface),
             ),
           ),
           const SizedBox(width: 12),
@@ -199,9 +203,10 @@ class _SearchOverlayState extends State<SearchOverlay> {
   /// Dropdown cakupan: "All Posts" di paling atas, lalu daftar Membership
   /// Areas — susunan yang sama dengan portal web.
   Widget _buildScopeButton() {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return PopupMenuButton<String>(
       tooltip: 'Cakupan pencarian',
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       position: PopupMenuPosition.under,
       constraints: const BoxConstraints(maxHeight: 400, minWidth: 220),
       onSelected: (slug) => setState(() {
@@ -226,14 +231,17 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 _spaceLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: onSurface.withValues(alpha: 0.8),
                 ),
               ),
             ),
-            const Icon(Icons.arrow_drop_down, color: Colors.black87),
+            Icon(
+              Icons.arrow_drop_down,
+              color: onSurface.withValues(alpha: 0.8),
+            ),
           ],
         ),
       ),
@@ -262,7 +270,12 @@ class _SearchOverlayState extends State<SearchOverlay> {
         height: 32,
         child: Text(
           label,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
         ),
       ),
       for (final entry in titlesBySlug.entries)
@@ -276,18 +289,25 @@ class _SearchOverlayState extends State<SearchOverlay> {
   /// Baris "Search in:" — meniru web. Post Title & Content selalu aktif
   /// (itu perilaku default server), Comments opsional.
   Widget _buildSearchInRow() {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Row(
       children: [
-        const Text(
+        Text(
           'Search in:',
-          style: TextStyle(fontSize: 13, color: Colors.black54),
+          style: TextStyle(
+            fontSize: 13,
+            color: onSurface.withValues(alpha: 0.6),
+          ),
         ),
         const SizedBox(width: 8),
         const Icon(Icons.check_box, size: 18, color: AppColors.primary),
         const SizedBox(width: 4),
-        const Text(
+        Text(
           'Post Title & Content',
-          style: TextStyle(fontSize: 13, color: Colors.black87),
+          style: TextStyle(
+            fontSize: 13,
+            color: onSurface.withValues(alpha: 0.8),
+          ),
         ),
         const SizedBox(width: 12),
         InkWell(
@@ -299,12 +319,17 @@ class _SearchOverlayState extends State<SearchOverlay> {
                     ? Icons.check_box
                     : Icons.check_box_outline_blank,
                 size: 18,
-                color: _includeComments ? AppColors.primary : Colors.black45,
+                color: _includeComments
+                    ? AppColors.primary
+                    : onSurface.withValues(alpha: 0.45),
               ),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'Comments',
-                style: TextStyle(fontSize: 13, color: Colors.black87),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: onSurface.withValues(alpha: 0.8),
+                ),
               ),
             ],
           ),

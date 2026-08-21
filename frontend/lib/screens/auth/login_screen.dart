@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -48,9 +49,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainShell()),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const MainShell()));
       } else {
         setState(() {
           _errorMessage = result['message'] ?? 'Login gagal.';
@@ -84,11 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
-          const Positioned(
-            right: 16,
-            bottom: 16,
-            child: WhatsAppHelpButton(),
-          ),
+          const Positioned(right: 16, bottom: 16, child: WhatsAppHelpButton()),
         ],
       ),
     );
@@ -107,38 +104,17 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: RichText(
-              textAlign: TextAlign.center,
-              text: const TextSpan(
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0B1440),
-                  height: 1.0,
-                ),
-                children: [
-                  TextSpan(text: 'TITC\n'),
-                  TextSpan(
-                    text: 'IND',
-                    style: TextStyle(fontSize: 20),
-                  ),
-                  TextSpan(
-                    text: 'ONE',
-                    style: TextStyle(fontSize: 20, color: Colors.red),
-                  ),
-                  TextSpan(
-                    text: 'SIA',
-                    style: TextStyle(fontSize: 20),
-                  ),
-                ],
-              ),
-            ),
+          // Logo resmi (dipakai portal FluentCommunity) — transparan, tanpa
+          // latar lingkaran, outline sudah bawaan file-nya. Menggantikan
+          // percobaan wordmark buatan tangan (Fredoka + stroke Paint) yang
+          // sebelumnya dipakai di sini.
+          CachedNetworkImage(
+            imageUrl:
+                'https://titc.or.id/wp-content/uploads/fluent-community/fluentcom-ZXdnviGV36ZadPN2A89uUf42WBfL6PbA-fluentcom-LOGO-TITC-INDONESIA.webp',
+            width: 260,
+            fit: BoxFit.contain,
+            placeholder: (_, _) => const SizedBox(width: 260, height: 140),
+            errorWidget: (_, _, _) => const SizedBox(width: 260, height: 140),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -169,7 +145,11 @@ class _LoginScreenState extends State<LoginScreen> {
           const Text(
             'Login to dashboard',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -180,12 +160,17 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 32),
           const Text(
             'Email Address',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('Your account email address'),
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -197,12 +182,17 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 20),
           const Text(
             'Password',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _passwordController,
             obscureText: _obscurePassword,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('Your account password').copyWith(
               suffixIcon: IconButton(
                 icon: PhosphorIcon(
@@ -226,16 +216,31 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Checkbox(
-                value: _rememberMe,
-                activeColor: const Color(0xFF1E5AF5),
-                onChanged: (value) {
-                  setState(() => _rememberMe = value ?? false);
-                },
+              // `materialTapTargetSize: shrinkWrap` — Checkbox bawaan Flutter
+              // punya area sentuh minimum 48x48 yang membuat kotaknya
+              // terlihat menjorok ke dalam dibanding label "Email
+              // Address"/"Password" di atasnya (keduanya mulai persis di
+              // tepi kiri Row/Column yang sama). Tanpa ini sisi kiri
+              // Checkbox tidak sejajar dengan sisi kiri field lain.
+              SizedBox(
+                height: 24,
+                width: 24,
+                child: Checkbox(
+                  value: _rememberMe,
+                  activeColor: const Color(0xFF1E5AF5),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: (value) {
+                    setState(() => _rememberMe = value ?? false);
+                  },
+                ),
               ),
+              const SizedBox(width: 8),
               const Text(
                 'Remember Me',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
               ),
             ],
           ),
@@ -281,12 +286,13 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text("Don't have an account? "),
+              const Text(
+                "Don't have an account? ",
+                style: TextStyle(color: Colors.black87),
+              ),
               GestureDetector(
                 onTap: () {
                   Navigator.of(context).push(
@@ -307,9 +313,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Center(
             child: GestureDetector(
               onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const ForgotPasswordScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
               ),
               child: const Text(
                 'Forgot password?',
@@ -344,5 +348,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
 }

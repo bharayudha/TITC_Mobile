@@ -17,6 +17,7 @@ import 'package:magang_titc/screens/customer/messages/chat_detail_screen.dart';
 import 'package:magang_titc/widgets/customer/customer_bottom_nav_bar.dart';
 import 'package:magang_titc/widgets/customer/main_shell_glass_bar.dart';
 import 'package:magang_titc/widgets/customer/side_drawer.dart';
+import 'package:magang_titc/services/theme_service.dart';
 import 'package:magang_titc/widgets/shared/scroll_hide_controller.dart';
 
 const Color _kAccent = Color(0xFF1E5AF5);
@@ -667,12 +668,20 @@ class _NewMessageDialogState extends State<_NewMessageDialog> {
         NavigationDelegate(
           onNavigationRequest: (_) => NavigationDecision.navigate,
           onPageFinished: (_) async {
+            final isDark =
+                ThemeService.themeModeNotifier.value == ThemeMode.dark;
             await _controller.runJavaScript('''
               (function() {
                 var s = document.createElement('style');
                 s.id = 'titc-new-message-styles';
-                s.textContent = `$_dialogCss`;
+                s.textContent = `$_dialogCss${isDark ? _darkModeCss : ''}`;
                 document.head.appendChild(s);
+                // Dibaca `cleanup()` di bawah (raw string, tidak bisa
+                // interpolasi Dart langsung) supaya filter dark mode ikut
+                // dipaksa ulang lewat style API setiap kali cleanup jalan —
+                // jaring pengaman kalau style tag di atas kalah/tersapu,
+                // pola yang sama dengan perbaikan lain di cleanup().
+                window.__titcDarkMode = $isDark;
               })();
             ''');
             // Bersihkan elemen yang ikut "bocor" ke dalam wadah modal —
@@ -772,6 +781,18 @@ class _NewMessageDialogState extends State<_NewMessageDialog> {
                       if (!isTargetModal) child.remove();
                     });
                   });
+                  // Dark mode: dipaksa ulang di sini (bukan cuma lewat
+                  // `<style>` di awal) sebagai jaring pengaman, mengikuti
+                  // pola yang sama dengan seluruh perbaikan lain di
+                  // `cleanup()` ini — style tag di `<head>` berulang kali
+                  // terbukti kalah/tersapu di modal ini. `window.__titcDarkMode`
+                  // diisi dari Dart (lihat pemanggil `runJavaScript`
+                  // sebelumnya) karena raw string ini tidak bisa interpolasi.
+                  if (window.__titcDarkMode) {
+                    document.querySelectorAll('.new-message-modal').forEach(function(modal) {
+                      modal.style.setProperty('filter', 'invert(1) hue-rotate(180deg)', 'important');
+                    });
+                  }
                   // Sempat dipaksa tema gelap manual (background #1c1e2b,
                   // teks putih) meniru referensi web user — sekarang
                   // diminta balik ke tema TERANG alami (rendering asli
@@ -963,6 +984,32 @@ class _NewMessageDialogState extends State<_NewMessageDialog> {
     }
   ''';
 
+  /// Modal "New message" adalah HTML web asli — latar putih & teks gelapnya
+  /// datang dari CSS web itu sendiri, bukan dari Flutter, jadi tidak bisa
+  /// diikutkan tema app lewat `Theme.of(context)` seperti widget Flutter
+  /// biasa. Diterapkan HANYA saat dark mode aktif: `filter: invert(1)
+  /// hue-rotate(180deg)` membalik terang↔gelap sekaligus mengoreksi
+  /// pergeseran hue akibat invert — trik standar untuk konten web yang
+  /// tidak punya varian dark mode sendiri. Aman di sini karena modal ini
+  /// cuma berisi teks, input, dan tombol (tidak ada foto/logo yang akan
+  /// ikut ter-invert jadi aneh).
+  ///
+  /// Target selector `.new-message-modal` — dikonfirmasi LANGSUNG dari kode
+  /// `cleanup()` di bawah (`child.classList.contains('new-message-modal')`),
+  /// bukan tebakan. Percobaan sebelumnya ke `.fcom-modal-portal` lalu `html`
+  /// sama-sama tidak berefek — kemungkinan besar bukan soal selector salah
+  /// semata, tapi style tag ini disuntik SEKALI di `onPageFinished`
+  /// sebelum modal-nya sendiri sempat dibuat Vue (baru muncul setelah
+  /// auto-click "New message"). CSS seharusnya tetap berlaku begitu elemen
+  /// itu muncul belakangan (stylesheet itu reaktif ke DOM), tapi sebagai
+  /// jaring pengaman filter yang sama JUGA dipaksa lewat `cleanup()` di
+  /// bawah (yang terbukti jalan berulang kali melawan DOM yang berubah-ubah).
+  static const String _darkModeCss = r'''
+    .new-message-modal {
+      filter: invert(1) hue-rotate(180deg) !important;
+    }
+  ''';
+
   @override
   Widget build(BuildContext context) {
     // Jarak atas dihitung eksplisit (bukan angka tetap) supaya dialog
@@ -995,10 +1042,11 @@ class _NewMessageDialogState extends State<_NewMessageDialog> {
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
-                      // Kembali putih — tema dikembalikan ke terang alami,
-                      // jadi penutup loading-nya ikut disamakan supaya
-                      // tidak ada kilasan warna yang beda dari kartu asli.
-                      color: Colors.white,
+                      // Ikut warna tema aplikasi (bukan putih tetap) supaya
+                      // tidak ada kilasan warna yang beda dari kartu modal
+                      // asli — yang saat dark mode aktif dibalik gelap lewat
+                      // `_darkModeCss` (invert filter).
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Center(child: CircularProgressIndicator()),

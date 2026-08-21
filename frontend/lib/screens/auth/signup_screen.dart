@@ -1,9 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:magang_titc/screens/auth/login_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
-import 'package:magang_titc/widgets/shared/whatsapp_help_button.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -78,7 +78,9 @@ class _SignupScreenState extends State<SignupScreen> {
         } else {
           // Fallback if no 2FA
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Pendaftaran berhasil! Silakan login.')),
+            const SnackBar(
+              content: Text('Pendaftaran berhasil! Silakan login.'),
+            ),
           );
           Navigator.of(context).pop();
         }
@@ -116,7 +118,9 @@ class _SignupScreenState extends State<SignupScreen> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Kode verifikasi (OTP) telah dikirim ke email Anda.'),
+                  const Text(
+                    'Kode verifikasi (OTP) telah dikirim ke email Anda.',
+                  ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: otpController,
@@ -140,9 +144,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       ? null
                       : () async {
                           if (otpController.text.isEmpty) return;
-                          
+
                           setStateDialog(() => isVerifying = true);
-                          
+
                           final res = await AuthService.verifyRegistration2FA(
                             twoFaToken,
                             otpController.text.trim(),
@@ -168,11 +172,15 @@ class _SignupScreenState extends State<SignupScreen> {
                               ),
                             );
                             Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(builder: (_) => const LoginScreen()),
+                              MaterialPageRoute(
+                                builder: (_) => const LoginScreen(),
+                              ),
                             );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(res['message'] ?? 'Kode salah.')),
+                              SnackBar(
+                                content: Text(res['message'] ?? 'Kode salah.'),
+                              ),
                             );
                           }
                         },
@@ -196,26 +204,17 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeader(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-                  child: _buildForm(),
-                ),
-              ],
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              child: _buildForm(),
             ),
-          ),
-          const Positioned(
-            right: 16,
-            bottom: 16,
-            child: WhatsAppHelpButton(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -233,23 +232,15 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
       child: Column(
         children: [
-          RichText(
-            textAlign: TextAlign.center,
-            text: const TextSpan(
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFFAEB4C2),
-                height: 1.0,
-              ),
-              children: [
-                TextSpan(text: 'TITC\n'),
-                TextSpan(
-                  text: 'INDONESIA',
-                  style: TextStyle(fontSize: 26, color: Color(0xFFB23B4E)),
-                ),
-              ],
-            ),
+          // Logo resmi, sama seperti Login — lihat komentar di
+          // `LoginScreen._buildHeader`.
+          CachedNetworkImage(
+            imageUrl:
+                'https://titc.or.id/wp-content/uploads/fluent-community/fluentcom-ZXdnviGV36ZadPN2A89uUf42WBfL6PbA-fluentcom-LOGO-TITC-INDONESIA.webp',
+            width: 300,
+            fit: BoxFit.contain,
+            placeholder: (_, _) => const SizedBox(width: 300, height: 160),
+            errorWidget: (_, _, _) => const SizedBox(width: 300, height: 160),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -279,7 +270,11 @@ class _SignupScreenState extends State<SignupScreen> {
         children: [
           const Text(
             'Sign up',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -289,11 +284,16 @@ class _SignupScreenState extends State<SignupScreen> {
           const SizedBox(height: 28),
           const Text(
             'Full name',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _fullNameController,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('Your first & last name'),
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -305,12 +305,17 @@ class _SignupScreenState extends State<SignupScreen> {
           const SizedBox(height: 20),
           const Text(
             'Email Address',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('Your email address'),
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -322,11 +327,16 @@ class _SignupScreenState extends State<SignupScreen> {
           const SizedBox(height: 20),
           const Text(
             'Username',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _usernameController,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('No space or special characters'),
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -338,12 +348,17 @@ class _SignupScreenState extends State<SignupScreen> {
           const SizedBox(height: 20),
           const Text(
             'Account Password',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _passwordController,
             obscureText: _obscurePassword,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('').copyWith(
               suffixIcon: IconButton(
                 icon: PhosphorIcon(
@@ -367,12 +382,17 @@ class _SignupScreenState extends State<SignupScreen> {
           const SizedBox(height: 20),
           const Text(
             'Re-type Account Password',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _confirmPasswordController,
             obscureText: _obscureConfirmPassword,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('').copyWith(
               suffixIcon: IconButton(
                 icon: PhosphorIcon(
@@ -409,7 +429,10 @@ class _SignupScreenState extends State<SignupScreen> {
                 },
               ),
               const Expanded(
-                child: Text('I agree to the terms and conditions'),
+                child: Text(
+                  'I agree to the terms and conditions',
+                  style: TextStyle(color: Colors.black87),
+                ),
               ),
             ],
           ),
@@ -457,7 +480,10 @@ class _SignupScreenState extends State<SignupScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('Already have an account? '),
+              const Text(
+                'Already have an account? ',
+                style: TextStyle(color: Colors.black87),
+              ),
               GestureDetector(
                 onTap: () => Navigator.of(context).pop(),
                 child: const Text(
@@ -494,5 +520,4 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
   }
-
 }

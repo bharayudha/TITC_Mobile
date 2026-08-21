@@ -253,12 +253,19 @@ class _MainShellState extends State<MainShell> {
             ),
           ],
         ),
-        bottomNavigationBar: BottomNavBar(
-          currentIndex: _currentIndex,
-          onTap: _onNavTap,
-          // Sama seperti backgroundColor Scaffold di atas: gaya glass ini
-          // sekarang berlaku untuk semua tab, bukan cuma Spaces.
-          isSpacesTab: true,
+        bottomNavigationBar: Padding(
+          // Sedikit jarak ekstra dari tepi bawah layar supaya dock kaca
+          // tidak terlalu mepet — GlassTabBar.bottom sendiri tidak
+          // memperhitungkan MediaQuery, jadi tanpa ini dock nempel persis
+          // di batas bawah body Scaffold.
+          padding: const EdgeInsets.only(bottom: 14),
+          child: BottomNavBar(
+            currentIndex: _currentIndex,
+            onTap: _onNavTap,
+            // Sama seperti backgroundColor Scaffold di atas: gaya glass ini
+            // sekarang berlaku untuk semua tab, bukan cuma Spaces.
+            isSpacesTab: true,
+          ),
         ),
       ),
     );

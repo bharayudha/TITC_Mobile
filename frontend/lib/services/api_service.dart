@@ -87,8 +87,10 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getStringList('liked_feed_ids');
     if (cached != null) {
-      _likedFeedIdsCache =
-          cached.map((e) => int.tryParse(e)).whereType<int>().toSet();
+      _likedFeedIdsCache = cached
+          .map((e) => int.tryParse(e))
+          .whereType<int>()
+          .toSet();
     }
     _likedFeedIdsCacheLoaded = true;
   }
@@ -215,8 +217,8 @@ class ApiService {
   static Future<List<ActivityModel>> fetchActivities() {
     return _activitiesInFlight ??=
         _doFetchActivitiesPage(page: 1, perPage: feedsPerPage).whenComplete(() {
-      _activitiesInFlight = null;
-    });
+          _activitiesInFlight = null;
+        });
   }
 
   /// Ambil SATU halaman feed, dipakai untuk infinite scroll di Home.
@@ -299,8 +301,7 @@ class ApiService {
         'space': spaceSlug,
         'order_by_type': 'latest',
         'search': query,
-        for (var i = 0; i < searchIn.length; i++)
-          'search_in[$i]': searchIn[i],
+        for (var i = 0; i < searchIn.length; i++) 'search_in[$i]': searchIn[i],
       },
     );
 
@@ -309,9 +310,9 @@ class ApiService {
       print('SEARCH_FEEDS: $uri → ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        return _extractFeedItems(json.decode(response.body))
-            .map((e) => ActivityModel.fromFluentCommunity(e))
-            .toList();
+        return _extractFeedItems(
+          json.decode(response.body),
+        ).map((e) => ActivityModel.fromFluentCommunity(e)).toList();
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
         throw Exception('Sesi login telah habis. Silakan login ulang.');
@@ -359,16 +360,6 @@ class ApiService {
 
         final feeds = _extractFeedItems(data);
 
-        // Debug: cetak JSON mentah item pertama supaya nama field asli
-        // untuk status "sudah di-like" (dipakai ActivityModel.isLikedByMe)
-        // bisa dipastikan, bukan cuma tebakan beberapa nama umum.
-        if (page == 1 && feeds.isNotEmpty) {
-          const encoder = JsonEncoder.withIndent('  ');
-          for (final line in encoder.convert(feeds.first).split('\n')) {
-            print('FEED_JSON: $line');
-          }
-        }
-
         final activities = feeds
             .map((json) => ActivityModel.fromFluentCommunity(json))
             .toList();
@@ -386,6 +377,7 @@ class ApiService {
       throw Exception('Terjadi kesalahan: $e');
     }
   }
+
   /// Ambil daftar spaces dari Fluent Community. Fetch daftar penuh (tanpa
   /// search) di-dedupe seperti [fetchActivities]; fetch dengan search tidak
   /// perlu di-dedupe karena tiap query beda hasil.
@@ -393,9 +385,11 @@ class ApiService {
 
   static Future<List<SpaceModel>> fetchSpaces({String search = ''}) {
     if (search.isEmpty) {
-      return _spacesInFlight ??= _doFetchSpaces(search: search).whenComplete(() {
-        _spacesInFlight = null;
-      });
+      return _spacesInFlight ??= _doFetchSpaces(search: search).whenComplete(
+        () {
+          _spacesInFlight = null;
+        },
+      );
     }
     return _doFetchSpaces(search: search);
   }
@@ -460,43 +454,6 @@ class ApiService {
       final spaces = collected.values
           .where((json) => (json['type'] as String?) != 'course')
           .toList();
-
-      if (data is Map) {
-        print('SPACES_ENVELOPE_KEYS: ${data.keys.toList()}');
-        // Cetak SETIAP entri mentah apa adanya, sebelum disaring collector.
-        // Ini yang menentukan apakah space hilang karena server memang tidak
-        // mengirimnya, atau karena tersaring di sisi aplikasi.
-        data.forEach((key, value) {
-          if (value is List) {
-            print('SPACES_RAW[$key]: ${value.length} entri');
-            for (final item in value) {
-              if (item is Map) {
-                print('SPACES_RAW_ITEM[$key]: id=${item['id']} slug=${item['slug']} type=${item['type']} privacy=${item['privacy']} status=${item['status']} title=${item['title']}');
-                // Gambar sengaja dicetak terpisah: kartu space "Update -
-                // Announcement" & "Update - Certification" tidak menampilkan
-                // gambar, perlu dipastikan apakah URL-nya memang kosong/null
-                // dari server atau ada tapi gagal dimuat.
-                print('SPACES_RAW_IMG[$key]: title=${item['title']} logo=${item['logo']} cover_photo=${item['cover_photo']}');
-              } else {
-                print('SPACES_RAW_ITEM[$key]: (bukan objek) $item');
-              }
-            }
-          } else if (value is Map) {
-            print('SPACES_RAW[$key]: objek dengan keys ${value.keys.toList()}');
-          }
-        });
-      }
-      print('SPACES_COLLECTED: total=${collected.length} nonCourse=${spaces.length}');
-      for (final s in spaces) {
-        print('SPACE_ITEM: id=${s['id']} type=${s['type']} privacy=${s['privacy']} status=${s['status']} title=${s['title']}');
-      }
-      // Nama field keanggotaan di respons `discover` belum diketahui —
-      // SpaceModel baru mencoba `is_joined` dan `is_member`. Daftar key entri
-      // pertama dicetak sekali supaya ketahuan field aslinya, karena tanpa itu
-      // badge "Member"/tombol Join di app bisa salah tampil.
-      if (spaces.isNotEmpty) {
-        print('SPACE_KEYS: ${spaces.first.keys.toList()}');
-      }
 
       await _initJoinedCache();
 
@@ -570,20 +527,25 @@ class ApiService {
     }
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/spaces/$spaceSlug/join'),
-        headers: authHeaders,
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/spaces/$spaceSlug/join'),
+            headers: authHeaders,
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         await _addJoinedSpace(spaceSlug);
         return true;
-      } else if (response.statusCode == 422 && response.body.contains('already a member')) {
+      } else if (response.statusCode == 422 &&
+          response.body.contains('already a member')) {
         // Jika server menolak karena user sudah menjadi member, kita anggap sukses
         await _addJoinedSpace(spaceSlug);
         return true;
       } else {
-        print('Failed to join space: ${response.statusCode} - ${response.body}');
+        print(
+          'Failed to join space: ${response.statusCode} - ${response.body}',
+        );
         return false;
       }
     } catch (e) {
@@ -599,9 +561,11 @@ class ApiService {
 
   static Future<List<CourseModel>> fetchCourses({String search = ''}) {
     if (search.isEmpty) {
-      return _coursesInFlight ??= _doFetchCourses(search: search).whenComplete(() {
-        _coursesInFlight = null;
-      });
+      return _coursesInFlight ??= _doFetchCourses(search: search).whenComplete(
+        () {
+          _coursesInFlight = null;
+        },
+      );
     }
     return _doFetchCourses(search: search);
   }
@@ -612,9 +576,9 @@ class ApiService {
     }
 
     try {
-      final uri = Uri.parse('$_baseUrl/courses').replace(
-        queryParameters: search.isNotEmpty ? {'search': search} : null,
-      );
+      final uri = Uri.parse(
+        '$_baseUrl/courses',
+      ).replace(queryParameters: search.isNotEmpty ? {'search': search} : null);
 
       final response = await authorizedGet(uri);
 
@@ -638,22 +602,9 @@ class ApiService {
           courses = [];
         }
 
-        // Debug sementara: tampilkan JSON mentah course pertama supaya kita
-        // bisa lihat nama field asli untuk status enrollment/akses (dipakai
-        // untuk investigasi kasus "Continue Learning" mengarah ke course
-        // yang ternyata private meski akun sudah py access di web).
-        if (courses.isNotEmpty) {
-          const encoder = JsonEncoder.withIndent('  ');
-          final jsonStr = encoder.convert(courses.first);
-          for (final line in jsonStr.split('\n')) {
-            print('COURSE_JSON: $line');
-          }
-        }
-
-        final result = courses.map((json) => CourseModel.fromJson(json)).toList();
-        for (final c in result) {
-          print('COURSE_PARSED: slug=${c.slug} isEnrolled=${c.isEnrolled} privacy=${c.privacy} title=${c.title}');
-        }
+        final result = courses
+            .map((json) => CourseModel.fromJson(json))
+            .toList();
         // Hanya cache hasil daftar penuh (tanpa search), supaya tab Courses
         // tidak salah menampilkan hasil pencarian sebagai daftar default.
         if (search.isEmpty) {
@@ -713,9 +664,9 @@ class ApiService {
 
     try {
       // Biasanya parameter group_id atau space_id ditambahkan untuk mengambil feed khusus space
-      final uri = Uri.parse('$_baseUrl/feeds').replace(
-        queryParameters: {'space_id': spaceId.toString()},
-      );
+      final uri = Uri.parse(
+        '$_baseUrl/feeds',
+      ).replace(queryParameters: {'space_id': spaceId.toString()});
 
       final response = await authorizedGet(uri);
 
@@ -728,7 +679,8 @@ class ApiService {
         } else if (data is Map && data.containsKey('data')) {
           feeds = data['data'] as List;
         } else if (data is Map && data.containsKey('activities')) {
-          if (data['activities'] is Map && data['activities'].containsKey('data')) {
+          if (data['activities'] is Map &&
+              data['activities'].containsKey('data')) {
             feeds = data['activities']['data'] as List;
           } else {
             feeds = [];
@@ -748,7 +700,8 @@ class ApiService {
         // Karena parameter query API mungkin diabaikan (mengembalikan global feed),
         // kita filter secara lokal untuk memastikan feed sesuai dengan Space yang dipilih
         final spaceFeeds = feeds.where((json) {
-          final sId = json['space_id']?.toString() ?? json['group_id']?.toString();
+          final sId =
+              json['space_id']?.toString() ?? json['group_id']?.toString();
           return sId == spaceId.toString();
         }).toList();
 
@@ -831,50 +784,6 @@ class ApiService {
         total = data['total'] as int?;
       }
 
-      if (page == 1) {
-        print('MEMBERS_PAGE_INFO: total=$total currentPage=$currentPage lastPage=$lastPage items=${items.length}');
-        if (items.isNotEmpty) {
-          const encoder = JsonEncoder.withIndent('  ');
-          for (final line in encoder.convert(items.first).split('\n')) {
-            print('MEMBER_JSON: $line');
-          }
-        }
-
-        // Cari tahu APA KAH endpoint members memang mengirim data sosial, dan
-        // kalau iya dalam bentuk apa (URL penuh atau username saja). Selama
-        // ini bentuknya cuma ditebak, jadi ikon sosial bisa jadi tidak pernah
-        // muncul sama sekali karena field-nya memang tidak ada di respons.
-        // Cetak SEMUA key `meta` yang isinya tidak kosong, dari member mana
-        // pun di halaman ini. Sampel pertama (akun sendiri) belum tentu
-        // mengisi profil sosial, jadi memeriksa satu member saja menyesatkan.
-        final metaKeysSeen = <String>{};
-        var withSocial = 0;
-        for (final item in items) {
-          if (item is! Map) continue;
-          final meta = item['meta'] ??
-              (item['xprofile'] is Map ? item['xprofile']['meta'] : null);
-          if (meta is! Map) continue;
-
-          final filled = <String, dynamic>{};
-          meta.forEach((key, value) {
-            metaKeysSeen.add('$key');
-            final isEmptyish = value == null ||
-                (value is String && value.trim().isEmpty) ||
-                (value is List && value.isEmpty);
-            if (!isEmptyish) filled['$key'] = value;
-          });
-
-          if (filled.isNotEmpty) {
-            withSocial++;
-            if (withSocial <= 5) {
-              print('MEMBER_META_FILLED: ${item['username'] ?? item['slug']} -> ${json.encode(filled)}');
-            }
-          }
-        }
-        print('MEMBER_META_ALL_KEYS: ${metaKeysSeen.toList()}');
-        print('MEMBER_META_SUMMARY: $withSocial dari ${items.length} member punya isi meta');
-      }
-
       return MembersPage(
         members: items.map((json) => MemberModel.fromJson(json)).toList(),
         total: total ?? items.length,
@@ -905,7 +814,10 @@ class ApiService {
   /// "Following" padahal sebenarnya tidak. Itu kasus yang jauh lebih jarang
   /// daripada "sudah follow", dan menampilkan error di kasus umum lebih
   /// merugikan daripada label yang meleset di kasus langka.
-  static Future<bool> toggleFollowMember(String username, {required bool follow}) async {
+  static Future<bool> toggleFollowMember(
+    String username, {
+    required bool follow,
+  }) async {
     if (!AuthService.isLoggedIn) return false;
 
     // Username kosong bikin URL jadi `/profile//follow` yang pasti ditolak
@@ -926,13 +838,16 @@ class ApiService {
           .timeout(const Duration(seconds: 30));
       print('TOGGLE_FOLLOW RES: ${response.statusCode} - ${response.body}');
 
-      final ok = response.statusCode == 200 ||
+      final ok =
+          response.statusCode == 200 ||
           response.statusCode == 201 ||
           // "Sudah dalam keadaan yang diminta" — lihat penjelasan di atas.
           response.statusCode == 422;
 
-      print('TOGGLE_FOLLOW: $uri follow=$follow status=${response.statusCode} ok=$ok '
-          'body=${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      print(
+        'TOGGLE_FOLLOW: $uri follow=$follow status=${response.statusCode} ok=$ok '
+        'body=${response.body.length > 300 ? response.body.substring(0, 300) : response.body}',
+      );
 
       // Simpan ke perangkat supaya tombolnya tetap benar setelah restart,
       // tanpa bergantung field server yang memang tidak ada.
@@ -971,11 +886,14 @@ class ApiService {
       final response = await client
           .post(uri, headers: authHeaders, body: body)
           .timeout(const Duration(seconds: 15));
-      final ok = response.statusCode == 200 ||
+      final ok =
+          response.statusCode == 200 ||
           response.statusCode == 201 ||
           response.statusCode == 204;
-      print('TOGGLE_LIKE: feedId=$feedId like=$like method=POST '
-          'status=${response.statusCode} ok=$ok body=${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      print(
+        'TOGGLE_LIKE: feedId=$feedId like=$like method=POST '
+        'status=${response.statusCode} ok=$ok body=${response.body.length > 300 ? response.body.substring(0, 300) : response.body}',
+      );
       if (ok) await _setFeedLikedLocally(feedId, like);
       return ok;
     } catch (e) {
@@ -1002,9 +920,10 @@ class ApiService {
       }
 
       final url = Uri.parse('https://titc.or.id/wp-json/wp/v2/users/me');
-      
+
       final Map<String, dynamic> body = {};
-      if (firstName != null && firstName.isNotEmpty) body['first_name'] = firstName;
+      if (firstName != null && firstName.isNotEmpty)
+        body['first_name'] = firstName;
       if (lastName != null && lastName.isNotEmpty) body['last_name'] = lastName;
       if (firstName != null && lastName != null) {
         body['name'] = '${firstName.trim()} ${lastName.trim()}'.trim();
@@ -1020,7 +939,8 @@ class ApiService {
           'Content-Type': 'application/json',
           'Cookie': cookies,
           'X-WP-Nonce': nonce,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': 'https://titc.or.id/portal/',
         },
         body: json.encode(body),
@@ -1029,7 +949,9 @@ class ApiService {
       if (response.statusCode == 200) {
         return true;
       } else {
-        print('Failed to update profile: ${response.statusCode} - ${response.body}');
+        print(
+          'Failed to update profile: ${response.statusCode} - ${response.body}',
+        );
         return false;
       }
     } catch (e) {
@@ -1050,56 +972,73 @@ class ApiService {
       }
 
       // 1. Upload to FCOM Media endpoint instead of WP Media (karena WP Media butuh role admin/editor)
-      final mediaUrl = Uri.parse('https://titc.or.id/wp-json/fluent-community/v2/feeds/media-upload');
+      final mediaUrl = Uri.parse(
+        'https://titc.or.id/wp-json/fluent-community/v2/feeds/media-upload',
+      );
       final mediaReq = http.MultipartRequest('POST', mediaUrl);
-      
+
       mediaReq.headers.addAll({
         'Cookie': cookies,
         'X-WP-Nonce': nonce,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       });
-      
-      mediaReq.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+      mediaReq.files.add(
+        await http.MultipartFile.fromPath('file', imageFile.path),
+      );
 
       final mediaStream = await mediaReq.send();
       final mediaRes = await http.Response.fromStream(mediaStream);
-      
+
       if (mediaRes.statusCode != 200 && mediaRes.statusCode != 201) {
-        print('Failed to upload to FCOM Media: ${mediaRes.statusCode} - ${mediaRes.body}');
+        print(
+          'Failed to upload to FCOM Media: ${mediaRes.statusCode} - ${mediaRes.body}',
+        );
         return false;
       }
 
       print('FCOM Media Upload Body: ${mediaRes.body}');
       final mediaData = json.decode(mediaRes.body);
       String? uploadedUrl;
-      
+
       if (mediaData is Map) {
         if (mediaData['url'] != null) {
           uploadedUrl = mediaData['url'];
         } else if (mediaData['source_url'] != null) {
           uploadedUrl = mediaData['source_url'];
-        } else if (mediaData['file'] is Map && mediaData['file']['url'] != null) {
+        } else if (mediaData['file'] is Map &&
+            mediaData['file']['url'] != null) {
           uploadedUrl = mediaData['file']['url'];
         } else if (mediaData['image'] != null) {
           uploadedUrl = mediaData['image'];
-        } else if (mediaData['data'] is Map && mediaData['data']['url'] != null) {
+        } else if (mediaData['data'] is Map &&
+            mediaData['data']['url'] != null) {
           uploadedUrl = mediaData['data']['url'];
-        } else if (mediaData['media'] is Map && mediaData['media']['url'] != null) {
+        } else if (mediaData['media'] is Map &&
+            mediaData['media']['url'] != null) {
           uploadedUrl = mediaData['media']['url'];
-        } else if (mediaData['media'] is List && mediaData['media'].isNotEmpty && mediaData['media'][0] is Map) {
+        } else if (mediaData['media'] is List &&
+            mediaData['media'].isNotEmpty &&
+            mediaData['media'][0] is Map) {
           uploadedUrl = mediaData['media'][0]['url'];
         }
-      } else if (mediaData is List && mediaData.isNotEmpty && mediaData[0] is Map) {
+      } else if (mediaData is List &&
+          mediaData.isNotEmpty &&
+          mediaData[0] is Map) {
         uploadedUrl = mediaData[0]['url'] ?? mediaData[0]['source_url'];
       }
 
       if (uploadedUrl == null) {
-        print('No url returned from FCOM Media upload. Parsed data: $mediaData');
+        print(
+          'No url returned from FCOM Media upload. Parsed data: $mediaData',
+        );
         return false;
       }
 
       // 2. Assign the uploaded image URL as the FCOM Avatar
-      final fcomUrl = Uri.parse('https://titc.or.id/wp-json/fluent-community/v2/profile/$slug');
+      final fcomUrl = Uri.parse(
+        'https://titc.or.id/wp-json/fluent-community/v2/profile/$slug',
+      );
       final fcomRes = await http.put(
         fcomUrl,
         headers: {
@@ -1109,15 +1048,13 @@ class ApiService {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         },
         body: json.encode({
-          'data': {
-            'avatar': uploadedUrl
-          }
-        })
+          'data': {'avatar': uploadedUrl},
+        }),
       );
 
       print('FCOM Avatar Assign Status: ${fcomRes.statusCode}');
       print('FCOM Avatar Assign Body: ${fcomRes.body}');
-      
+
       return fcomRes.statusCode == 200 || fcomRes.statusCode == 201;
     } catch (e) {
       print('Exception in uploadAvatar: $e');

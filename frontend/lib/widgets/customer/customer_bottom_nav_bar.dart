@@ -27,10 +27,26 @@ const List<GlassTab> _glassTabs = [
     activeIcon: Icon(PhosphorIconsFill.house),
     label: 'Home',
   ),
-  GlassTab(icon: Icon(PhosphorIconsRegular.play), label: 'Spaces'),
-  GlassTab(icon: Icon(PhosphorIconsRegular.bookOpen), label: 'Courses'),
-  GlassTab(icon: Icon(PhosphorIconsRegular.users), label: 'Members'),
-  GlassTab(icon: Icon(PhosphorIconsRegular.headphones), label: 'Prep Test'),
+  GlassTab(
+    icon: Icon(PhosphorIconsRegular.play),
+    activeIcon: Icon(PhosphorIconsFill.play),
+    label: 'Spaces',
+  ),
+  GlassTab(
+    icon: Icon(PhosphorIconsRegular.bookOpen),
+    activeIcon: Icon(PhosphorIconsFill.bookOpen),
+    label: 'Courses',
+  ),
+  GlassTab(
+    icon: Icon(PhosphorIconsRegular.users),
+    activeIcon: Icon(PhosphorIconsFill.users),
+    label: 'Members',
+  ),
+  GlassTab(
+    icon: Icon(PhosphorIconsRegular.headphones),
+    activeIcon: Icon(PhosphorIconsFill.headphones),
+    label: 'Prep Test',
+  ),
 ];
 
 /// Dock navigasi bawah — versi kaca sekarang dipasrahkan sepenuhnya ke

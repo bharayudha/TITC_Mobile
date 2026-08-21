@@ -38,7 +38,8 @@ class AuthenticatedWebViewScreen extends StatefulWidget {
       _AuthenticatedWebViewScreenState();
 }
 
-class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen> {
+class _AuthenticatedWebViewScreenState
+    extends State<AuthenticatedWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
 
@@ -59,7 +60,9 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
+      ..setUserAgent(
+        'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      )
       // Debug sementara — dipakai WebViewClickHelper untuk melaporkan hasil
       // AUTO_CLICK/MODAL_PROBE lewat `adb logcat`. Sebelumnya layar ini
       // tidak punya channel ini sama sekali (laporannya dibuang diam2 lewat
@@ -204,7 +207,10 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
 
             if (widget.autoClickText != null && !_autoClickedText) {
               _autoClickedText = true;
-              WebViewClickHelper.clickElementByText(_controller, widget.autoClickText!);
+              WebViewClickHelper.clickElementByText(
+                _controller,
+                widget.autoClickText!,
+              );
             }
             if (widget.autoClickDotMenuThenText != null && !_autoClickedText) {
               _autoClickedText = true;
@@ -236,7 +242,8 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
       Uri.parse(widget.url),
       headers: {
         'X-App-Client': 'titc-mobile',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'User-Agent':
+            'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
       },
     );
   }
@@ -247,10 +254,9 @@ class _AuthenticatedWebViewScreenState extends State<AuthenticatedWebViewScreen>
       backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 3,
+        elevation: 0,
         scrolledUnderElevation: 3,
         shadowColor: kShadowColor,
-        surfaceTintColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.black87),
         title: Text(
           widget.title,

@@ -40,10 +40,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 3,
+        elevation: 0,
         scrolledUnderElevation: 3,
         shadowColor: kShadowColor,
-        surfaceTintColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.black87),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

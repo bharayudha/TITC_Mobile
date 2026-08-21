@@ -61,10 +61,9 @@ class _PreparationTestWebviewScreenState
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 3,
+        elevation: 0,
         scrolledUnderElevation: 3,
         shadowColor: kShadowColor,
-        surfaceTintColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.black87),
         title: const Text(
           'Preparation Test',

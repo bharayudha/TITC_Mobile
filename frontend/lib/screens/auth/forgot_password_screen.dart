@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import 'package:magang_titc/services/auth_service.dart';
@@ -105,32 +106,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: RichText(
-              textAlign: TextAlign.center,
-              text: const TextSpan(
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0B1440),
-                  height: 1.0,
-                ),
-                children: [
-                  TextSpan(text: 'TITC\n'),
-                  TextSpan(text: 'IND', style: TextStyle(fontSize: 20)),
-                  TextSpan(
-                    text: 'ONE',
-                    style: TextStyle(fontSize: 20, color: Colors.red),
-                  ),
-                  TextSpan(text: 'SIA', style: TextStyle(fontSize: 20)),
-                ],
-              ),
-            ),
+          // Logo resmi, sama seperti Login — lihat komentar di
+          // `LoginScreen._buildHeader`.
+          CachedNetworkImage(
+            imageUrl:
+                'https://titc.or.id/wp-content/uploads/fluent-community/fluentcom-ZXdnviGV36ZadPN2A89uUf42WBfL6PbA-fluentcom-LOGO-TITC-INDONESIA.webp',
+            width: 260,
+            fit: BoxFit.contain,
+            placeholder: (_, _) => const SizedBox(width: 260, height: 140),
+            errorWidget: (_, _, _) => const SizedBox(width: 260, height: 140),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -161,7 +145,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const Text(
             'Forgot Password',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -173,11 +161,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 32),
           const Text(
             'Username or Email Address',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
             controller: _usernameController,
+            style: const TextStyle(color: Colors.black87),
             decoration: _inputDecoration('Your username or email address'),
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
@@ -246,8 +239,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
           Center(
             child: GestureDetector(
               onTap: () => Navigator.of(context).pop(),

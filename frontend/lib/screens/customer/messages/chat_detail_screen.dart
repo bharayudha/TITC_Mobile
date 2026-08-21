@@ -439,10 +439,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 3,
+        // Elevation dasar 0 (flat) supaya efek "scrolled under" (tint +
+        // bayangan saat konten discroll) benar-benar terlihat sebagai
+        // perubahan, bukan sudah sama dari awal.
+        elevation: 0,
         scrolledUnderElevation: 3,
         shadowColor: kShadowColor,
-        surfaceTintColor: Colors.transparent,
         iconTheme: IconThemeData(
           color: Theme.of(context).colorScheme.onSurface,
         ),

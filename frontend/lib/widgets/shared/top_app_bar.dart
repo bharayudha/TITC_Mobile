@@ -32,9 +32,12 @@ class _TitcAppBarState extends State<TitcAppBar> {
     return AppBar(
       backgroundColor: Theme.of(context).colorScheme.surface,
       elevation: 0,
-      scrolledUnderElevation: 0,
+      // Efek Material 3 "scrolled under": app bar dapat tint/bayangan halus
+      // begitu konten di bawahnya mulai discroll — mengikuti default
+      // `colorScheme.surfaceTint` (theme-aware, sudah pas untuk light & dark
+      // mode) alih-alih dimatikan lewat `surfaceTintColor: transparent`.
+      scrolledUnderElevation: 3,
       shadowColor: kShadowColor,
-      surfaceTintColor: Colors.transparent,
       // Default Flutter (16dp) membuat "TITC Indonesia" terlalu jauh dari
       // ikon ☰ dibanding web, di mana keduanya lebih rapat.
       titleSpacing: 0,

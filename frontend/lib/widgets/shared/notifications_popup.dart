@@ -108,7 +108,7 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
         child: Padding(
           padding: const EdgeInsets.only(top: kToolbarHeight - 8, right: 8),
           child: Material(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             elevation: 8,
             borderRadius: BorderRadius.circular(10),
             child: SizedBox(
@@ -135,10 +135,14 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'Recent Notifications',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           _buildOutlinedAction(
@@ -207,7 +211,11 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                    color: selected ? AppColors.primary : Colors.black87,
+                    color: selected
+                        ? AppColors.primary
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.8),
                   ),
                 ),
               ),
@@ -237,11 +245,16 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
     }
 
     if (_notifications.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(16, 20, 16, 20),
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
         child: Text(
           'No notifications found',
-          style: TextStyle(fontSize: 14, color: Colors.black54),
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
         ),
       );
     }
@@ -269,26 +282,32 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
         // Percayakan pada URL bawaan dari FCOM API (karena FCOM sudah membuat link yang tepat).
         // Kadang FCOM mengembalikan URL relatif (dimulai dengan '/'), jadi kita pastikan jadi absolut.
         if (targetUrl != null && targetUrl.isNotEmpty) {
-           if (targetUrl.startsWith('/')) {
-              targetUrl = 'https://titc.or.id$targetUrl';
-           }
+          if (targetUrl.startsWith('/')) {
+            targetUrl = 'https://titc.or.id$targetUrl';
+          }
         } else if (notif.route != null) {
-           // Jika FCOM tidak memberikan URL, kita rakit sendiri secara dinamis berdasarkan parameter yang ada.
-           final params = notif.route!['params'] as Map<String, dynamic>? ?? {};
+          // Jika FCOM tidak memberikan URL, kita rakit sendiri secara dinamis berdasarkan parameter yang ada.
+          final params = notif.route!['params'] as Map<String, dynamic>? ?? {};
 
-           final space = params['space'] ?? params['group'];
-           final slug = params['slug'] ?? params['post'] ?? params['post_slug'] ?? params['id'] ?? params['feed_id'] ?? params['feed'];
-           final user = params['user'] ?? params['username'];
+          final space = params['space'] ?? params['group'];
+          final slug =
+              params['slug'] ??
+              params['post'] ??
+              params['post_slug'] ??
+              params['id'] ??
+              params['feed_id'] ??
+              params['feed'];
+          final user = params['user'] ?? params['username'];
 
-           if (space != null && slug != null) {
-             targetUrl = 'https://titc.or.id/portal/space/$space/post/$slug';
-           } else if (slug != null) {
-             targetUrl = 'https://titc.or.id/portal/post/$slug';
-           } else if (space != null) {
-             targetUrl = 'https://titc.or.id/portal/space/$space';
-           } else if (user != null) {
-             targetUrl = 'https://titc.or.id/portal/u/$user';
-           }
+          if (space != null && slug != null) {
+            targetUrl = 'https://titc.or.id/portal/space/$space/post/$slug';
+          } else if (slug != null) {
+            targetUrl = 'https://titc.or.id/portal/post/$slug';
+          } else if (space != null) {
+            targetUrl = 'https://titc.or.id/portal/space/$space';
+          } else if (user != null) {
+            targetUrl = 'https://titc.or.id/portal/u/$user';
+          }
         }
 
         // Jika semua gagal, baru lempar ke halaman depan portal.
@@ -331,11 +350,9 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
           );
         }
 
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => nextScreen,
-          ),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => nextScreen));
       },
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -371,13 +388,15 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
                     : null,
               )
             else
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.divider,
                 child: Icon(
                   Icons.notifications,
                   size: 20,
-                  color: Colors.black54,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             const SizedBox(width: 12),
@@ -392,7 +411,9 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
                     ), // Strip HTML
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.black87,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.8),
                       fontWeight: notif.isRead
                           ? FontWeight.normal
                           : FontWeight.w600,
@@ -401,7 +422,12 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
                   const SizedBox(height: 4),
                   Text(
                     notif.dateNotified,
-                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
                   ),
                 ],
               ),
@@ -440,7 +466,12 @@ class _NotificationsPopupState extends State<NotificationsPopup> {
         ),
         child: Text(
           label,
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.8),
+          ),
         ),
       ),
     );
