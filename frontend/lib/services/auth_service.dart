@@ -39,6 +39,7 @@ class AuthService {
   static String? _userEmail;
   static String? _userName;
   static String? _userSlug;
+  static int? _userId;
 
   /// URL foto profil user. Dibungkus ValueNotifier supaya widget yang
   /// menampilkannya (mis. tombol profil di app bar) ikut ter-update begitu
@@ -76,6 +77,42 @@ class AuthService {
     }
   }
 
+  /// Generate nilai `_lscache_vary` dari cookie string yang sudah ada.
+  ///
+  /// LiteSpeed Cache di sisi server meng-hash beberapa variabel (termasuk
+  /// cookie login) untuk membuat vary key. Kita tidak bisa meniru hash yang
+  /// persis sama karena algoritmanya internal, tapi cukup menyetel SEBUAH
+  /// nilai non-kosong agar LiteSpeed tahu user ini punya sesi aktif dan
+  /// tidak boleh disajikan halaman cache tamu/basi.
+  ///
+  /// Dipakai bersama oleh [_fetchRestNonce] (request homepage biasa) DAN
+  /// `WebViewCookieHelper` (cookie jar WebView) — logika sama persis,
+  /// dipusatkan di sini supaya keduanya tidak diam-diam berbeda.
+  static String generateLscacheVary(String cookies) {
+    // Coba cari nilai yang sudah ada di cookie string
+    final match = RegExp(r'_lscache_vary=([^;]+)').firstMatch(cookies);
+    if (match != null) {
+      return decodeCookieValue(match.group(1)!);
+    }
+
+    // Fallback: gunakan hash sederhana dari cookie logged_in
+    final loggedInMatch =
+        RegExp(r'wordpress_logged_in_[^=]+=([^;]+)').firstMatch(cookies);
+    if (loggedInMatch != null) {
+      // Buat hash sederhana 32-char hex dari cookie value
+      final value = loggedInMatch.group(1)!;
+      var hash = 0x811c9dc5; // FNV-1a offset basis
+      for (var i = 0; i < value.length; i++) {
+        hash ^= value.codeUnitAt(i);
+        hash = (hash * 0x01000193) & 0xFFFFFFFF; // FNV prime
+      }
+      return hash.toRadixString(16).padLeft(8, '0');
+    }
+
+    // Fallback terakhir
+    return 'mobile_session';
+  }
+
   /// Header auth untuk dipakai widget gambar (CachedNetworkImage/Provider).
   /// Sebagian media (cover/logo space & course, avatar) kemungkinan ada di
   /// balik privacy WordPress dan butuh cookie sesi yang sama seperti
@@ -87,6 +124,7 @@ class AuthService {
   static String? get userName => _userName;
   static String? get userSlug => _userSlug;
   static String? get userAvatarUrl => _userAvatarUrl;
+  static int? get userId => _userId;
 
   /// Inisialisasi: coba muat cookies yang pernah disimpan sebelumnya.
   static Future<void> init() async {
@@ -95,6 +133,8 @@ class AuthService {
     _userName = await _storage.read(key: _userNameKey);
     _userSlug = await _storage.read(key: 'wp_user_slug');
     _userAvatarUrl = await _storage.read(key: 'wp_user_avatar');
+    final storedUserId = await _storage.read(key: 'wp_user_id');
+    if (storedUserId != null) _userId = int.tryParse(storedUserId);
 
     if (_cookies != null) {
       print('=== AUTH DEBUG ===');
@@ -157,11 +197,23 @@ class AuthService {
   /// Fetch REST API Nonce (X-WP-Nonce) dari halaman portal
   static Future<String?> _fetchRestNonce(String cookies) async {
     try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      // `?_t=` di URL saja tidak cukup menjamin LiteSpeed Cache menyajikan
+      // versi logged-in — LiteSpeed memvary berdasarkan cookie
+      // `_lscache_vary`, bukan (cuma) query string. Tanpa cookie ini,
+      // halaman yang diambil bisa jadi versi tamu/cache basi meski cookie
+      // login valid, sehingga nonce yang ter-scrape darinya tidak cocok
+      // dengan sesi user (401/403 `rest_cookie_invalid_nonce` di semua
+      // endpoint). Pola sama seperti yang sudah terbukti untuk WebView di
+      // `WebViewCookieHelper`.
+      final cookiesWithVary = cookies.contains('_lscache_vary')
+          ? cookies
+          : '$cookies; _lscache_vary=${generateLscacheVary(cookies)}';
       final response = await _client
           .get(
-            Uri.parse('https://titc.or.id/'),
+            Uri.parse('https://titc.or.id/portal/?_t=$timestamp'),
             headers: {
-              'Cookie': cookies,
+              'Cookie': cookiesWithVary,
               'User-Agent': 'TITC Mobile App/1.0 (Android; Dart)',
               'Accept':
                   'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -169,6 +221,12 @@ class AuthService {
           )
           .timeout(const Duration(seconds: 30));
       print('Fetch Nonce Status: ${response.statusCode}');
+      // Penanda yang sama dipakai debug panel WebView (`WEBVIEW_SESSION`)
+      // untuk membedakan halaman versi logged-in vs tamu — kalau ini
+      // `false` di sini, halaman yang diambil memang bukan versi personal
+      // user, mengonfirmasi dugaan cache LiteSpeed.
+      print('Fetch Nonce body looks logged-in: '
+          '${response.body.contains('logged-in')}');
 
       if (response.statusCode == 200 || response.statusCode == 302) {
         final body = response.body;
@@ -250,6 +308,14 @@ class AuthService {
         if (slug != null) {
           _userSlug = slug;
           await _storage.write(key: 'wp_user_slug', value: _userSlug);
+        }
+        
+        final id = data['id'];
+        if (id != null) {
+          _userId = id is int ? id : int.tryParse('$id');
+          if (_userId != null) {
+            await _storage.write(key: 'wp_user_id', value: _userId.toString());
+          }
         }
 
         if (data['avatar_urls'] != null) {

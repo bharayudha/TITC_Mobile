@@ -2,8 +2,8 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:magang_titc/constants/app_text_styles.dart';
 import 'package:magang_titc/constants/fcom_post_dialog_css.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/portal_navigator.dart';
@@ -13,16 +13,16 @@ import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../spaces/space_webview_screen.dart';
 
-/// Satu link cepat di bawah header Feed, meniru deretan link di Home web.
+/// Satu fitur berbentuk ikon di bawah header Announcement.
 class _QuickLink {
   /// Tujuannya halaman WordPress biasa.
-  const _QuickLink.page(this.emoji, this.label, this.url) : spaceTitle = null;
+  const _QuickLink.page(this.asset, this.label, this.url) : spaceTitle = null;
 
   /// Tujuannya Space di portal FCOM. Yang disimpan judulnya, bukan slug —
   /// slug aslinya dicari lewat API saat diketuk (lihat [PortalNavigator]).
-  const _QuickLink.space(this.emoji, this.label, this.spaceTitle) : url = null;
+  const _QuickLink.space(this.asset, this.label, this.spaceTitle) : url = null;
 
-  final String emoji;
+  final String asset;
   final String label;
   final String? url;
   final String? spaceTitle;
@@ -393,10 +393,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // 4. Deretan link cepat, mengikuti Home web: satu baris di
-                  // bawah header Feed yang bisa digulir mendatar.
                   _buildQuickLinks(context),
-                  const SizedBox(height: 12),
 
                   // 5. Activity Feed — dimuat bertahap (infinite scroll). `/feeds`
                   // cuma mengembalikan sejumlah item per panggilan, jadi feed di web
@@ -463,89 +460,99 @@ class _HomeScreenState extends State<HomeScreen> {
   ///   `/certificate-tracking/` tidak ada (404).
   static const List<_QuickLink> _quickLinks = [
     _QuickLink.page(
-      '⭐',
+      'assets/images/toefl-itp.png',
       'Daftar Tes TOEFL ITP Resmi ETS',
       'https://titc.or.id/?ff_landing=21',
     ),
     _QuickLink.page(
-      '⚡',
+      'assets/images/preptest.png',
       'Daftar Preparation Test Online',
       'https://titc.or.id/institutional-preparation-test/',
     ),
     _QuickLink.page(
-      '💻',
+      'assets/images/check-readiness.png',
       'Check Readiness',
       'https://titc.or.id/check-readiness/',
     ),
     _QuickLink.page(
-      '🎫',
+      'assets/images/certificate-tracking.png',
       'Certificate Tracking',
       'https://titc.or.id/certificate-distribution/',
     ),
     _QuickLink.page(
-      '✔️',
+      'assets/images/ept.png',
       'EPT Certificate Verification',
       'https://titc.or.id/certificate-verification/',
     ),
-    _QuickLink.space('💡', 'FREE Placement Test', 'FREE Placement Test'),
+    _QuickLink.space('assets/images/free-placement.png', 'FREE Placement Test', 'FREE Placement Test'),
   ];
 
   Widget _buildQuickLinks(BuildContext context) {
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _quickLinks.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final link = _quickLinks[index];
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(19),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Material(
-                color: Theme.of(
-                  context,
-                ).colorScheme.surface.withValues(alpha: 0.55),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(19),
-                  side: BorderSide(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.08),
-                    width: 1.0,
-                  ),
-                ),
-                child: InkWell(
-                  onTap: () => _onQuickLinkTap(link),
-                  borderRadius: BorderRadius.circular(19),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(link.emoji, style: emojiStyle(size: 14)),
-                        const SizedBox(width: 6),
-                        Text(
-                          link.label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontWeight: FontWeight.w600,
-                          ),
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          itemCount: _quickLinks.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 6,
+            childAspectRatio: 1.0,
+          ),
+          itemBuilder: (context, index) {
+            final link = _quickLinks[index];
+            return InkWell(
+              onTap: () => _onQuickLinkTap(link),
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 58,
+                      height: 58,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: scheme.surface.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: scheme.onSurface.withValues(alpha: 0.12),
                         ),
-                      ],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: link.asset.endsWith('.svg')
+                          ? SvgPicture.asset(link.asset)
+                          : Image.asset(link.asset),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  Text(
+                    link.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.15,
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        ),
+      ],
     );
   }
 

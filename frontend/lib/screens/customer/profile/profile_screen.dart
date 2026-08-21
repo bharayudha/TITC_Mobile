@@ -15,6 +15,13 @@ import 'package:magang_titc/screens/customer/profile/profile_edit_screen.dart';
 import 'package:magang_titc/screens/shared/authenticated_webview_screen.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/api_service.dart';
+import 'package:magang_titc/models/member_model.dart';
+import 'package:magang_titc/models/activity_model.dart';
+import 'package:magang_titc/models/space_model.dart';
+import 'package:magang_titc/models/course_model.dart';
+import 'package:magang_titc/widgets/customer/space_card.dart';
+import 'package:magang_titc/widgets/customer/course_card.dart';
+import 'dart:ui';
 
 const int kHomeTabIndex = 0;
 
@@ -56,7 +63,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _selectedTab = 0;
   String _sortBy = _sortOptions.first;
 
+  MemberModel? _memberProfile;
+  List<ActivityModel>? _feeds;
+  List<SpaceModel>? _spaces;
+  List<CourseModel>? _courses;
+
+  bool _isLoadingFeeds = false;
+  bool _isLoadingSpaces = false;
+  bool _isLoadingCourses = false;
+
   String get _currentName => AuthService.userName ?? widget.name;
+  
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfileData();
+  }
+
+  Future<void> _fetchProfileData() async {
+    final slug = AuthService.userSlug ?? widget.username;
+    final profile = await ApiService.fetchMemberProfile(slug);
+    if (mounted) {
+      setState(() {
+        _memberProfile = profile;
+      });
+      // Fetch data for the initially selected tab (About tab doesn't need extra fetch)
+      _fetchTabData(_selectedTab);
+    }
+  }
+
+  Future<void> _fetchTabData(int index) async {
+    final slug = AuthService.userSlug ?? widget.username;
+    if (index == 1 && _feeds == null) {
+      setState(() => _isLoadingFeeds = true);
+      final feeds = await ApiService.fetchUserFeeds(slug);
+      if (mounted) setState(() { _feeds = feeds; _isLoadingFeeds = false; });
+    } else if (index == 2 && _spaces == null) {
+      setState(() => _isLoadingSpaces = true);
+      final spaces = await ApiService.fetchUserSpaces(slug);
+      if (mounted) setState(() { _spaces = spaces; _isLoadingSpaces = false; });
+    } else if (index == 3 && _courses == null) {
+      setState(() => _isLoadingCourses = true);
+      final courses = await ApiService.fetchUserCourses(slug);
+      if (mounted) setState(() { _courses = courses; _isLoadingCourses = false; });
+    }
+  }
 
   void _openNotificationSettings() {
     Navigator.of(context).push(
@@ -82,13 +133,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           firstName: firstName,
           lastName: lastName,
           email: AuthService.userEmail ?? '',
-          bio: '',
+          bio: _memberProfile?.bio ?? '',
+          headline: _memberProfile?.headline ?? '',
+          socialLinks: _memberProfile?.socialLinks ?? const {},
+          username: _memberProfile?.username ?? AuthService.userSlug ?? '',
+          userId: _memberProfile?.id ?? 0,
+          status: _memberProfile?.status ?? 'active',
+          isVerified: _memberProfile?.isVerified ?? 0,
+          isFlagged: _memberProfile?.isFlagged ?? 'no',
+          badgeSlugs: _memberProfile?.badgeSlugs ?? const [],
+          customFields: _memberProfile?.customFields ?? const {},
         ),
       ),
     );
-    // Refresh user profile data after returning
-    await AuthService.init();
-    if (mounted) setState(() {});
+    // Refresh FCOM profile data after returning
+    await _fetchProfileData();
+    // Reset tab data so they refresh with fresh data
+    if (mounted) setState(() {
+      _feeds = null;
+      _spaces = null;
+      _courses = null;
+    });
   }
 
   Future<void> _openAvatarUpload() async {
@@ -154,7 +219,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           await AuthService.init();
-          if (mounted) setState(() {});
+          await _fetchProfileData();
+          if (mounted) setState(() {
+             _feeds = null;
+             _spaces = null;
+             _courses = null;
+          });
+          await _fetchTabData(_selectedTab);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -178,13 +249,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 12),
               ProfileTabBar(
                 selectedIndex: _selectedTab,
-                onSelected: (index) => setState(() => _selectedTab = index),
+                onSelected: (index) {
+                  setState(() => _selectedTab = index);
+                  _fetchTabData(index);
+                },
               ),
               const SizedBox(height: 12),
               if (_selectedTab == 0)
                 _buildAboutCard()
               else if (_selectedTab == 1)
                 _buildPostsTab()
+              else if (_selectedTab == 2)
+                _buildSpacesTab()
+              else if (_selectedTab == 3)
+                _buildCoursesTab()
               else
                 _buildEmptyTab(kProfileTabs[_selectedTab]),
               const SizedBox(height: 24),
@@ -203,19 +281,169 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 16),
         _buildSortRow(),
         const SizedBox(height: 12),
-        AppCard(
-          padding: const EdgeInsets.symmetric(vertical: 28),
-          child: Center(
-            child: Text(
-              'No posts found!',
-              style: TextStyle(
-                fontSize: 15,
-                color: Theme.of(context).colorScheme.onSurface,
+        if (_isLoadingFeeds)
+          const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+        else if (_feeds == null || _feeds!.isEmpty)
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            child: Center(
+              child: Text(
+                'No posts found!',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _feeds!.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (_, index) => _buildActivityCard(_feeds![index]),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildActivityCard(ActivityModel activity) {
+    final scheme = Theme.of(context).colorScheme;
+    // Basic feed card implementation for profile
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              // TODO: Open comment detail
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: scheme.surface.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: scheme.onSurface.withValues(alpha: 0.06),
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Colors.grey.shade300,
+                          backgroundImage: activity.avatarUrl.isNotEmpty
+                              ? CachedNetworkImageProvider(
+                                  activity.avatarUrl,
+                                  headers: AuthService.imageAuthHeaders,
+                                )
+                              : null,
+                          child: activity.avatarUrl.isEmpty
+                              ? Text(activity.authorName.isNotEmpty ? activity.authorName[0] : '?')
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                             children: [
+                               Text(
+                                 activity.authorName,
+                                 style: TextStyle(fontWeight: FontWeight.bold, color: scheme.onSurface),
+                               ),
+                               if (activity.date.isNotEmpty)
+                                 Text(
+                                   activity.date.split('T')[0],
+                                   style: TextStyle(fontSize: 12, color: scheme.onSurface.withValues(alpha: 0.6)),
+                                 ),
+                             ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      activity.content,
+                      style: TextStyle(fontSize: 14, color: scheme.onSurface, height: 1.4),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildSpacesTab() {
+    if (_isLoadingSpaces) {
+      return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+    }
+    if (_spaces == null || _spaces!.isEmpty) {
+      return _buildEmptyTab('Spaces');
+    }
+    // Satu kolom, bukan grid 2 kolom — SpaceCard (cover 130px + logo +
+    // deskripsi + tombol) butuh tinggi lebih dari yang muat di sel grid
+    // sempit, dulu bikin kartu overflow dan tombol "View Space" terpotong.
+    // Samakan dengan tab Spaces asli (`spaces_list_screen.dart`) yang juga
+    // memakai daftar satu kolom.
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _spaces!.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (_, index) => SpaceCard(
+        space: _spaces![index],
+        onJoinPressed: () async {
+          bool success = await ApiService.joinSpace(_spaces![index].slug);
+          if (success) {
+            _fetchTabData(_selectedTab);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Berhasil bergabung ke Space!')),
+              );
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Gagal bergabung ke Space.')),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildCoursesTab() {
+    if (_isLoadingCourses) {
+      return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+    }
+    if (_courses == null || _courses!.isEmpty) {
+      return _buildEmptyTab('Courses');
+    }
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _courses!.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (_, index) => CourseCard(course: _courses![index]),
     );
   }
 
@@ -342,6 +570,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildAboutCard() {
+    final bio = _memberProfile?.bio;
+    final headline = _memberProfile?.headline;
+    final socialLinks = _memberProfile?.socialLinks ?? {};
+    
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,20 +602,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          _buildAddChip('Add your profile description'),
+          if (headline != null && headline.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                headline,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+              ),
+            ),
+          if (bio != null && bio.isNotEmpty)
+            Text(
+              bio,
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+            )
+          else
+            _buildAddChip('Add your profile description'),
           const SizedBox(height: 16),
-          _buildInfoRow(
-            PhosphorIconsRegular.calendarBlank,
-            'Joined 10 days ago',
-          ),
-          const SizedBox(height: 12),
-          _buildInfoRow(
-            PhosphorIconsRegular.clock,
-            'Last seen: a few seconds ago',
-          ),
-          const SizedBox(height: 16),
-          _buildAddChip('Add social links'),
+          if (_memberProfile != null && _memberProfile!.joinedAt.isNotEmpty) ...[
+            _buildInfoRow(
+              PhosphorIconsRegular.calendarBlank,
+              'Joined ${_memberProfile!.joinedAt}',
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_memberProfile != null && _memberProfile!.lastActivity.isNotEmpty) ...[
+            _buildInfoRow(
+              PhosphorIconsRegular.clock,
+              'Last seen: ${_memberProfile!.lastActivity}',
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (socialLinks.isNotEmpty)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: socialLinks.entries.map((e) => _buildSocialIcon(e.key, e.value)).toList(),
+            )
+          else
+            _buildAddChip('Add social links'),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSocialIcon(String provider, String url) {
+    IconData iconData = PhosphorIconsRegular.link;
+    switch (provider.toLowerCase()) {
+      case 'instagram': iconData = PhosphorIconsRegular.instagramLogo; break;
+      case 'youtube': iconData = PhosphorIconsRegular.youtubeLogo; break;
+      case 'linkedin': iconData = PhosphorIconsRegular.linkedinLogo; break;
+      case 'facebook': iconData = PhosphorIconsRegular.facebookLogo; break;
+      case 'tiktok': iconData = PhosphorIconsRegular.tiktokLogo; break;
+      case 'telegram': iconData = PhosphorIconsRegular.telegramLogo; break;
+      case 'twitter':
+      case 'x': iconData = PhosphorIconsRegular.twitterLogo; break;
+    }
+    return GestureDetector(
+      onTap: () {
+        // TODO: open URL
+      },
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          shape: BoxShape.circle,
+        ),
+        child: PhosphorIcon(iconData, size: 20, color: AppColors.primary),
       ),
     );
   }

@@ -200,6 +200,24 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
         background: #fff !important;
       }
 
+      /* PERINGATAN: blok CSS ini berada di dalam template literal JavaScript.
+         JANGAN pernah menulis karakter backtick di sini — sekali muncul, ia
+         menutup template literal lebih awal dan SELURUH skrip jadi syntax
+         error, sehingga tidak ada CSS yang tersuntik sama sekali (gejalanya:
+         menu atas & menu bawah FCOM ikut muncul). Sudah pernah terjadi. */
+
+      /* FCOM menyembunyikan isi header saat halaman digulir (auto-hide),
+         memakai visibility:hidden — bukan display. Di web itu masuk akal
+         karena headernya memang menggulung pergi; di app header ini kita
+         buat sticky supaya tombol "Continue Course" selalu terjangkau, jadi
+         penyembunyian itu justru bikin bar-nya kosong melompong.
+         Diverifikasi lewat probe: teks anaknya tetap utuh, hanya nilai
+         visibility-nya yang berubah visible ke hidden persis saat tergulir. */
+      .fhr_content_layout_header,
+      .fhr_content_layout_header > * {
+        visibility: visible !important;
+      }
+
       /* Isi header dipaksa kembali ke aliran normal. CSS bawaan FCOM
          meng-absolute-kan sebagian dari mereka (dirancang untuk header
          desktop yang tinggi), akibatnya container menyisakan pita kosong
@@ -374,13 +392,45 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       // (digantikan AppBar Flutter), jadi yang tersisa cuma tombol ⋮ — dan
       // header-nya tampil sebagai pita putih kosong yang terlihat seperti bug.
       // Kalau tidak ada isi yang benar-benar terlihat, header disembunyikan.
+      // Header dikembalikan TAMPIL sebelum isinya dinilai.
+      //
+      // Tanpa ini pemeriksaan di bawah mengunci diri sendiri: begitu header
+      // pernah disembunyikan, anak-anaknya otomatis bertinggi 0, sehingga
+      // hasContent selamanya false dan header tidak akan pernah muncul lagi.
+      // Itulah yang membuat breadcrumb hilang setelah digulir turun-naik —
+      // MutationObserver menjalankan ulang fungsi ini saat SPA merender,
+      // dan keputusan "sembunyikan" dari putaran sebelumnya ikut terbaca
+      // sebagai bukti bahwa header memang kosong.
+      layoutHeader.style.setProperty('display', 'flex', 'important');
+
+      // Penyembunyian saat gulir dilawan lewat inline style, bukan cuma
+      // lewat stylesheet: kalau FCOM menyetelnya sebagai inline style,
+      // aturan !important di stylesheet kita bisa kalah. Ditulis ulang tiap
+      // MutationObserver menyala, jadi selalu menang di putaran berikutnya.
+      layoutHeader.style.setProperty('visibility', 'visible', 'important');
+      Array.prototype.forEach.call(layoutHeader.children, function(child) {
+        child.style.setProperty('visibility', 'visible', 'important');
+      });
+
       var hasContent = false;
       Array.prototype.forEach.call(layoutHeader.children, function(child) {
         // Tombol ⋮ tidak dihitung: dia sendirian tidak cukup jadi alasan
         // menampilkan sebaris header kosong.
         if (child.classList && child.classList.contains('fcom_dot_menu')) return;
         var cs = getComputedStyle(child);
-        if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        // HANYA display:none yang dianggap bukti kosong.
+        //
+        // `visibility: hidden` sengaja TIDAK ikut: FCOM sendiri menyetelnya
+        // pada isi header saat halaman digulir (pola auto-hide). Terbukti
+        // dari probe — teksnya tetap utuh (teks=39), cuma vis-nya berubah
+        // visible→hidden. Dulu kondisi ini membuat header dianggap kosong
+        // lalu dimatikan, dan karena keputusan itu tidak pernah dicabut,
+        // breadcrumb hilang permanen begitu user menggulir sekali.
+        if (cs.display === 'none') return;
+        // Isi dinilai dari TEKS lebih dulu, baru tinggi. Saat SPA sedang
+        // merender ulang, tingginya bisa sesaat 0 padahal isinya ada —
+        // menilai dari tinggi saja membuat header berkedip hilang.
+        if ((child.textContent || '').trim().length > 0) hasContent = true;
         if (child.getBoundingClientRect().height > 0) hasContent = true;
       });
 
@@ -424,10 +474,62 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       // wrapper penyebabnya bisa berada beberapa tingkat di atas dan nama
       // class-nya tidak diketahui dari luar.
       var node = layoutHeader.parentElement;
-      while (node && node !== document.body) {
+      while (node && node !== document.documentElement) {
         node.style.setProperty('padding-top', '0', 'important');
         node.style.setProperty('margin-top', '0', 'important');
         node = node.parentElement;
+      }
+
+      // Sisa jarak apa pun DIUKUR, bukan ditebak.
+      //
+      // Menyapu padding rantai induk di atas ternyata belum menuntaskan pita
+      // kosong itu — dan mencari tahu elemen mana persisnya sudah berkali-kali
+      // gagal (lihat riwayat "BELUM SELESAI" di CLAUDE.md). Pendekatan di sini
+      // membalik arahnya: berapa pun sisa jaraknya dan apa pun penyebabnya,
+      // jarak itu diukur langsung lalu header ditarik naik sebesar itu.
+      //
+      // Bekerja untuk penyebab apa pun — padding induk, margin, elemen kosong
+      // sebelum header, atau kombinasinya — karena yang dibaca adalah HASIL
+      // akhirnya di layar, bukan dugaan tentang sebabnya.
+      if (hasContent) {
+        // Diukur lewat rantai offsetTop, BUKAN getBoundingClientRect().
+        // getBoundingClientRect() mengukur relatif terhadap viewport, jadi
+        // nilainya ikut berubah begitu halaman digulir — dan portal FCOM
+        // adalah SPA yang bisa menggulung container di dalamnya, bukan
+        // window. offsetTop murni posisi layout: bebas dari gulir maupun
+        // sticky, karena sticky cuma menggeser saat menggambar.
+        var gap = 0;
+        var probe = layoutHeader;
+        while (probe && probe !== document.body) {
+          gap += probe.offsetTop;
+          probe = probe.offsetParent;
+        }
+
+        // Koreksi yang SEDANG terpasang dikurangkan, BUKAN dinolkan dulu.
+        //
+        // Versi sebelumnya menyetel margin-top ke 0, mengukur, lalu memasang
+        // lagi. Itu benar secara hitungan tapi merusak pengalaman menggulir:
+        // sesaat tanpa koreksi, tinggi dokumen berubah, browser menjepit
+        // posisi gulir, dan halaman terlihat melompat sendiri ke atas. Karena
+        // MutationObserver menjalankan fungsi ini tiap 200ms selama FCOM
+        // lazy-load saat digulir, lompatan itu terjadi terus-menerus.
+        //
+        // margin-top yang sedang terpasang menggeser offsetTop sebesar nilai
+        // itu juga, jadi jarak aslinya bisa dipulihkan lewat pengurangan —
+        // tanpa perlu mengusik layout sama sekali.
+        var curMt = parseFloat(layoutHeader.style.marginTop) || 0;
+        var trueGap = gap - curMt;
+
+        // Ambang 4px mengabaikan pembulatan sub-piksel. Batas atas 400px
+        // menjaga dari nilai ekstrem kalau layout sedang belum stabil —
+        // menarik header naik ratusan piksel justru akan menyembunyikannya.
+        var wantMt = (trueGap > 4 && trueGap < 400) ? -trueGap : 0;
+
+        // Ditulis HANYA kalau nilainya benar-benar berubah. Menulis ulang
+        // nilai yang sama tiap 200ms memaksa recalc gaya tanpa guna.
+        if (Math.abs(wantMt - curMt) > 0.5) {
+          layoutHeader.style.setProperty('margin-top', wantMt + 'px', 'important');
+        }
       }
 
       // Body dipaksa mengalir setelah header, bukan menyelip di bawahnya
@@ -435,9 +537,83 @@ class _SpaceWebViewScreenState extends State<SpaceWebViewScreen> {
       var layoutBody = document.querySelector('.fhr_content_layout_body');
       if (layoutBody) {
         layoutBody.style.setProperty('margin-top', '0', 'important');
-        layoutBody.style.setProperty('padding-top', '0', 'important');
+        // padding-top SENGAJA tidak dinolkan di sini. Nilainya dihitung di
+        // bawah dan hanya ditulis kalau berubah; menolkannya lebih dulu
+        // membuat tinggi dokumen menyusut sesaat tiap putaran, sehingga
+        // browser menjepit posisi gulir dan halaman melompat sendiri.
         layoutBody.style.setProperty('position', 'static', 'important');
         layoutBody.style.setProperty('top', 'auto', 'important');
+      }
+
+      // Header dibuat DIAM di atas saat konten digulir.
+      //
+      // Sebelumnya header ikut menggulung, jadi breadcrumb dan tombol
+      // "Continue Course" hilang begitu user menggulir sedikit — padahal
+      // tombol itu justru aksi utama halaman ini.
+      if (hasContent) {
+        layoutHeader.style.setProperty('position', 'sticky', 'important');
+        layoutHeader.style.setProperty('top', '0', 'important');
+        // Harus di atas kartu konten, kalau tidak konten yang lewat di
+        // baliknya akan tergambar menimpa header.
+        layoutHeader.style.setProperty('z-index', '20', 'important');
+
+        // Pastikan konten MULAI setelah header — jaraknya diukur, bukan
+        // ditebak dari tinggi header.
+        //
+        // Header sticky semestinya tetap menempati ruang di aliran normal,
+        // tapi pada halaman ini konten tetap naik menimpanya (sudah terlihat
+        // di probe DOM lama: body mulai di y=52 padahal header menempati
+        // y=56..108). Daripada menebak lagi asal-usulnya, selisih kedua
+        // kotak diukur langsung lalu konten didorong turun sebanyak itu.
+        if (layoutBody) {
+          // Diukur dari posisi LAYOUT, bukan dari getBoundingClientRect().
+          //
+          // Versi sebelumnya membandingkan dua rect dengan alasan "dibaca
+          // pada saat yang sama, jadi selisihnya bebas dari posisi gulir".
+          // Alasan itu SALAH begitu header dibuat sticky: header berhenti di
+          // atas sementara konten terus menggulung, sehingga selisihnya ikut
+          // membesar seiring gulir — dan konten terdorong makin jauh.
+          //
+          // offsetTop tidak terpengaruh gulir MAUPUN sticky, karena sticky
+          // hanya menggeser saat menggambar, bukan posisi layout-nya.
+          // Ditulis sebagai function EXPRESSION, bukan declaration: deklarasi
+          // fungsi di dalam blok punya aturan scope yang berbeda-beda antar
+          // engine JS lama, dan WebView Android tidak selalu yang terbaru.
+          var layoutTop = function(el) {
+            var t = 0;
+            while (el && el !== document.body) {
+              t += el.offsetTop;
+              el = el.offsetParent;
+            }
+            return t;
+          };
+
+          var overlap =
+              (layoutTop(layoutHeader) + layoutHeader.offsetHeight) -
+              layoutTop(layoutBody);
+          // Jarak nafas antara header dan kartu konten, meniru web: di sana
+          // ada pita latar abu tipis yang memisahkan keduanya. Tanpa ini
+          // kartu putih menempel langsung ke header putih sehingga batas
+          // antar keduanya nyaris tak terlihat.
+          //
+          // Ditambahkan SETELAH koreksi tumpang tindih, bukan menggantikannya:
+          // yang satu memperbaiki posisi, yang satu lagi soal tampilan.
+          var breathing = 12;
+          var wantPt = (overlap > -breathing && overlap < 400)
+              ? (overlap + breathing)
+              : 0;
+
+          // Sama seperti margin header: ditulis hanya kalau nilainya berubah.
+          // `overlap` di atas TIDAK terpengaruh padding yang sedang terpasang
+          // (padding sebuah elemen tidak menggeser offsetTop elemen itu
+          // sendiri), jadi tidak perlu dinolkan dulu — dan justru itu yang
+          // dulu membuat halaman melompat tiap kali digulir.
+          var curPt = parseFloat(layoutBody.style.paddingTop) || 0;
+          if (Math.abs(wantPt - curPt) > 0.5) {
+            layoutBody.style.setProperty(
+              'padding-top', wantPt + 'px', 'important');
+          }
+        }
       }
     }
 

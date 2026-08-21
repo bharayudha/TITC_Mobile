@@ -4,7 +4,7 @@ Catatan progres perbaikan aplikasi Flutter `titc_mobile` yang meniru portal
 Fluent Community di `titc.or.id`. Dipakai sebagai rekam jejak supaya pekerjaan
 bisa dilanjutkan di sesi berikutnya.
 
-Terakhir diperbarui: 19 Agustus 2026.
+Terakhir diperbarui: 22 Agustus 2026.
 
 ---
 
@@ -473,53 +473,81 @@ Menerima `NavigatorState` & `ScaffoldMessengerState`, **bukan** `BuildContext`,
 karena drawer harus menutup dirinya lebih dulu dan setelah itu context-nya
 sudah tidak mounted.
 
-### BELUM SELESAI — baris breadcrumb + "Continue Course" masih meleset
+### SELESAI — baris breadcrumb + "Continue Course" (19 Agustus 2026)
 
-Header web (`.fhr_content_layout_header`, isinya breadcrumb + tombol
-"Continue Course") dulu di-collapse ke `height: 0`. User minta header itu
-**ditampilkan** seperti di web, rapi di bawah navbar, tidak tumpang tindih.
-Sampai akhir sesi **masih belum benar**.
+Masalah yang menggantung berminggu-minggu ini **sudah beres**. Header web
+(`.fhr_content_layout_header`, isinya breadcrumb + tombol "Continue Course")
+kini tampil rapi di bawah navbar, diam saat konten digulir, tanpa pita kosong
+maupun tumpang tindih. Berlaku untuk kesembilan course di drawer sekaligus,
+karena semuanya melewati `SpaceWebViewScreen` yang sama.
 
-Kunci pemahaman: `height: 0` + `overflow: visible` membuat isi header tetap
-tergambar tanpa menempati ruang → menimpa konten di bawahnya. Itu penyebab
-tumpang tindih yang awalnya dilaporkan.
+Kronologi lengkapnya di RIWAYAT_PERCAKAPAN.md. Yang di bawah ini aturannya.
 
-**Data probe DOM (dari perangkat user, header masih di-collapse saat itu):**
+#### Temuan kunci: FCOM menyembunyikan isi header saat digulir
 
+Portal punya perilaku *auto-hide on scroll* bawaan yang menyetel
+**`visibility: hidden`** — bukan `display: none` — pada isi header. Di web itu
+wajar karena headernya memang menggulung pergi; di app header dibuat sticky,
+jadi yang tersisa cuma bar kosong.
+
+> [!IMPORTANT]
+> **Jangan menilai "header kosong" dari `visibility`.** Hanya `display: none`
+> yang boleh dianggap bukti kosong. Terbukti lewat probe: teks anaknya tetap
+> utuh (`teks=39`), hanya `vis` yang berubah `visible`→`hidden` persis saat
+> mulai tergulir. Kalau `visibility` ikut dihitung, header dimatikan lalu
+> **tidak pernah muncul lagi** — karena anak dari elemen tersembunyi selalu
+> bertinggi 0, sehingga keputusan itu mengunci dirinya sendiri.
+
+Lawan penyembunyiannya di dua tempat sekaligus: aturan CSS **dan** inline
+style lewat JS. Yang inline perlu karena kalau FCOM menyetelnya sebagai inline
+style, `!important` di stylesheet bisa kalah.
+
+#### Pendekatan: UKUR, jangan tebak selector
+
+Mencari elemen mana yang menyisakan pita kosong sudah berkali-kali gagal.
+Yang akhirnya berhasil adalah membalik arahnya — ukur jaraknya lalu tarik
+header naik sebesar itu:
+
+```js
+gap = jumlah offsetTop sepanjang rantai offsetParent
+header.marginTop = -(gap - marginTop_yang_sedang_terpasang)
 ```
-HEADER  DIV.fhr_content_layout_header [pos=relative top=56 h=52]
-SEBELUM tidak ada
-SESUDAH DIV.fhr_content_layout_body   [pos=static  top=52 h=1306]
-ANAK[0] DIV.el-breadcrumb             [pos=static  top=75 h=14]
-ANAK[1] DIV.fhr_page_actions          [pos=static  top=66 h=32]
-```
 
-Dua fakta penting dari angka itu:
-1. Header anak pertama (`SEBELUM: tidak ada`) tapi mulai di `top=56` → ada 56px
-   jarak yang disumbang induk-induknya. 56px ≈ tinggi `.fcom_top_menu` yang
-   kita `display: none`; besar dugaan `padding-top` untuk menu `position: fixed`
-   itu tertinggal.
-2. Body mulai di `top=52`, padahal header menempati 56–108 → keduanya bertumpuk.
+Berlaku untuk penyebab apa pun (padding induk, margin, elemen kosong) karena
+yang dibaca hasil akhirnya, bukan dugaan tentang sebabnya. Cara yang sama
+dipakai untuk mendorong konten agar mulai setelah header.
 
-**Sudah dicoba, belum menuntaskan** (jangan diulang tanpa data baru):
-- `overflow: hidden` pada header → menghilangkan tumpang tindih tapi ikut
-  menyembunyikan breadcrumb & tombol; user menolak, mau keduanya tetap tampil.
-- `.fhr_content_layout_header > *:not(.fcom_dot_menu) { position: static }` →
-  **berhasil** untuk isi header (probe membuktikan anak-anaknya jadi `static`
-  dan rapi di dalam kotak). Pertahankan.
-- `.fhr_content_layout_body { margin-top: 0; position: static }` → menyasar
-  hipotesis margin negatif; belum terbukti benar/salah.
-- Induk header dipaksa `display: block` → menyasar hipotesis induk `grid`
-  yang menumpuk header & body di sel sama; belum terbukti.
-- Sapu `padding-top`/`margin-top` = 0 ke **seluruh rantai induk** header sampai
-  `<body>` → menyasar pita kosong 56px; belum terbukti.
+> [!WARNING]
+> **Pakai `offsetTop`, JANGAN `getBoundingClientRect()`.** Rect mengukur
+> relatif viewport, jadi nilainya berubah saat digulir — dan karena header
+> sticky, header berhenti di atas sementara konten terus turun, sehingga
+> selisih keduanya justru MEMBESAR seiring gulir. Akibatnya konten terdorong
+> makin jauh ke bawah. `offsetTop` murni posisi layout: bebas dari gulir
+> maupun sticky.
 
-**Langkah berikutnya:** jalankan app, buka course, ambil baris `WEBVIEW_DOM:`
-yang baru. Probe sekarang sudah melaporkan `INDUK[0..5]` lengkap dengan `top`,
-`mt`, `pt`, dan `display` masing-masing. Itu memisahkan dua hipotesis yang
-tersisa: kalau ada induk ber-`display: grid` → penyebabnya penumpukan sel;
-kalau ada induk dengan `pt`/`mt` bukan 0 → penyebabnya padding sisa.
-**Jangan menebak selector lagi — baca angkanya dulu.**
+> [!WARNING]
+> **Jangan pakai pola reset-lalu-ukur.** Menolkan margin/padding dulu sebelum
+> mengukur memang benar secara hitungan, tapi membuat tinggi dokumen menyusut
+> sesaat — browser lalu menjepit posisi gulir dan halaman terlihat melompat
+> sendiri ke atas. Karena `MutationObserver` menjalankan `fixLayout()` tiap
+> 200ms selama FCOM lazy-load saat digulir, lompatan itu beruntun terus.
+> Sebagai gantinya, kurangkan nilai yang sedang terpasang, dan tulis style
+> HANYA kalau nilainya benar-benar berubah.
+
+#### Jebakan paling mematikan: backtick di dalam CSS
+
+CSS di `_injectScript` berada di dalam **template literal JavaScript**.
+
+> [!CAUTION]
+> **JANGAN PERNAH menulis karakter backtick di dalam blok CSS itu** — termasuk
+> di komentar. Satu backtick menutup template literal lebih awal, seluruh
+> skrip jadi syntax error, dan **tidak ada CSS yang tersuntik sama sekali**.
+>
+> Gejalanya khas dan mudah dikenali: **menu atas FCOM dan menu bawahnya
+> ikut muncul**, padahal keduanya disembunyikan lewat CSS.
+>
+> `flutter analyze` **TIDAK BISA** menangkap ini — bagi Dart isinya cuma
+> string biasa. Sudah pernah terjadi 19 Agustus 2026.
 
 ### Alat debug yang ditambahkan (HAPUS SEBELUM RILIS)
 
@@ -774,22 +802,22 @@ jalan sungguhan dan hardcode email bisa dibuang.
 | Link cepat di Home (6 item, seperti web) | ✅ 7 Agt |
 | Baris ikon shortcut lama di Home | 🗑️ Dihapus 7 Agt, duplikat link cepat |
 | Notifikasi in-app (lonceng) | ✅ Selesai (Polling & FCOM parse) |
-| Push notification (FCM + plugin PHP) | ⬜ Masih rangka kosong — diserahkan ke tim |
+| Push notification (FCM + plugin PHP) | ⬜ Sempat dibangun 19 Agt, **DIHAPUS lagi 20 Agt** (`49cc819`, kredensial bocor) — lihat sesi 19 Agt |
 | Search di app bar | ✅ Selesai 13 Agt — cakupan per space + opsi Comments |
 | Search Spaces/Courses pakai server | ⬜ Jalur API sudah ada, layar belum memakai |
 | Daftar Spaces lengkap (6/6) | ✅ 13 Agt, lewat `/spaces/discover?type=all` |
 | Tombol Join/View Space benar | ✅ 13 Agt, lewat `space_pivot` |
 | Deteksi admin/moderator FCOM | ⬜ Diserahkan ke tim backend — petunjuk: `space_pivot.role` |
-| Header web (breadcrumb + Continue Course) | ❌ **Masih tumpang tindih / meleset** |
+| Header web (breadcrumb + Continue Course) | ✅ **Selesai 19 Agt** — sticky, tanpa pita kosong, berlaku di 9 course |
 | Tujuan tombol "Continue Course" | ❓ Belum diperiksa, pakai log `WEBVIEW_NAV:` |
 | Members list (2.256) | ✅ Dikonfirmasi user |
 | Ikon sosial clickable | ✅ url_launcher |
 | Waktu relatif ("15 days ago") | ✅ |
 | Timeout 15s → 30s + retry | ✅ Diperbaiki 6 Agt |
 | Spaces parser rekursif | ✅ Masih dipakai — tapi penyebab space hilang ternyata di endpoint, bukan parser (13 Agt) |
-| Liquid glass di bottom nav/top bar/chat FAB | ✅ 19 Agt — pakai `liquid_glass_widgets`, tapi baru ada di branch `bhara`, BELUM di `main` (lihat catatan sesi 19 Agt) |
+| Liquid glass di bottom nav/top bar/chat FAB | ✅ 19 Agt — pakai `liquid_glass_widgets`, digabung ke `main` lewat merge 22 Agt |
 | Optimasi performa (GlassQuality + cache gambar) | ✅ 19 Agt — lihat catatan sesi 19 Agt |
-| Dark mode | ✅ 19 Agt — toggle di menu profil, retrofit menjangkau semua layar utama |
+| Dark mode | ✅ 19 Agt — toggle di menu profil, retrofit menjangkau semua layar utama termasuk popup notifikasi/search/dialog WebView |
 
 ---
 
@@ -1210,15 +1238,218 @@ liquid_glass_widgets".
   Push Notification ke topik `global_feeds` supaya diterima semua HP yang
   sudah pasang app TITC.
 
-> [!WARNING]
-> Commit yang sama (`bbce8b1` dkk) juga mengklaim sudah menghapus file tes
-> eksperimental (`scratch_fcom_follow.py`, endpoint `/test-fcm`, file zip,
-> tombol Bug di app bar) — **tapi belum, masih ada di repo** per pengecekan
-> 19 Agt: `scratch_fcom_routes.py`, `titc-mobile-notification-root.zip`,
-> folder `test_extract/` semua masih ter-commit. Perlu dibersihkan.
->
-> **Lebih penting:** commit ini juga meng-commit kredensial Firebase Admin
-> SDK asli (`service_account.json` / `titc-mobile-firebase-adminsdk-*.json`,
-> berisi `private_key` sungguhan) ke tiga lokasi di repo. Ini HARUS di-rotate
-> di Firebase Console (anggap key lama sudah bocor) dan file-nya dihapus
-> dari repo + ditambahkan ke `.gitignore` — belum dikerjakan per 19 Agt.
+> [!NOTE]
+> **Seluruh fitur ini SUDAH DIHAPUS lagi** lewat commit `49cc819` ("hapus
+> notif", 20 Agustus 2026) — 29 file terhapus (877 baris), mencakup plugin PHP
+> `backend/titc-mobile-notification/` lengkap, `firebase_messaging_service.dart`,
+> `google-services.json`, DAN kredensial Firebase Admin SDK yang sempat
+> ter-commit (`service_account.json` / `titc-mobile-firebase-adminsdk-*.json`).
+> Alasannya persis peringatan sesi 19 Agt di atas: kredensial asli bocor ke
+> repo. **Rotasi key di Firebase Console tetap wajib dilakukan secara manual**
+> (menghapus file dari working tree tidak mencabut key yang sudah pernah
+> ter-expose ke riwayat git) — status rotasi belum diketahui, tim yang pegang
+> akses Firebase Console yang perlu konfirmasi. Push notification sekarang
+> kembali ke status "belum ada", bukan "rangka kosong".
+
+
+
+---
+
+## Sesi 20 Agustus 2026 — Navigasi Space/Course dari Profil & Update Account Settings
+
+### Masalah 1 — Klik Space/Course dari tab profil tidak menavigasi ke halaman yang benar
+
+**Dilaporkan user:** tab Spaces & Courses di halaman Profil sudah menarik data
+yang benar, tapi mengklik salah satu kartu tidak masuk ke halaman space/course
+yang dituju, dan seharusnya ada tombol "View Space" yang tidak muncul.
+
+**Investigasi.** `profile_screen.dart` (`_buildSpacesTab`/`_buildCoursesTab`)
+ternyata memakai `SpaceCard`/`CourseCard` dari `widgets/customer/*.dart` —
+widget lama yang sebelumnya ditandai "tidak terpakai di runtime" di catatan
+sesi-sesi lalu, karena `spaces_list_screen.dart`/`courses_list_screen.dart`
+sudah lama pindah ke `_buildCourseCard`/`_buildSpaceCard` privat sendiri.
+Begitu `profile_screen.dart` mulai memakainya lagi, bug lama di widget itu
+ikut aktif kembali tanpa disadari.
+
+**Akar masalah (dua bug independen, saling memperkuat gejala):**
+
+1. **`CourseCard._onCourseAction` tidak mengirim `portalSegment`/`initialPath`.**
+   `SpaceWebViewScreen` default ke `portalSegment: 'space', initialPath: 'home'`
+   kalau parameter itu tidak diisi. Untuk course, ini membuka
+   `.../portal/space/<slug>/home` — URL SPACE, bukan course — sedangkan
+   `courses_list_screen.dart` yang sudah terverifikasi benar selalu memakai
+   `portalSegment: 'course', initialPath: 'lessons'`. Course yang diklik dari
+   profil jadi membuka halaman yang salah/rusak.
+2. **`isJoined`/`isEnrolled` salah `false`, menyembunyikan tombol "View Space"/
+   "Continue Learning".** Endpoint yang dipakai tab profil
+   (`/profile/{slug}/spaces` dan `/profile/{slug}/courses`) tidak selalu
+   mengirim `space_pivot`/`isEnrolled` seperti endpoint lain
+   (`/spaces/discover`), sehingga `SpaceModel`/`CourseModel` menganggap belum
+   join/enroll — padahal ini tab "punya saya sendiri", pasti sudah
+   join/enroll. Kartu jadi menampilkan tombol "Join"/"Enroll" (yang memang
+   tidak menavigasi ke mana pun) alih-alih "View Space"/"Continue Learning".
+
+**Solusi:**
+
+- `lib/widgets/customer/course_card.dart` — `_onCourseAction` ditulis ulang
+  mengikuti persis logika `courses_list_screen.dart`: kalau `isEnrolled`,
+  navigasi dengan `portalSegment: 'course', initialPath: 'lessons'`; kalau
+  belum, panggil `ApiService.enrollCourse(course.id)` dulu baru beri
+  feedback snackbar.
+- `lib/services/api_service.dart` — di `fetchUserSpaces()` dan
+  `fetchUserCourses()`, hasil parsing dipaksa `is_joined: true` /
+  `isEnrolled: true` sebelum masuk ke `SpaceModel.fromJson`/
+  `CourseModel.fromJson`, karena secara semantik entri di kedua endpoint itu
+  memang selalu milik/sudah diikuti pemilik profil.
+
+```dart
+// fetchUserSpaces
+return collected.values
+    .where((json) => (json['type'] as String?) != 'course')
+    .map((e) => SpaceModel.fromJson({...e, 'is_joined': true}))
+    .toList();
+
+// fetchUserCourses
+return collected.values
+    .map((e) => CourseModel.fromJson({...e, 'isEnrolled': true}))
+    .toList();
+```
+
+> [!NOTE]
+> Kalau nanti ada tab profil ORANG LAIN (bukan diri sendiri) yang memakai
+> `fetchUserSpaces`/`fetchUserCourses`, paksaan `is_joined`/`isEnrolled: true`
+> ini HARUS ditinjau ulang — asumsinya cuma valid untuk "space/course milik
+> profil yang sedang dilihat", bukan berarti PENGGUNA YANG SEDANG LOGIN ikut
+> jadi anggota.
+
+---
+
+### Masalah 2 — Account Settings: Headline, Short Bio, Social Links tidak tersimpan
+
+**Dilaporkan user:** setelah mengganti Headline/Short Bio/Social Links dan
+klik Save, datanya tidak berubah — baik di tampilan About profil di app,
+maupun di web asli (titc.or.id) setelah dicek langsung.
+
+**Percobaan pertama (SALAH, jangan diulang tanpa bukti baru).** Berdasarkan
+`member_model.dart` (sisi baca) yang membaca `headline` dan tautan sosial
+dari dalam `xprofile.meta`, saya memindahkan payload kirim dari key datar
+root (`data.headline`, `data.social_links`) ke `data.meta.headline` +
+key provider langsung di `data.meta`. Request membalas **200 "Profile
+updated"**, dan bahkan re-fetch (`FETCH_MEMBER_PROFILE`) langsung setelahnya
+ikut menampilkan nilai baru — **tapi ternyata itu bukan bukti data
+tersimpan sungguhan.** Setelah dicek user di web asli, datanya tidak
+berubah. Pelajaran: **status 200 + response yang "kelihatan benar" bisa jadi
+cuma echo, bukan bukti persist ke database — satu-satunya bukti valid
+adalah cek independen di luar jalur yang sama (di sini: buka web asli).**
+
+**Cara menemukan bentuk yang benar — cURL DevTools dari web asli.** User
+membuka halaman edit profil di **web** (bukan app), mengganti Headline/Short
+Bio/Social Link di sana, Save, lalu ambil request-nya dari DevTools Network
+tab (Copy as cURL) dan kirim ke saya. Setelah decode escaping cmd.exe-nya,
+body asli yang dikirim web:
+
+```json
+{
+  "data": {
+    "username": "arnanda",
+    "display_name": "Arnanda ppp",
+    "first_name": "Arnanda",
+    "last_name": "ppp",
+    "email": "arnandasty@gmail.com",
+    "website": "",
+    "headline": "mbut",
+    "short_description": "clek`n",
+    "user_id": 727,
+    "is_verified": 0,
+    "is_flagged": "no",
+    "social_links": { "instagram": "@arnandasty" },
+    "badge_slugs": [],
+    "status": "active",
+    "custom_fields": {}
+  },
+  "query_timestamp": 1787160581800
+}
+```
+
+**Dua temuan yang membantah dugaan sebelumnya:**
+
+1. **`headline` dan `social_links` memang ada di ROOT `data`**, bukan di
+   dalam `meta` — dugaan sesi ini di atas (percobaan pertama) salah arah.
+2. **Method-nya `POST`, bukan `PUT`.** Tidak ada flag `-X` di cURL manapun,
+   dan curl otomatis pakai `POST` saat ada `--data-raw` tanpa override.
+   `uploadAvatar()` yang sudah lama terbukti jalan memakai `PUT` — tapi itu
+   khusus untuk field `avatar` saja. Untuk update field teks profil,
+   `PUT` membalas 200 tapi **diam-diam tidak menyimpan apa pun** — endpoint
+   yang sama, method berbeda, perilaku beda total.
+
+**Field pass-through yang wajib ikut dikirim.** Selain field yang memang
+diedit (`headline`, `short_description`, `social_links`, nama, email,
+website), web JUGA mengirim ulang seluruh state profil yang sedang tidak
+diedit: `username`, `display_name`, `user_id`, `is_verified`, `is_flagged`,
+`badge_slugs`, `status`, `custom_fields`, plus `query_timestamp` (timestamp
+milidetik, sejajar dengan `data` — bukan di dalamnya). Tidak jelas apakah
+SEMUA field ini betul-betul divalidasi server atau cuma sebagian — karena
+tidak ada cara memverifikasi tanpa akses kode backend, pilihan paling aman
+adalah menyalin bentuknya utuh, bukan menebak subset mana yang "penting".
+
+**Solusi (diterapkan, status: menunggu konfirmasi user setelah dicek di web):**
+
+- `lib/models/member_model.dart` — ditambah 4 field pass-through baru:
+  `isVerified` (int), `isFlagged` (String), `badgeSlugs` (List<String>),
+  `customFields` (Map). Diparse dengan `asJsonList`/`asJsonMap` (bukan cast
+  langsung) mengikuti aturan proyek soal PHP menyerialkan array asosiatif
+  kosong sebagai `[]`.
+- `lib/services/api_service.dart` — `updateFcomProfile()`:
+  `http.put` → `http.post`; body jadi
+  `json.encode({'data': data, 'query_timestamp': DateTime.now().millisecondsSinceEpoch})`;
+  header `Referer` disamakan persis: `https://titc.or.id/portal/u/$slug/update`.
+- `lib/screens/customer/profile/profile_edit_screen.dart` — `ProfileEditScreen`
+  menerima parameter baru (`username`, `userId`, `status`, `isVerified`,
+  `isFlagged`, `badgeSlugs`, `customFields`); `_saveProfile()` membangun
+  `fcomData` mengikuti persis bentuk cURL di atas.
+- `lib/screens/customer/profile/profile_screen.dart` — `_openEditProfile()`
+  meneruskan field-field itu dari `_memberProfile` (hasil fetch profil
+  terbaru) saat membuka layar edit.
+
+> [!IMPORTANT]
+> **Metodologi yang berhasil di sini, ulangi kalau ada endpoint FCOM lain
+> yang perilakunya tidak jelas dari respons saja:** minta user reproduksi
+> aksi yang sama di WEB (bukan app), ambil request asli dari DevTools
+> Network tab (Copy as cURL), lalu cocokkan bentuknya field-per-field dan
+> method-nya. Status 200 dari API **bukan** bukti data tersimpan — kalau
+> ragu, verifikasi independen di luar app (di sini: reload halaman web
+> aslinya) sebelum melaporkan sesuatu "sudah beres".
+
+---
+
+## Sinkronisasi GitHub — 20 Agustus 2026
+
+Branch lokal `main` sudah disinkronkan dengan `origin/main` melalui fast-forward
+tanpa konflik. Dua commit terbaru yang masuk:
+
+- `23f538c` — penyelesaian menu profil user dan alur profil Spaces/Courses,
+  termasuk update profil FCOM dan kartu navigasi profil.
+- `6563df6` — perbaikan header WebView course agar sticky, tanpa pita kosong
+  dan tanpa tumpang tindih.
+
+Perubahan lokal yang belum dikomit tetap dipertahankan setelah merge:
+`frontend/lib/screens/customer/home/home_screen.dart`,
+`frontend/pubspec.yaml`, `frontend/pubspec.lock`, serta enam asset gambar di
+`frontend/assets/images/`.
+
+---
+
+## Sesi 22 Agustus 2026 — Merge `origin/main` ke `bhara`
+
+`git merge origin/main` dijalankan di branch `bhara` untuk menarik masuk
+penghapusan FCM/kredensial bocor (`49cc819`), refresh quick links Home
+(`6219dea`), perbaikan header WebView course (`6563df6`), dan penyelesaian
+menu profil (`23f538c`) — sambil mempertahankan kerja sesi 19 Agt di `bhara`
+(liquid glass, optimasi performa, dark mode).
+
+Konflik muncul di 5 file: `CLAUDE.md`, `frontend/lib/main.dart`,
+`frontend/lib/screens/customer/home/home_screen.dart`,
+`frontend/lib/screens/customer/profile/profile_screen.dart`,
+`frontend/pubspec.lock` — diselesaikan manual (bukan `--ours`/`--theirs`
+mentah), mempertahankan kedua sisi perubahan yang tidak saling tumpang
+tindih.

@@ -5,8 +5,6 @@ import 'package:magang_titc/app.dart';
 import 'package:magang_titc/services/auth_service.dart';
 import 'package:magang_titc/services/messages_service.dart';
 import 'package:magang_titc/services/theme_service.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:magang_titc/services/firebase_messaging_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,13 +23,6 @@ void main() async {
   // tidak ada kedipan tema (mulai terang lalu tiba-tiba gelap) saat app
   // dibuka dengan preferensi dark mode sudah tersimpan.
   await ThemeService.init();
-
-  try {
-    await Firebase.initializeApp();
-    await FirebaseMessagingService.init();
-  } catch (e) {
-    print('Error initializing Firebase: $e');
-  }
 
   runApp(
     LiquidGlassWidgets.wrap(

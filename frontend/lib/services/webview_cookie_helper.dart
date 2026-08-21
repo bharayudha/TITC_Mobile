@@ -86,7 +86,7 @@ class WebViewCookieHelper {
     //    bukan tamu.
     if (!cookiesString.contains('_lscache_vary')) {
       // Cari hash dari cookie logged_in sebagai vary value
-      String varyValue = _generateLscacheVary(cookiesString);
+      String varyValue = AuthService.generateLscacheVary(cookiesString);
       for (final d in [_domain, _dotDomain]) {
         await cookieManager.setCookie(
           WebViewCookie(
@@ -100,41 +100,5 @@ class WebViewCookieHelper {
     }
 
     return true;
-  }
-
-  /// Generate nilai `_lscache_vary` dari cookie string.
-  ///
-  /// LiteSpeed Cache di sisi server meng-hash beberapa variabel (termasuk
-  /// cookie login) untuk membuat vary key. Kita tidak bisa meniru hash yang
-  /// persis sama karena algoritmanya internal, tapi cukup menyetel SEBUAH
-  /// nilai non-kosong agar LiteSpeed tahu bahwa user ini punya sesi aktif
-  /// dan tidak boleh disajikan halaman cache tamu.
-  ///
-  /// Yang paling akurat: ambil langsung dari cookie string jika sudah ada
-  /// (karena server menyetelnya saat login via HTTP header response yang
-  /// kita simpan di AuthService).
-  static String _generateLscacheVary(String cookies) {
-    // Coba cari nilai yang sudah ada di cookie string
-    final match = RegExp(r'_lscache_vary=([^;]+)').firstMatch(cookies);
-    if (match != null) {
-      return AuthService.decodeCookieValue(match.group(1)!);
-    }
-
-    // Fallback: gunakan hash sederhana dari cookie logged_in
-    final loggedInMatch =
-        RegExp(r'wordpress_logged_in_[^=]+=([^;]+)').firstMatch(cookies);
-    if (loggedInMatch != null) {
-      // Buat hash sederhana 32-char hex dari cookie value
-      final value = loggedInMatch.group(1)!;
-      var hash = 0x811c9dc5; // FNV-1a offset basis
-      for (var i = 0; i < value.length; i++) {
-        hash ^= value.codeUnitAt(i);
-        hash = (hash * 0x01000193) & 0xFFFFFFFF; // FNV prime
-      }
-      return hash.toRadixString(16).padLeft(8, '0');
-    }
-
-    // Fallback terakhir
-    return 'mobile_session';
   }
 }
