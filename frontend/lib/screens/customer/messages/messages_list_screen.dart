@@ -260,7 +260,17 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
                                       'Belum ada pesan langsung.',
                                     ),
                                   ],
-                                  const SizedBox(height: 24),
+                                  // Cukup tinggi untuk melewati bottom nav bar
+                                  // kaca — `extendBody: true` membuat body
+                                  // meluas ke belakangnya, jadi tanpa ini item
+                                  // "Direct Messages" paling bawah tertutup
+                                  // nav bar walau sudah discroll mentok.
+                                  SizedBox(
+                                    height:
+                                        kBottomNavBarContentHeight +
+                                        14 +
+                                        MediaQuery.of(context).padding.bottom,
+                                  ),
                                 ],
                               );
                             },
@@ -285,10 +295,15 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
             ),
           ],
         ),
-        bottomNavigationBar: BottomNavBar(
-          currentIndex: -1,
-          onTap: _onNavTap,
-          isSpacesTab: true,
+        bottomNavigationBar: Padding(
+          // Samakan dengan MainShell — tanpa ini dock nempel persis di batas
+          // bawah body Scaffold, beda posisi dengan tab Home/Spaces/dst.
+          padding: const EdgeInsets.only(bottom: 14),
+          child: BottomNavBar(
+            currentIndex: -1,
+            onTap: _onNavTap,
+            isSpacesTab: true,
+          ),
         ),
       ),
     );
@@ -977,8 +992,11 @@ class _NewMessageDialogState extends State<_NewMessageDialog> {
        (sudah terbukti berkali-kali nama class berbeda per halaman) — jadi
        daripada menambah daftar terus, semua anak langsung <body> yang
        BUKAN wadah modal langsung disembunyikan total, apa pun namanya.
-       Dikecualikan pakai `.fcom-modal-portal` — wadah Vue Teleport untuk
-       modal ini. */
+       Dikecualikan pakai .fcom-modal-portal — wadah Vue Teleport untuk
+       modal ini. (JANGAN pakai backtick di komentar CSS blok ini — ia
+       disuntik ke dalam template literal JS lewat interpolasi Dart di
+       pemanggilnya, satu backtick menutup literal itu lebih awal dan
+       seluruh skrip jadi syntax error diam-diam.) */
     body > *:not(.fcom-modal-portal) {
       display: none !important;
     }
